@@ -8,6 +8,7 @@ package connections
 import (
 	"context"
 	"fmt"
+	"strings"
 	"sync"
 	"time"
 
@@ -167,6 +168,13 @@ func (m *Manager) Create(ctx context.Context, c *model.Connection) error {
 	if c.Region == "" {
 		c.Region = "us-east-1"
 	}
+	if isAWS(c) {
+		c.Provider = "aws"
+		c.UseSSL = true // AWS S3 requires HTTPS
+		if c.Endpoint == "" {
+			c.Endpoint = "s3.amazonaws.com"
+		}
+	}
 	if err := m.store.UpsertConnection(ctx, c); err != nil {
 		return err
 	}
@@ -226,15 +234,32 @@ func (m *Manager) TestConnection(ctx context.Context, c *model.Connection) error
 	return err
 }
 
+// isAWS reports whether a connection targets real AWS S3 (by provider choice or
+// an amazonaws.com endpoint), which needs HTTPS and per-bucket region handling.
+func isAWS(c *model.Connection) bool {
+	return c.Provider == "aws" || strings.Contains(strings.ToLower(c.Endpoint), "amazonaws.com")
+}
+
 // buildClient constructs an s3.Client for a connection profile.
+//
+// For AWS we (a) force HTTPS — plain HTTP to s3.amazonaws.com returns 307
+// redirects — and (b) leave the signing region empty so the SDK auto-discovers
+// each bucket's real region (a bucket outside us-east-1 otherwise fails with
+// "Access Denied" when signed for the wrong region).
 func buildClient(c *model.Connection) (*s3.Client, error) {
 	endpoint := c.Endpoint
-	if endpoint == "" && c.Provider == "aws" {
-		endpoint = "s3.amazonaws.com"
+	useSSL := c.UseSSL
+	region := c.Region
+	if isAWS(c) {
+		if endpoint == "" {
+			endpoint = "s3.amazonaws.com"
+		}
+		useSSL = true
+		region = "" // auto-discover per bucket
 	}
 	return s3.New(s3.Config{
 		Endpoint: endpoint, AccessKey: c.AccessKey, SecretKey: c.SecretKey,
-		UseSSL: c.UseSSL, Region: c.Region,
+		UseSSL: useSSL, Region: region,
 	})
 }
 
@@ -242,14 +267,20 @@ func buildClient(c *model.Connection) (*s3.Client, error) {
 func previewConn(c *model.Connection) preview.Conn {
 	urlStyle := "path"
 	endpoint := c.Endpoint
-	if c.Provider == "aws" {
+	useSSL := c.UseSSL
+	region := c.Region
+	if isAWS(c) {
 		urlStyle = "vhost"
+		useSSL = true
 		if endpoint == "" {
 			endpoint = "s3.amazonaws.com"
 		}
+		if region == "" {
+			region = "us-east-1"
+		}
 	}
 	return preview.Conn{
-		Endpoint: endpoint, Region: c.Region, AccessKey: c.AccessKey,
-		SecretKey: c.SecretKey, UseSSL: c.UseSSL, URLStyle: urlStyle,
+		Endpoint: endpoint, Region: region, AccessKey: c.AccessKey,
+		SecretKey: c.SecretKey, UseSSL: useSSL, URLStyle: urlStyle,
 	}
 }

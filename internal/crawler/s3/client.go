@@ -87,6 +87,13 @@ func (c *Client) BucketExists(ctx context.Context, bucket string) (bool, error) 
 	return c.mc.BucketExists(ctx, bucket)
 }
 
+// BucketRegion resolves the region a bucket lives in. Calling it also primes the
+// SDK's internal region cache, so subsequent list/get operations sign with the
+// correct region even when the client was created without one (AWS auto-detect).
+func (c *Client) BucketRegion(ctx context.Context, bucket string) (string, error) {
+	return c.mc.GetBucketLocation(ctx, bucket)
+}
+
 // WalkObjects streams every object under prefix to fn. Listing is recursive and
 // paginated by the SDK, so it scales to millions of objects with constant
 // memory. Returning an error from fn stops the walk.

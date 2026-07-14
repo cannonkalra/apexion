@@ -124,14 +124,27 @@ func (c *Crawler) Crawl(ctx context.Context, opts Options) (*model.CrawlerRun, e
 }
 
 func (c *Crawler) ensureBucket(ctx context.Context, name string) (*model.Bucket, error) {
+	// Resolve the bucket's real region up front. This primes the SDK region
+	// cache so the subsequent walk signs correctly for buckets outside the
+	// client's default region (essential for AWS multi-region accounts).
+	region := c.client().Region()
+	if r, err := c.client().BucketRegion(ctx, name); err == nil && r != "" {
+		region = r
+	}
+
 	b, err := c.store.GetBucketByName(ctx, name)
 	if err == nil && b != nil {
+		if region != "" && b.Region != region {
+			b.Region = region
+			b.UpdatedAt = time.Now().UTC()
+			_ = c.store.UpsertBucket(ctx, b)
+		}
 		return b, nil
 	}
 	now := time.Now().UTC()
 	b = &model.Bucket{
 		ID: uuid.NewString(), Name: name, Endpoint: c.client().Endpoint(),
-		Region: c.client().Region(), CreatedAt: now, UpdatedAt: now,
+		Region: region, CreatedAt: now, UpdatedAt: now,
 	}
 	if err := c.store.UpsertBucket(ctx, b); err != nil {
 		return nil, err
