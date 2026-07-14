@@ -174,6 +174,9 @@ func (m *Manager) Create(ctx context.Context, c *model.Connection) error {
 		if c.Endpoint == "" {
 			c.Endpoint = "s3.amazonaws.com"
 		}
+		if c.AccessKey == "" {
+			c.UseRole = true // no keys provided → service role
+		}
 	}
 	if err := m.store.UpsertConnection(ctx, c); err != nil {
 		return err
@@ -250,16 +253,20 @@ func buildClient(c *model.Connection) (*s3.Client, error) {
 	endpoint := c.Endpoint
 	useSSL := c.UseSSL
 	region := c.Region
+	useRole := c.UseRole
 	if isAWS(c) {
 		if endpoint == "" {
 			endpoint = "s3.amazonaws.com"
 		}
 		useSSL = true
 		region = "" // auto-discover per bucket
+		if c.AccessKey == "" {
+			useRole = true // no static keys → use the instance/service role
+		}
 	}
 	return s3.New(s3.Config{
 		Endpoint: endpoint, AccessKey: c.AccessKey, SecretKey: c.SecretKey,
-		UseSSL: useSSL, Region: region,
+		UseSSL: useSSL, Region: region, UseRole: useRole,
 	})
 }
 
@@ -269,6 +276,7 @@ func previewConn(c *model.Connection) preview.Conn {
 	endpoint := c.Endpoint
 	useSSL := c.UseSSL
 	region := c.Region
+	useRole := c.UseRole
 	if isAWS(c) {
 		urlStyle = "vhost"
 		useSSL = true
@@ -278,9 +286,15 @@ func previewConn(c *model.Connection) preview.Conn {
 		if region == "" {
 			region = "us-east-1"
 		}
+		if c.AccessKey == "" {
+			useRole = true
+		}
+		// For real AWS, the DuckDB secret should not pin a custom endpoint —
+		// let it use AWS's regional endpoints.
+		endpoint = ""
 	}
 	return preview.Conn{
 		Endpoint: endpoint, Region: region, AccessKey: c.AccessKey,
-		SecretKey: c.SecretKey, UseSSL: useSSL, URLStyle: urlStyle,
+		SecretKey: c.SecretKey, UseSSL: useSSL, URLStyle: urlStyle, UseRole: useRole,
 	}
 }

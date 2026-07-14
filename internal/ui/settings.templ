@@ -45,16 +45,23 @@ templ SettingsPage(vm SettingsVM) {
 						<input name="region" value="us-east-1" class={ inputClass }/>
 					</div>
 					<div>
-						<label class="block text-xs text-slate-500 mb-1">Access key</label>
+						<label class="block text-xs text-slate-500 mb-1">Access key <span class="text-slate-600">(leave blank for AWS role)</span></label>
 						<input name="access_key" autocomplete="off" class={ inputClass }/>
 					</div>
 					<div>
 						<label class="block text-xs text-slate-500 mb-1">Secret key</label>
 						<input name="secret_key" type="password" autocomplete="new-password" class={ inputClass }/>
 					</div>
+					<label class="flex items-center gap-2 text-sm text-slate-300 md:col-span-2 rounded-lg border border-base-800 bg-base-900 px-3 py-2">
+						<input type="checkbox" name="use_role" class="rounded bg-base-950 border-base-700"/>
+						<span>
+							<span class="font-medium">AWS Mode — use IAM role / instance profile</span>
+							<span class="block text-xs text-slate-500">Uses the EC2/ECS/IRSA service role (and env vars / <span class="font-mono">~/.aws</span>) — no access keys needed. Forces HTTPS and auto-detects each bucket's region.</span>
+						</span>
+					</label>
 					<label class="flex items-center gap-2 text-sm text-slate-300">
 						<input type="checkbox" name="use_ssl" class="rounded bg-base-950 border-base-700"/>
-						Use SSL (required for AWS)
+						Use SSL (auto-enabled for AWS)
 					</label>
 					<div class="md:col-span-2 flex justify-end">
 						<button class="btn-primary" type="submit">@iconPlay() Add connection</button>
@@ -150,6 +157,9 @@ templ connectionRow(c model.Connection, active bool) {
 			<div class="flex items-center gap-2">
 				<span class="font-medium text-slate-100">{ c.Name }</span>
 				<span class="badge bg-base-700 text-slate-400">{ c.Provider }</span>
+				if c.UseRole {
+					<span class="badge bg-accent-violet/15 text-accent-violet">IAM role</span>
+				}
 				if active {
 					<span class="badge bg-accent-emerald/15 text-accent-emerald">active</span>
 				}

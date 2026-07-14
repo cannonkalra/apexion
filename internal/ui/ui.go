@@ -366,6 +366,10 @@ func (h *Handler) settings(w http.ResponseWriter, r *http.Request) {
 }
 
 func (h *Handler) actionCreateConnection(w http.ResponseWriter, r *http.Request) {
+	checked := func(name string) bool {
+		v := r.FormValue(name)
+		return v == "on" || v == "true"
+	}
 	c := &model.Connection{
 		Name:      r.FormValue("name"),
 		Provider:  r.FormValue("provider"),
@@ -373,7 +377,8 @@ func (h *Handler) actionCreateConnection(w http.ResponseWriter, r *http.Request)
 		Region:    r.FormValue("region"),
 		AccessKey: r.FormValue("access_key"),
 		SecretKey: r.FormValue("secret_key"),
-		UseSSL:    r.FormValue("use_ssl") == "on" || r.FormValue("use_ssl") == "true",
+		UseSSL:    checked("use_ssl"),
+		UseRole:   checked("use_role"),
 	}
 	if c.Name == "" {
 		h.render(w, r, Toast("Connection name is required", "error"))

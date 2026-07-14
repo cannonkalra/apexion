@@ -11,15 +11,15 @@ import (
 func (s *Store) UpsertConnection(ctx context.Context, c *model.Connection) error {
 	_, err := s.db.ExecContext(ctx, `
 		INSERT INTO connections (id, name, provider, endpoint, region, access_key,
-			secret_key, use_ssl, is_active, created_at, updated_at)
-		VALUES (?,?,?,?,?,?,?,?,?,?,?)
+			secret_key, use_ssl, use_role, is_active, created_at, updated_at)
+		VALUES (?,?,?,?,?,?,?,?,?,?,?,?)
 		ON CONFLICT (id) DO UPDATE SET
 			name=excluded.name, provider=excluded.provider, endpoint=excluded.endpoint,
 			region=excluded.region, access_key=excluded.access_key,
 			secret_key=excluded.secret_key, use_ssl=excluded.use_ssl,
-			updated_at=excluded.updated_at`,
+			use_role=excluded.use_role, updated_at=excluded.updated_at`,
 		c.ID, c.Name, c.Provider, c.Endpoint, c.Region, c.AccessKey, c.SecretKey,
-		c.UseSSL, c.IsActive, c.CreatedAt, c.UpdatedAt)
+		c.UseSSL, c.UseRole, c.IsActive, c.CreatedAt, c.UpdatedAt)
 	return err
 }
 
@@ -100,12 +100,12 @@ func (s *Store) DeleteConnection(ctx context.Context, id string) error {
 }
 
 const connectionSelect = `SELECT id, name, provider, endpoint, region, access_key,
-	secret_key, use_ssl, is_active, created_at, updated_at FROM connections`
+	secret_key, use_ssl, use_role, is_active, created_at, updated_at FROM connections`
 
 func scanConnection(r rowScanner) (*model.Connection, error) {
 	var c model.Connection
 	if err := r.Scan(&c.ID, &c.Name, &c.Provider, &c.Endpoint, &c.Region,
-		&c.AccessKey, &c.SecretKey, &c.UseSSL, &c.IsActive, &c.CreatedAt, &c.UpdatedAt); err != nil {
+		&c.AccessKey, &c.SecretKey, &c.UseSSL, &c.UseRole, &c.IsActive, &c.CreatedAt, &c.UpdatedAt); err != nil {
 		return nil, err
 	}
 	return &c, nil

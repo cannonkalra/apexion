@@ -62,6 +62,9 @@ type Conn struct {
 	UseSSL    bool
 	// URLStyle is "path" (MinIO/custom) or "vhost" (AWS).
 	URLStyle string
+	// UseRole uses DuckDB's AWS credential chain (instance/service role) instead
+	// of static keys.
+	UseRole bool
 }
 
 func (e *Engine) configure(cfg config.MinIOConfig) {
@@ -120,30 +123,51 @@ func (e *Engine) Reconfigure(c Conn) error {
 		scheme = "https://"
 	}
 
+	useSSL := boolStr(c.UseSSL)
+
 	// Delta/Iceberg kernels read AWS_* env vars rather than DuckDB's s3_*
 	// settings. AWS_ALLOW_HTTP is required for plain-HTTP MinIO.
-	for k, v := range map[string]string{
-		"AWS_ENDPOINT_URL":           scheme + c.Endpoint,
-		"AWS_ENDPOINT_URL_S3":        scheme + c.Endpoint,
-		"AWS_ACCESS_KEY_ID":          c.AccessKey,
-		"AWS_SECRET_ACCESS_KEY":      c.SecretKey,
+	env := map[string]string{
 		"AWS_REGION":                 region,
 		"AWS_DEFAULT_REGION":         region,
 		"AWS_ALLOW_HTTP":             boolStr(!c.UseSSL),
 		"AWS_S3_ALLOW_UNSAFE_RENAME": "true",
-		"AWS_EC2_METADATA_DISABLED":  "true",
-	} {
+	}
+	if c.Endpoint != "" {
+		env["AWS_ENDPOINT_URL"] = scheme + c.Endpoint
+		env["AWS_ENDPOINT_URL_S3"] = scheme + c.Endpoint
+	}
+	if c.UseRole {
+		// Clear any static creds left in the process env by a previous
+		// connection (e.g. the default MinIO one) so the credential chain
+		// resolves the instance/service role via IMDS instead of stale keys.
+		for _, k := range []string{
+			"AWS_ACCESS_KEY_ID", "AWS_SECRET_ACCESS_KEY", "AWS_SESSION_TOKEN",
+			"AWS_EC2_METADATA_DISABLED",
+		} {
+			_ = os.Unsetenv(k)
+		}
+	} else {
+		env["AWS_ACCESS_KEY_ID"] = c.AccessKey
+		env["AWS_SECRET_ACCESS_KEY"] = c.SecretKey
+		env["AWS_EC2_METADATA_DISABLED"] = "true"
+	}
+	for k, v := range env {
 		_ = os.Setenv(k, v)
 	}
 
-	useSSL := boolStr(c.UseSSL)
 	setup := []string{
-		fmt.Sprintf("SET s3_endpoint='%s'", esc(c.Endpoint)),
 		"SET s3_use_ssl=" + useSSL,
 		fmt.Sprintf("SET s3_url_style='%s'", esc(urlStyle)),
 		fmt.Sprintf("SET s3_region='%s'", esc(region)),
-		fmt.Sprintf("SET s3_access_key_id='%s'", esc(c.AccessKey)),
-		fmt.Sprintf("SET s3_secret_access_key='%s'", esc(c.SecretKey)),
+	}
+	if c.Endpoint != "" {
+		setup = append(setup, fmt.Sprintf("SET s3_endpoint='%s'", esc(c.Endpoint)))
+	}
+	if !c.UseRole {
+		setup = append(setup,
+			fmt.Sprintf("SET s3_access_key_id='%s'", esc(c.AccessKey)),
+			fmt.Sprintf("SET s3_secret_access_key='%s'", esc(c.SecretKey)))
 	}
 	for _, q := range setup {
 		if _, err := e.db.ExecContext(ctx, q); err != nil {
@@ -158,17 +182,26 @@ func (e *Engine) Reconfigure(c Conn) error {
 	if c.Endpoint != "" {
 		endpointClause = fmt.Sprintf(", ENDPOINT '%s'", esc(c.Endpoint))
 	}
-	secret := fmt.Sprintf(`CREATE OR REPLACE SECRET apexion_s3 (
-		TYPE S3, KEY_ID '%s', SECRET '%s'%s,
-		URL_STYLE '%s', USE_SSL %s, REGION '%s')`,
-		esc(c.AccessKey), esc(c.SecretKey), endpointClause, esc(urlStyle), useSSL, esc(region))
+	var secret string
+	if c.UseRole {
+		// PROVIDER credential_chain resolves creds from env/config/instance role.
+		secret = fmt.Sprintf(`CREATE OR REPLACE SECRET apexion_s3 (
+			TYPE S3, PROVIDER CREDENTIAL_CHAIN%s,
+			URL_STYLE '%s', USE_SSL %s, REGION '%s')`,
+			endpointClause, esc(urlStyle), useSSL, esc(region))
+	} else {
+		secret = fmt.Sprintf(`CREATE OR REPLACE SECRET apexion_s3 (
+			TYPE S3, KEY_ID '%s', SECRET '%s'%s,
+			URL_STYLE '%s', USE_SSL %s, REGION '%s')`,
+			esc(c.AccessKey), esc(c.SecretKey), endpointClause, esc(urlStyle), useSSL, esc(region))
+	}
 	if _, err := e.db.ExecContext(ctx, secret); err != nil {
 		e.log.Debug().Err(err).Msg("create s3 secret failed (table-format preview may be limited)")
 	}
 
 	e.ready = true
 	e.readErr = ""
-	e.log.Info().Str("endpoint", c.Endpoint).Str("url_style", urlStyle).Msg("preview engine configured")
+	e.log.Info().Str("endpoint", c.Endpoint).Str("url_style", urlStyle).Bool("role", c.UseRole).Msg("preview engine configured")
 	return nil
 }
 

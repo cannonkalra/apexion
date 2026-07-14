@@ -8,6 +8,7 @@ import (
 	"context"
 	"fmt"
 	"io"
+	"net/http"
 	"strings"
 	"time"
 
@@ -38,12 +39,27 @@ type Config struct {
 	SecretKey string
 	UseSSL    bool
 	Region    string
+	// UseRole uses the AWS credential chain (env vars, shared config, and the
+	// EC2/ECS/IRSA instance role) instead of static keys — for service roles.
+	UseRole bool
 }
 
 // New connects to the object store.
 func New(cfg Config) (*Client, error) {
+	var creds *credentials.Credentials
+	if cfg.UseRole {
+		// Mirror the AWS SDK default chain: env → shared config → IAM role
+		// (EC2 IMDS / ECS / IRSA web identity).
+		creds = credentials.NewChainCredentials([]credentials.Provider{
+			&credentials.EnvAWS{},
+			&credentials.FileAWSCredentials{},
+			&credentials.IAM{Client: &http.Client{Timeout: 10 * time.Second}},
+		})
+	} else {
+		creds = credentials.NewStaticV4(cfg.AccessKey, cfg.SecretKey, "")
+	}
 	mc, err := minio.New(cfg.Endpoint, &minio.Options{
-		Creds:  credentials.NewStaticV4(cfg.AccessKey, cfg.SecretKey, ""),
+		Creds:  creds,
 		Secure: cfg.UseSSL,
 		Region: cfg.Region,
 	})

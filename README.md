@@ -44,6 +44,11 @@ browse and preview data before (and after) cataloging it:
   and DuckDB preview engine (its S3 credentials + endpoint) at the new account — pick one from the
   switcher in the Explorer or from Settings. Credentials are stored in the DuckDB catalog and
   redacted in API listings.
+  - **AWS**: choosing the `aws` provider forces HTTPS and auto-detects each bucket's region (no need
+    to know it up front). Tick **AWS Mode — use IAM role / instance profile** (or just leave the
+    access key blank) to authenticate with the EC2/ECS/IRSA **service role** via the AWS credential
+    chain — no static keys required. The DuckDB preview engine uses the same chain
+    (`PROVIDER credential_chain`).
 
 The AI inference now also produces a **business description**, **recommended partition columns**,
 **duplicate & missing-value analysis**, a **recommended Apache Doris schema**, and **Spark/Flink
