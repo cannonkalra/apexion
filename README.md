@@ -49,6 +49,11 @@ browse and preview data before (and after) cataloging it:
     access key blank) to authenticate with the EC2/ECS/IRSA **service role** via the AWS credential
     chain — no static keys required. The DuckDB preview engine uses the same chain
     (`PROVIDER credential_chain`).
+    - **Legacy bucket names** (uppercase, underscores, or dots — e.g. `Dharani_test`) aren't
+      DNS-compatible, so virtual-hosted addressing (`bucket.s3.amazonaws.com`) fails with
+      *NoSuchBucket*. Apexion auto-switches those buckets to **path-style** addressing; you can also
+      tick **Force path-style addressing** on the connection. DNS-compliant buckets keep using
+      virtual-hosted style.
 
 The AI inference now also produces a **business description**, **recommended partition columns**,
 **duplicate & missing-value analysis**, a **recommended Apache Doris schema**, and **Spark/Flink

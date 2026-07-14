@@ -98,12 +98,14 @@ type connectionInput struct {
 	SecretKey string `json:"secret_key"`
 	UseSSL    bool   `json:"use_ssl"`
 	UseRole   bool   `json:"use_role"`
+	PathStyle bool   `json:"path_style"`
 }
 
 func (in connectionInput) toModel() *model.Connection {
 	return &model.Connection{
 		Name: in.Name, Provider: in.Provider, Endpoint: in.Endpoint, Region: in.Region,
-		AccessKey: in.AccessKey, SecretKey: in.SecretKey, UseSSL: in.UseSSL, UseRole: in.UseRole,
+		AccessKey: in.AccessKey, SecretKey: in.SecretKey, UseSSL: in.UseSSL,
+		UseRole: in.UseRole, PathStyle: in.PathStyle,
 	}
 }
 

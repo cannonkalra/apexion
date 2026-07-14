@@ -325,7 +325,8 @@ type Connection struct {
 	AccessKey string    `json:"access_key"`
 	SecretKey string    `json:"secret_key"`
 	UseSSL    bool      `json:"use_ssl"`
-	UseRole   bool      `json:"use_role"` // use the AWS credential chain (IAM role), no keys
+	UseRole   bool      `json:"use_role"`   // use the AWS credential chain (IAM role), no keys
+	PathStyle bool      `json:"path_style"` // force path-style addressing (legacy bucket names)
 	IsActive  bool      `json:"is_active"`
 	CreatedAt time.Time `json:"created_at"`
 	UpdatedAt time.Time `json:"updated_at"`

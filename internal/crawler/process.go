@@ -119,7 +119,7 @@ func (c *Crawler) processOne(ctx context.Context, bucket *model.Bucket, d *dsAgg
 // resolveSchema reads the schema either via a table resolver or a file reader.
 func (c *Crawler) resolveSchema(ctx context.Context, bucket *model.Bucket, d *dsAgg, f model.Format) (*format.Result, error) {
 	if resolver, ok := c.resolvers[f]; ok {
-		res, ok, err := resolver.Detect(ctx, c.client().Catalog(bucket.Name), d.root)
+		res, ok, err := resolver.Detect(ctx, c.clientFor(bucket.Name).Catalog(bucket.Name), d.root)
 		if err != nil {
 			c.log.Warn().Err(err).Str("root", d.root).Msg("table resolver failed")
 		}
@@ -137,7 +137,7 @@ func (c *Crawler) resolveSchema(ctx context.Context, bucket *model.Bucket, d *ds
 	if !ok {
 		return &format.Result{Format: f}, nil
 	}
-	src := c.client().NewSource(bucket.Name, rep.key, rep.size)
+	src := c.clientFor(bucket.Name).NewSource(bucket.Name, rep.key, rep.size)
 	opts := format.Options{
 		SampleRows:  1000,
 		SampleBytes: c.cfg.SampleBytes,

@@ -63,6 +63,13 @@ templ SettingsPage(vm SettingsVM) {
 						<input type="checkbox" name="use_ssl" class="rounded bg-base-950 border-base-700"/>
 						Use SSL (auto-enabled for AWS)
 					</label>
+					<label class="flex items-center gap-2 text-sm text-slate-300">
+						<input type="checkbox" name="path_style" class="rounded bg-base-950 border-base-700"/>
+						<span>
+							Force path-style addressing
+							<span class="block text-xs text-slate-500">For legacy bucket names with uppercase/underscores/dots (auto-applied when detected).</span>
+						</span>
+					</label>
 					<div class="md:col-span-2 flex justify-end">
 						<button class="btn-primary" type="submit">@iconPlay() Add connection</button>
 					</div>
@@ -159,6 +166,9 @@ templ connectionRow(c model.Connection, active bool) {
 				<span class="badge bg-base-700 text-slate-400">{ c.Provider }</span>
 				if c.UseRole {
 					<span class="badge bg-accent-violet/15 text-accent-violet">IAM role</span>
+				}
+				if c.PathStyle {
+					<span class="badge bg-base-700 text-slate-400">path-style</span>
 				}
 				if active {
 					<span class="badge bg-accent-emerald/15 text-accent-emerald">active</span>

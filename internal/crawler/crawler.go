@@ -53,6 +53,9 @@ func New(store *storage.Store, provider s3.Provider, reg *format.Registry,
 // client returns the currently-active S3 client.
 func (c *Crawler) client() *s3.Client { return c.provider.Client() }
 
+// clientFor returns a client with addressing suited to the bucket name.
+func (c *Crawler) clientFor(bucket string) *s3.Client { return c.provider.ClientFor(bucket) }
+
 // Options controls a single crawl.
 type Options struct {
 	Bucket   string
@@ -127,8 +130,9 @@ func (c *Crawler) ensureBucket(ctx context.Context, name string) (*model.Bucket,
 	// Resolve the bucket's real region up front. This primes the SDK region
 	// cache so the subsequent walk signs correctly for buckets outside the
 	// client's default region (essential for AWS multi-region accounts).
-	region := c.client().Region()
-	if r, err := c.client().BucketRegion(ctx, name); err == nil && r != "" {
+	cf := c.clientFor(name)
+	region := cf.Region()
+	if r, err := cf.BucketRegion(ctx, name); err == nil && r != "" {
 		region = r
 	}
 
@@ -143,7 +147,7 @@ func (c *Crawler) ensureBucket(ctx context.Context, name string) (*model.Bucket,
 	}
 	now := time.Now().UTC()
 	b = &model.Bucket{
-		ID: uuid.NewString(), Name: name, Endpoint: c.client().Endpoint(),
+		ID: uuid.NewString(), Name: name, Endpoint: cf.Endpoint(),
 		Region: region, CreatedAt: now, UpdatedAt: now,
 	}
 	if err := c.store.UpsertBucket(ctx, b); err != nil {
@@ -190,7 +194,7 @@ func (c *Crawler) walk(ctx context.Context, bucket *model.Bucket, run *model.Cra
 	now := time.Now().UTC()
 	incremental := opts.Mode == model.CrawlIncremental
 
-	err := c.client().WalkObjects(ctx, bucket.Name, opts.Prefix, startAfter, func(om s3.ObjectMeta) error {
+	err := c.clientFor(bucket.Name).WalkObjects(ctx, bucket.Name, opts.Prefix, startAfter, func(om s3.ObjectMeta) error {
 		if err := limiter.Wait(ctx); err != nil {
 			return err
 		}

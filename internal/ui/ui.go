@@ -379,6 +379,7 @@ func (h *Handler) actionCreateConnection(w http.ResponseWriter, r *http.Request)
 		SecretKey: r.FormValue("secret_key"),
 		UseSSL:    checked("use_ssl"),
 		UseRole:   checked("use_role"),
+		PathStyle: checked("path_style"),
 	}
 	if c.Name == "" {
 		h.render(w, r, Toast("Connection name is required", "error"))

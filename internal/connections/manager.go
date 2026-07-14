@@ -100,31 +100,64 @@ func (m *Manager) activate(conn *model.Connection) error {
 	return nil
 }
 
-// Client returns the active S3 client, building and caching it as needed. It
-// always returns a usable client (falling back to the static config).
+// Client returns the active S3 client (for connection-level / global
+// operations like ListBuckets). It always returns a usable client.
 func (m *Manager) Client() *s3.Client {
 	m.mu.RLock()
 	active := m.active
 	m.mu.RUnlock()
-
 	if active == nil {
 		return m.fallbackClient()
 	}
+	return m.clientFor(active, active.PathStyle)
+}
+
+// ClientFor returns a client whose addressing style suits the bucket. Legacy
+// AWS bucket names (uppercase, underscore, dots) need path-style; the user can
+// also force it per connection.
+func (m *Manager) ClientFor(bucket string) *s3.Client {
 	m.mu.RLock()
-	c := m.clients[active.ID]
+	active := m.active
+	m.mu.RUnlock()
+	if active == nil {
+		return m.fallbackClient()
+	}
+	pathStyle := active.PathStyle || (isAWS(active) && needsPathStyle(bucket))
+	return m.clientFor(active, pathStyle)
+}
+
+// clientFor builds/caches a client for a connection at a given addressing style.
+func (m *Manager) clientFor(active *model.Connection, pathStyle bool) *s3.Client {
+	key := active.ID
+	if pathStyle {
+		key += ":path"
+	}
+	m.mu.RLock()
+	c := m.clients[key]
 	m.mu.RUnlock()
 	if c != nil {
 		return c
 	}
-	built, err := buildClient(active)
+	built, err := buildClient(active, pathStyle)
 	if err != nil {
 		m.log.Warn().Err(err).Str("connection", active.Name).Msg("build client failed, using fallback")
 		return m.fallbackClient()
 	}
 	m.mu.Lock()
-	m.clients[active.ID] = built
+	m.clients[key] = built
 	m.mu.Unlock()
 	return built
+}
+
+// needsPathStyle reports whether a bucket name is not DNS-compatible and so
+// requires path-style addressing on AWS.
+func needsPathStyle(bucket string) bool {
+	if bucket == "" {
+		return false
+	}
+	return bucket != strings.ToLower(bucket) || // uppercase
+		strings.Contains(bucket, "_") || // underscore
+		strings.Contains(bucket, ".") // dots break virtual-host + TLS
 }
 
 func (m *Manager) fallbackClient() *s3.Client {
@@ -227,7 +260,7 @@ func (m *Manager) Delete(ctx context.Context, id string) error {
 
 // TestConnection validates credentials by listing buckets.
 func (m *Manager) TestConnection(ctx context.Context, c *model.Connection) error {
-	client, err := buildClient(c)
+	client, err := buildClient(c, c.PathStyle)
 	if err != nil {
 		return err
 	}
@@ -249,7 +282,7 @@ func isAWS(c *model.Connection) bool {
 // redirects — and (b) leave the signing region empty so the SDK auto-discovers
 // each bucket's real region (a bucket outside us-east-1 otherwise fails with
 // "Access Denied" when signed for the wrong region).
-func buildClient(c *model.Connection) (*s3.Client, error) {
+func buildClient(c *model.Connection, pathStyle bool) (*s3.Client, error) {
 	endpoint := c.Endpoint
 	useSSL := c.UseSSL
 	region := c.Region
@@ -266,7 +299,7 @@ func buildClient(c *model.Connection) (*s3.Client, error) {
 	}
 	return s3.New(s3.Config{
 		Endpoint: endpoint, AccessKey: c.AccessKey, SecretKey: c.SecretKey,
-		UseSSL: useSSL, Region: region, UseRole: useRole,
+		UseSSL: useSSL, Region: region, UseRole: useRole, PathStyle: pathStyle || c.PathStyle,
 	})
 }
 
@@ -292,6 +325,9 @@ func previewConn(c *model.Connection) preview.Conn {
 		// For real AWS, the DuckDB secret should not pin a custom endpoint —
 		// let it use AWS's regional endpoints.
 		endpoint = ""
+	}
+	if c.PathStyle {
+		urlStyle = "path"
 	}
 	return preview.Conn{
 		Endpoint: endpoint, Region: region, AccessKey: c.AccessKey,

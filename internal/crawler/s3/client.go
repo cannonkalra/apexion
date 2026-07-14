@@ -20,9 +20,11 @@ import (
 
 // Provider returns the currently-active S3 client. It lets long-lived services
 // (crawler, explorer, catalog) follow the user's active connection without
-// being rebuilt when it changes.
+// being rebuilt when it changes. ClientFor returns a client whose addressing
+// style suits the given bucket name (path-style for legacy AWS names).
 type Provider interface {
 	Client() *Client
+	ClientFor(bucket string) *Client
 }
 
 // Client is a thin wrapper over the MinIO SDK.
@@ -42,6 +44,10 @@ type Config struct {
 	// UseRole uses the AWS credential chain (env vars, shared config, and the
 	// EC2/ECS/IRSA instance role) instead of static keys — for service roles.
 	UseRole bool
+	// PathStyle forces path-style addressing (s3.host/bucket) instead of
+	// virtual-hosted (bucket.s3.host). Required for legacy AWS bucket names that
+	// aren't DNS-compatible (uppercase, underscore, dots).
+	PathStyle bool
 }
 
 // New connects to the object store.
@@ -58,11 +64,15 @@ func New(cfg Config) (*Client, error) {
 	} else {
 		creds = credentials.NewStaticV4(cfg.AccessKey, cfg.SecretKey, "")
 	}
-	mc, err := minio.New(cfg.Endpoint, &minio.Options{
+	opts := &minio.Options{
 		Creds:  creds,
 		Secure: cfg.UseSSL,
 		Region: cfg.Region,
-	})
+	}
+	if cfg.PathStyle {
+		opts.BucketLookup = minio.BucketLookupPath
+	}
+	mc, err := minio.New(cfg.Endpoint, opts)
 	if err != nil {
 		return nil, fmt.Errorf("connect minio: %w", err)
 	}
