@@ -95,6 +95,36 @@ down: ## Stop and remove the Docker stack
 docker-build: ## Build the Docker image
 	docker build -t apexion:latest .
 
+## ---- cross-build (linux/amd64) ------------------------------------------
+# The embedded DuckDB driver uses CGO, so a native `GOOS=linux go build` on
+# macOS won't link. These targets build inside a linux/amd64 container instead.
+
+.PHONY: build-linux
+build-linux: ## Cross-build linux/amd64 binaries into ./dist (via Docker)
+	@mkdir -p dist
+	docker run --rm --platform linux/amd64 \
+	  -v "$(CURDIR)":/src -w /src \
+	  -v apexion-gomod:/go/pkg/mod \
+	  -v apexion-gobuild:/root/.cache/go-build \
+	  -e CGO_ENABLED=1 \
+	  golang:1.26-bookworm \
+	  bash -c 'go build -trimpath -ldflags "-s -w" -o dist/apexion-linux-amd64 ./cmd/apexion && \
+	           go build -trimpath -ldflags "-s -w" -o dist/seed-linux-amd64 ./cmd/seed'
+	@echo "→ dist/apexion-linux-amd64"
+	@file dist/apexion-linux-amd64 2>/dev/null || true
+
+.PHONY: docker-build-linux
+docker-build-linux: ## Build the linux/amd64 Docker image (for deploy)
+	docker build --platform linux/amd64 -t apexion:linux-amd64 .
+
+.PHONY: image-extract-linux
+image-extract-linux: docker-build-linux ## Build the amd64 image and copy the binary to ./dist
+	@mkdir -p dist
+	$(eval CID := $(shell docker create --platform linux/amd64 apexion:linux-amd64))
+	docker cp $(CID):/usr/local/bin/apexion dist/apexion-linux-amd64
+	docker rm $(CID) >/dev/null
+	@echo "→ dist/apexion-linux-amd64"
+
 ## ---- quality ------------------------------------------------------------
 
 .PHONY: test

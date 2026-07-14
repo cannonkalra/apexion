@@ -170,15 +170,40 @@ func (h *Handler) buckets(w http.ResponseWriter, r *http.Request) {
 
 func (h *Handler) explorerPage(w http.ResponseWriter, r *http.Request) {
 	ctx := r.Context()
-	_, names, _ := h.catalog.ServerBuckets(ctx)
+	selected := r.URL.Query().Get("bucket")
+
+	// ListAllMyBuckets may be denied by the credentials. Build the bucket rail
+	// from every source we have: the server listing (best-effort), buckets we've
+	// already cataloged/connected, and whatever bucket the user is browsing.
+	_, serverNames, serverErr := h.catalog.ServerBuckets(ctx)
+	cataloged, _ := h.store.ListBuckets(ctx)
+
+	seen := map[string]bool{}
+	var buckets []string
+	add := func(n string) {
+		if n != "" && !seen[n] {
+			seen[n] = true
+			buckets = append(buckets, n)
+		}
+	}
+	for _, n := range serverNames {
+		add(n)
+	}
+	for _, b := range cataloged {
+		add(b.Name)
+	}
+	add(selected)
+	sort.Strings(buckets)
+
 	conns, _ := h.connections.List(ctx)
 	vm := ExplorerVM{
-		Buckets: names, Bucket: r.URL.Query().Get("bucket"),
+		Buckets: buckets, Bucket: selected,
 		Connections: conns, ActiveConn: h.connections.Active(),
+		ServerListOK: serverErr == nil,
 	}
-	if vm.Bucket != "" {
+	if selected != "" {
 		prefix := r.URL.Query().Get("prefix")
-		listing, err := h.explorer.ListDir(ctx, vm.Bucket, prefix)
+		listing, err := h.explorer.ListDir(ctx, selected, prefix)
 		if err != nil {
 			vm.Error = err.Error()
 		} else {

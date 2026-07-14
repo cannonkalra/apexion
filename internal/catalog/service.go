@@ -48,9 +48,13 @@ func New(store *storage.Store, provider s3.Provider, cr *crawler.Crawler, engine
 // ServerBuckets lists the buckets that exist on the active S3/MinIO connection
 // (via the ListAllMyBuckets API). This is independent of what has been crawled
 // into the catalog. The endpoint is returned so the UI can show what it is
-// connected to.
+// connected to. It is bounded by a short timeout so a denied or unreachable
+// endpoint never hangs the Explorer — the caller falls back to cataloged
+// buckets and manual entry.
 func (s *Service) ServerBuckets(ctx context.Context) (endpoint string, names []string, err error) {
 	client := s.provider.Client()
+	ctx, cancel := context.WithTimeout(ctx, 8*time.Second)
+	defer cancel()
 	names, err = client.ListBuckets(ctx)
 	return client.Endpoint(), names, err
 }

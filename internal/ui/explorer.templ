@@ -7,10 +7,32 @@ templ ExplorerPage(vm ExplorerVM) {
 		<div class="grid grid-cols-1 lg:grid-cols-4 gap-4">
 			<div class="card p-3 lg:col-span-1 h-fit">
 				@connectionSwitcher(vm)
-				<div class="text-xs uppercase tracking-wider text-slate-500 px-2 mb-2 mt-3">Buckets</div>
+				<div class="text-xs uppercase tracking-wider text-slate-500 px-2 mb-2 mt-3">Open a bucket</div>
+				<form method="get" action="/explorer" class="px-1 mb-3">
+					<div class="flex gap-1.5">
+						<input
+							name="bucket"
+							value={ vm.Bucket }
+							placeholder="bucket name…"
+							class="flex-1 min-w-0 px-2.5 py-1.5 rounded-lg bg-base-950 border border-base-800 text-sm text-slate-200 placeholder-slate-500 focus:outline-none focus:ring-2 focus:ring-brand-500/40"
+						/>
+						<button type="submit" class="btn-primary !px-2.5" title="Open">→</button>
+					</div>
+				</form>
+				<div class="flex items-center justify-between px-2 mb-2">
+					<span class="text-xs uppercase tracking-wider text-slate-500">Buckets</span>
+					if !vm.ServerListOK {
+						<span class="badge bg-accent-amber/15 text-accent-amber" title="ListAllMyBuckets is not permitted for these credentials">restricted</span>
+					}
+				</div>
+				if !vm.ServerListOK {
+					<p class="text-[11px] text-slate-500 px-2 mb-2 leading-snug">
+						Can't list all buckets (missing <span class="font-mono">s3:ListAllMyBuckets</span>). Type a bucket name above to browse one you have access to.
+					</p>
+				}
 				<div class="space-y-0.5">
 					if len(vm.Buckets) == 0 {
-						<p class="text-sm text-slate-500 px-2">No buckets on the server.</p>
+						<p class="text-sm text-slate-500 px-2">No buckets to show yet — open one by name above.</p>
 					}
 					for _, b := range vm.Buckets {
 						<a

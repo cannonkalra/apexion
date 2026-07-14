@@ -10,13 +10,14 @@ import (
 
 // ExplorerVM powers the VS Code-style bucket/folder/file browser.
 type ExplorerVM struct {
-	Buckets     []string // all buckets on the active connection
-	Bucket      string
-	Listing     *explorer.DirListing
-	Crumbs      []explorer.Crumb
-	Error       string
-	Connections []model.Connection
-	ActiveConn  *model.Connection
+	Buckets      []string // union of server-listed + cataloged + selected buckets
+	Bucket       string
+	Listing      *explorer.DirListing
+	Crumbs       []explorer.Crumb
+	Error        string
+	Connections  []model.Connection
+	ActiveConn   *model.Connection
+	ServerListOK bool // false when ListAllMyBuckets is denied/unavailable
 }
 
 // PreviewVM powers the instant file preview page.

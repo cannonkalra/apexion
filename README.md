@@ -25,7 +25,10 @@ browse and preview data before (and after) cataloging it:
 
 - **Explorer** (`/explorer`) — a VS Code-style tree over object storage. Click a bucket, drill
   into folders (delimiter-based, lazy), see a live folder summary (files, size, formats, last
-  modified), and **Crawl Directory** to catalog just that prefix.
+  modified), and **Crawl Directory** to catalog just that prefix. If the credentials can't list
+  all buckets (no `s3:ListAllMyBuckets`, common on scoped AWS roles), the rail still shows the
+  buckets you've already connected and offers an **Open a bucket by name** box — browsing a single
+  bucket only needs `s3:ListBucket` on it.
 - **Instant file preview** (`/preview`) — opens any CSV/TSV/JSON/JSONL/Parquet file and runs
   `read_csv_auto` / `read_json_auto` / `read_parquet` **directly against `s3://…`** via DuckDB's
   `httpfs` extension. Shows column names, DuckDB types, and 100 sample rows — the file is never
