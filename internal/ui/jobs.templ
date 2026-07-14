@@ -1,0 +1,90 @@
+package ui
+
+import (
+	"fmt"
+	"github.com/apexion/apexion/internal/model"
+)
+
+templ JobsPage(vm JobsVM) {
+	@Layout("jobs", "Jobs") {
+		<div class="card p-5">
+			<div class="flex items-center justify-between mb-4">
+				<div>
+					<h2 class="text-base font-semibold text-white">Background jobs</h2>
+					<p class="text-sm text-slate-500">Crawl and inference jobs with live progress</p>
+				</div>
+			</div>
+			<div id="jobs-table" hx-get="/ui/partials/jobs-table" hx-trigger="load, every 2s" hx-swap="innerHTML">
+				@JobsTable(vm.Jobs)
+			</div>
+		</div>
+		<div id="toast-slot"></div>
+	}
+}
+
+// JobsTable renders the jobs table (polled).
+templ JobsTable(jobs []model.Job) {
+	if len(jobs) == 0 {
+		@EmptyState("No jobs yet", "Crawl a bucket or directory to create a job.")
+	} else {
+		<div class="overflow-x-auto">
+			<table class="w-full">
+				<thead>
+					<tr class="border-b border-base-800">
+						<th class="th">Job</th>
+						<th class="th">Type</th>
+						<th class="th">Status</th>
+						<th class="th w-64">Progress</th>
+						<th class="th">Elapsed</th>
+						<th class="th text-right">Actions</th>
+					</tr>
+				</thead>
+				<tbody class="divide-y divide-base-800">
+					for _, j := range jobs {
+						<tr class="hover:bg-base-850/50">
+							<td class="table-cell">
+								<div class="text-slate-200 font-medium">{ truncate(j.Label, 40) }</div>
+								if j.Message != "" {
+									<div class="text-xs text-slate-500">{ truncate(j.Message, 50) }</div>
+								}
+								if j.Error != "" {
+									<div class="text-xs text-accent-rose">{ truncate(j.Error, 60) }</div>
+								}
+							</td>
+							<td class="table-cell text-slate-400">{ string(j.Type) }</td>
+							<td class="table-cell">@StatusPill(j.Status)</td>
+							<td class="table-cell">
+								<div class="flex items-center gap-2">
+									@ProgressBar(j.Progress)
+									<span class="text-xs text-slate-500 w-10 text-right">{ progressPct(j.Progress) }</span>
+								</div>
+							</td>
+							<td class="table-cell text-slate-500">{ jobElapsed(j) }</td>
+							<td class="table-cell text-right">
+								if j.Status == model.StatusRunning || j.Status == model.StatusQueued {
+									<button
+										class="btn-danger !px-2 !py-1"
+										title="Cancel"
+										hx-post={ "/ui/jobs/" + j.ID + "/cancel" }
+										hx-target="#toast-slot"
+										hx-swap="innerHTML"
+									>@iconStop() Cancel</button>
+								} else {
+									<span class="text-xs text-slate-600">—</span>
+								}
+							</td>
+						</tr>
+					}
+				</tbody>
+			</table>
+		</div>
+	}
+}
+
+templ StatCardsForJobs(running, completed, failed int) {
+	<div class="grid grid-cols-3 gap-3 mb-4">
+		<div class="card p-3"><div class="text-xs text-slate-500">Running</div><div class="text-xl font-semibold text-brand-300">{ fmt.Sprintf("%d", running) }</div></div>
+		<div class="card p-3"><div class="text-xs text-slate-500">Completed</div><div class="text-xl font-semibold text-accent-emerald">{ fmt.Sprintf("%d", completed) }</div></div>
+		<div class="card p-3"><div class="text-xs text-slate-500">Failed</div><div class="text-xl font-semibold text-accent-rose">{ fmt.Sprintf("%d", failed) }</div></div>
+	</div>
+}

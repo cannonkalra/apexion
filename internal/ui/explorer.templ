@@ -1,0 +1,103 @@
+package ui
+
+import "github.com/apexion/apexion/internal/explorer"
+
+templ ExplorerPage(vm ExplorerVM) {
+	@Layout("explorer", "Explorer") {
+		<div class="grid grid-cols-1 lg:grid-cols-4 gap-4">
+			<div class="card p-3 lg:col-span-1 h-fit">
+				<div class="text-xs uppercase tracking-wider text-slate-500 px-2 mb-2">Buckets</div>
+				<div class="space-y-0.5">
+					if len(vm.Buckets) == 0 {
+						<p class="text-sm text-slate-500 px-2">No buckets on the server.</p>
+					}
+					for _, b := range vm.Buckets {
+						<a
+							href={ templ.SafeURL("/explorer?bucket=" + b) }
+							class={ "flex items-center gap-2 px-2 py-2 rounded-lg text-sm", templ.KV("bg-base-800 text-white", b == vm.Bucket), templ.KV("text-slate-300 hover:bg-base-850", b != vm.Bucket) }
+						>
+							@iconBucket()
+							<span class="truncate flex-1">{ b }</span>
+						</a>
+					}
+				</div>
+			</div>
+
+			<div class="lg:col-span-3">
+				if vm.Bucket == "" {
+					@EmptyState("Pick a bucket", "Select a bucket to browse its folders and files.")
+				} else if vm.Error != "" {
+					@QueryError(vm.Error)
+				} else if vm.Listing != nil {
+					@breadcrumbs(vm.Bucket, vm.Crumbs)
+					@folderSummaryBar(vm.Bucket, vm.Listing)
+					@DirListing(vm.Listing)
+				}
+			</div>
+		</div>
+		<div id="toast-slot"></div>
+	}
+}
+
+templ breadcrumbs(bucket string, crumbs []explorer.Crumb) {
+	<div class="flex items-center gap-1.5 text-sm mb-3 flex-wrap">
+		<a href={ templ.SafeURL("/explorer?bucket=" + bucket) } class="text-brand-300 hover:underline font-medium">{ bucket }</a>
+		for _, c := range crumbs {
+			<span class="text-slate-600">/</span>
+			<a href={ templ.SafeURL("/explorer?bucket=" + bucket + "&prefix=" + c.Path) } class="text-slate-300 hover:text-brand-300">{ c.Name }</a>
+		}
+	</div>
+}
+
+templ folderSummaryBar(bucket string, l *explorer.DirListing) {
+	<div class="card p-4 mb-4 flex flex-wrap items-center justify-between gap-4">
+		<div class="flex items-center gap-6 text-sm">
+			<div><span class="text-slate-500">Files </span><span class="text-white font-medium">{ humanCount(l.Summary.Files) }{ truncatedMark(l.Summary.Truncated) }</span></div>
+			<div><span class="text-slate-500">Size </span><span class="text-white font-medium">{ humanBytes(l.Summary.Size) }</span></div>
+			<div class="flex items-center gap-1">
+				<span class="text-slate-500">Formats </span>
+				for _, f := range l.Summary.Formats {
+					@FormatPill(f)
+				}
+				if len(l.Summary.Formats) == 0 {
+					<span class="text-slate-600">—</span>
+				}
+			</div>
+			<div><span class="text-slate-500">Modified </span><span class="text-white font-medium">{ timeAgo(l.Summary.LastModified) }</span></div>
+		</div>
+		<div class="flex items-center gap-2">
+			<button
+				class="btn-primary"
+				hx-post="/ui/directories/crawl"
+				hx-vals={ crawlVals(bucket, l.Prefix) }
+				hx-target="#toast-slot"
+				hx-swap="innerHTML"
+			>@iconPlay() Crawl Directory</button>
+		</div>
+	</div>
+}
+
+// DirListing renders folders and files for a prefix.
+templ DirListing(l *explorer.DirListing) {
+	<div class="card overflow-hidden divide-y divide-base-800">
+		if len(l.Folders) == 0 && len(l.Files) == 0 {
+			<div class="p-8 text-center text-sm text-slate-500">Empty folder.</div>
+		}
+		for _, f := range l.Folders {
+			<a href={ templ.SafeURL("/explorer?bucket=" + l.Bucket + "&prefix=" + f.Path) } class="flex items-center gap-3 px-4 py-2.5 hover:bg-base-850/60">
+				<span class="text-accent-amber">@iconFolder()</span>
+				<span class="text-sm text-slate-200 flex-1 truncate">{ f.Name }</span>
+				<span class="text-xs text-slate-600">folder</span>
+			</a>
+		}
+		for _, file := range l.Files {
+			<a href={ templ.SafeURL(previewURL(l.Bucket, file)) } class="flex items-center gap-3 px-4 py-2.5 hover:bg-base-850/60">
+				<span class="text-slate-500">@iconFile()</span>
+				<span class="text-sm text-slate-200 flex-1 truncate">{ file.Name }</span>
+				@FormatPill(file.Format)
+				<span class="text-xs text-slate-500 w-20 text-right">{ humanBytes(file.Size) }</span>
+				<span class="text-xs text-slate-600 w-24 text-right hidden sm:block">{ timeAgo(file.Modified) }</span>
+			</a>
+		}
+	</div>
+}

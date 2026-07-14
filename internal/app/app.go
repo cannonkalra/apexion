@@ -16,11 +16,13 @@ import (
 	"github.com/apexion/apexion/internal/crawler"
 	"github.com/apexion/apexion/internal/crawler/s3"
 	"github.com/apexion/apexion/internal/events"
+	"github.com/apexion/apexion/internal/explorer"
 	"github.com/apexion/apexion/internal/httpserver"
 	"github.com/apexion/apexion/internal/inference"
 	"github.com/apexion/apexion/internal/jobs"
 	"github.com/apexion/apexion/internal/lineage"
 	"github.com/apexion/apexion/internal/model"
+	"github.com/apexion/apexion/internal/preview"
 	"github.com/apexion/apexion/internal/storage"
 	"github.com/apexion/apexion/internal/ui"
 	"github.com/apexion/apexion/pkg/logger"
@@ -39,6 +41,8 @@ type App struct {
 	Jobs      *jobs.Manager
 	Scheduler *jobs.Scheduler
 	Agents    *agents.Registry
+	Preview   *preview.Engine
+	Explorer  *explorer.Service
 	Server    *httpserver.Server
 }
 
@@ -85,14 +89,20 @@ func Build(ctx context.Context, cfg *config.Config) (*App, error) {
 
 	sched := jobs.NewScheduler(store, cat, log)
 
-	apiH := api.New(cat, lin, agentReg, log)
-	uiH := ui.New(cat, lin, agentReg, cfg, log)
+	prev, err := preview.New(cfg.MinIO, log)
+	if err != nil {
+		return nil, err
+	}
+	expl := explorer.New(s3client)
+
+	apiH := api.New(cat, lin, agentReg, prev, expl, log)
+	uiH := ui.New(cat, lin, agentReg, prev, expl, cfg, log)
 	srv := httpserver.New(cfg.Server, apiH, uiH, log)
 
 	return &App{
 		Cfg: cfg, Log: log, Store: store, Bus: bus, S3: s3client, Crawler: cr,
 		Catalog: cat, Lineage: lin, Jobs: jobMgr, Scheduler: sched,
-		Agents: agentReg, Server: srv,
+		Agents: agentReg, Preview: prev, Explorer: expl, Server: srv,
 	}, nil
 }
 
@@ -142,6 +152,9 @@ func (a *App) Shutdown() error {
 	a.Scheduler.Stop()
 	a.Jobs.Shutdown(shutCtx)
 	a.Bus.Close()
+	if a.Preview != nil {
+		_ = a.Preview.Close()
+	}
 	if err := a.Store.Close(); err != nil {
 		a.Log.Warn().Err(err).Msg("store close")
 	}

@@ -18,6 +18,8 @@ type DatasetDetail struct {
 	Inference     *model.InferenceResult `json:"inference"`
 	InferenceRun  *model.InferenceRun    `json:"inference_run"`
 	Objects       []model.Object         `json:"objects"`
+	InferenceRuns []model.InferenceRun   `json:"inference_runs"`
+	CrawlRuns     []model.CrawlerRun     `json:"crawl_runs"`
 }
 
 // DatasetDetail assembles everything the dataset page needs.
@@ -63,6 +65,8 @@ func (s *Service) DatasetDetail(ctx context.Context, id string) (*DatasetDetail,
 			}
 		}
 	}
+	d.InferenceRuns, _ = s.store.ListInferenceRuns(ctx, id, 20)
+	d.CrawlRuns, _ = s.store.ListCrawlerRuns(ctx, ds.BucketID, 10)
 	return d, nil
 }
 

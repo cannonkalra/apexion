@@ -7,6 +7,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"strings"
 	"time"
 
 	"github.com/google/uuid"
@@ -73,16 +74,28 @@ func (s *Service) PersistEvents(bus *events.Bus) {
 	})
 }
 
-// StartCrawl submits a crawl job for a bucket and returns the job.
+// StartCrawl submits a crawl job for a whole bucket and returns the job.
 func (s *Service) StartCrawl(bucket string, mode model.CrawlMode, trigger model.ScheduleKind) *model.Job {
+	return s.StartCrawlPrefix(bucket, "", mode, trigger)
+}
+
+// StartCrawlPrefix submits a crawl scoped to a directory (prefix). An empty
+// prefix crawls the whole bucket.
+func (s *Service) StartCrawlPrefix(bucket, prefix string, mode model.CrawlMode, trigger model.ScheduleKind) *model.Job {
 	label := fmt.Sprintf("Crawl %s (%s)", bucket, mode)
+	if prefix != "" {
+		label = fmt.Sprintf("Crawl %s/%s (%s)", bucket, strings.TrimRight(prefix, "/"), mode)
+	}
 	return s.jobs.Submit(model.JobCrawl, bucket, label, func(ctx context.Context, progress func(float64, string)) error {
 		_, err := s.crawler.Crawl(ctx, crawler.Options{
-			Bucket: bucket, Mode: mode, Trigger: trigger, Progress: progress,
+			Bucket: bucket, Prefix: prefix, Mode: mode, Trigger: trigger, Progress: progress,
 		})
 		return err
 	})
 }
+
+// CancelJob requests cancellation of a running job.
+func (s *Service) CancelJob(id string) bool { return s.jobs.Cancel(id) }
 
 // StartInference submits an inference job for a dataset.
 func (s *Service) StartInference(datasetID string) (*model.Job, error) {
@@ -127,6 +140,9 @@ func (s *Service) RunInference(ctx context.Context, datasetID string, progress f
 	progress(0.55, "analyzing")
 	result := s.engine.Analyze(inference.Input{
 		DatasetID:       datasetID,
+		DatasetName:     ds.Name,
+		Format:          ds.Format,
+		PartitionKeys:   ds.PartitionKeys,
 		Fields:          fields,
 		Rows:            rows,
 		RefColumns:      refs,

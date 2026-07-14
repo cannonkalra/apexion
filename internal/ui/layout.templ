@@ -52,9 +52,12 @@ templ sidebar(active string) {
 		</div>
 		<nav class="flex-1 overflow-y-auto p-3 space-y-1">
 			@navLink("/", "Dashboard", active == "dashboard", iconGrid())
+			@navLink("/explorer", "Explorer", active == "explorer", iconFolder())
 			@navLink("/buckets", "Buckets", active == "buckets", iconBucket())
-			@navLink("/datasets", "Datasets", active == "datasets", iconTable())
-			@navLink("/runs", "Crawler Runs", active == "runs", iconPlay())
+			@navLink("/datasets", "Catalog", active == "datasets", iconTable())
+			@navLink("/sql", "SQL", active == "sql", iconTerminal())
+			@navLink("/jobs", "Jobs", active == "jobs", iconPlay())
+			@navLink("/runs", "Crawler Runs", active == "runs", iconRefresh())
 			@navLink("/schema", "Schema Explorer", active == "schema", iconColumns())
 			@navLink("/inference", "Inference", active == "inference", iconSpark())
 			@navLink("/lineage", "Lineage", active == "lineage", iconGraph())

@@ -5,7 +5,9 @@ package ui
 
 import (
 	"net/http"
+	"path"
 	"sort"
+	"strconv"
 
 	"github.com/a-h/templ"
 	"github.com/go-chi/chi/v5"
@@ -14,33 +16,55 @@ import (
 	"github.com/apexion/apexion/internal/agents"
 	"github.com/apexion/apexion/internal/catalog"
 	"github.com/apexion/apexion/internal/config"
+	"github.com/apexion/apexion/internal/crawler/format"
+	"github.com/apexion/apexion/internal/explorer"
 	"github.com/apexion/apexion/internal/lineage"
 	"github.com/apexion/apexion/internal/model"
+	"github.com/apexion/apexion/internal/preview"
 	"github.com/apexion/apexion/internal/storage"
 )
 
+func baseName(key string) string { return path.Base(key) }
+
+func intFrom(s string, def int) int {
+	if n, err := strconv.Atoi(s); err == nil && n > 0 {
+		return n
+	}
+	return def
+}
+
 // Handler serves the UI.
 type Handler struct {
-	catalog *catalog.Service
-	lineage *lineage.Service
-	agents  *agents.Registry
-	store   *storage.Store
-	cfg     *config.Config
-	log     zerolog.Logger
+	catalog  *catalog.Service
+	lineage  *lineage.Service
+	agents   *agents.Registry
+	preview  *preview.Engine
+	explorer *explorer.Service
+	store    *storage.Store
+	cfg      *config.Config
+	log      zerolog.Logger
 }
 
 // New builds the UI handler.
-func New(cat *catalog.Service, lin *lineage.Service, ag *agents.Registry, cfg *config.Config, log zerolog.Logger) *Handler {
-	return &Handler{catalog: cat, lineage: lin, agents: ag, store: cat.Store(), cfg: cfg, log: log}
+func New(cat *catalog.Service, lin *lineage.Service, ag *agents.Registry,
+	prev *preview.Engine, expl *explorer.Service, cfg *config.Config, log zerolog.Logger) *Handler {
+	return &Handler{
+		catalog: cat, lineage: lin, agents: ag, preview: prev, explorer: expl,
+		store: cat.Store(), cfg: cfg, log: log,
+	}
 }
 
 // Routes returns the page + partial router.
 func (h *Handler) Routes() http.Handler {
 	r := chi.NewRouter()
 	r.Get("/", h.dashboard)
+	r.Get("/explorer", h.explorerPage)
 	r.Get("/buckets", h.buckets)
 	r.Get("/datasets", h.datasets)
 	r.Get("/datasets/{id}", h.datasetDetail)
+	r.Get("/preview", h.filePreview)
+	r.Get("/sql", h.sqlPage)
+	r.Get("/jobs", h.jobsPage)
 	r.Get("/schema", h.schema)
 	r.Get("/inference", h.inference)
 	r.Get("/lineage", h.lineageGraph)
@@ -50,12 +74,17 @@ func (h *Handler) Routes() http.Handler {
 
 	r.Route("/ui", func(r chi.Router) {
 		r.Get("/partials/jobs", h.partialJobs)
+		r.Get("/partials/jobs-table", h.partialJobsTable)
 		r.Get("/partials/activity", h.partialActivity)
+		r.Get("/datasets/{id}/preview", h.partialDatasetPreview)
 		r.Get("/search", h.partialSearch)
+		r.Post("/sql", h.actionRunSQL)
 		r.Post("/buckets/crawl", h.actionCrawlForm)
 		r.Post("/buckets/{name}/crawl", h.actionCrawl)
+		r.Post("/directories/crawl", h.actionCrawlDirectory)
 		r.Post("/datasets/{id}/infer", h.actionInfer)
 		r.Delete("/datasets/{id}", h.actionDeleteDataset)
+		r.Post("/jobs/{id}/cancel", h.actionCancelJob)
 		r.Post("/settings/crawl", h.actionSettingsCrawl)
 	})
 	return r
@@ -134,6 +163,72 @@ func (h *Handler) buckets(w http.ResponseWriter, r *http.Request) {
 	h.render(w, r, BucketsPage(vm))
 }
 
+func (h *Handler) explorerPage(w http.ResponseWriter, r *http.Request) {
+	ctx := r.Context()
+	_, names, _ := h.catalog.ServerBuckets(ctx)
+	vm := ExplorerVM{Buckets: names, Bucket: r.URL.Query().Get("bucket")}
+	if vm.Bucket != "" {
+		prefix := r.URL.Query().Get("prefix")
+		listing, err := h.explorer.ListDir(ctx, vm.Bucket, prefix)
+		if err != nil {
+			vm.Error = err.Error()
+		} else {
+			vm.Listing = listing
+			vm.Crumbs = explorer.Breadcrumbs(prefix)
+		}
+	}
+	h.render(w, r, ExplorerPage(vm))
+}
+
+func (h *Handler) filePreview(w http.ResponseWriter, r *http.Request) {
+	q := r.URL.Query()
+	bucket, key := q.Get("bucket"), q.Get("key")
+	if bucket == "" || key == "" {
+		http.Error(w, "bucket and key required", http.StatusBadRequest)
+		return
+	}
+	f := model.Format(q.Get("format"))
+	if f == "" {
+		f = format.DetectFormat(key, nil)
+	}
+	vm := PreviewVM{
+		Bucket: bucket, Key: key, Name: baseName(key), Format: f,
+		Compression: format.DetectCompression(key), Limit: 100, Ready: h.preview.Ready(),
+	}
+	res, err := h.preview.PreviewFile(r.Context(), bucket, key, f, 100)
+	if err != nil {
+		vm.Error = err.Error()
+	} else {
+		vm.Result = res
+	}
+	h.render(w, r, FilePreviewPage(vm))
+}
+
+func (h *Handler) sqlPage(w http.ResponseWriter, r *http.Request) {
+	vm := SQLVM{
+		InitialSQL: r.URL.Query().Get("sql"),
+		Ready:      h.preview.Ready(),
+		SetupError: h.preview.SetupError(),
+	}
+	if id := r.URL.Query().Get("dataset_id"); id != "" {
+		if ds, _ := h.store.GetDataset(r.Context(), id); ds != nil {
+			vm.DatasetID = ds.ID
+			vm.DatasetName = ds.Name
+			if vm.InitialSQL == "" {
+				if from, err := preview.GlobClause(ds.BucketName, ds.Path, ds.Format); err == nil {
+					vm.InitialSQL = "SELECT * FROM " + from + " LIMIT 100"
+				}
+			}
+		}
+	}
+	h.render(w, r, SQLPage(vm))
+}
+
+func (h *Handler) jobsPage(w http.ResponseWriter, r *http.Request) {
+	jobs, _ := h.store.ListJobs(r.Context(), "", 100)
+	h.render(w, r, JobsPage(JobsVM{Jobs: jobs}))
+}
+
 func (h *Handler) datasets(w http.ResponseWriter, r *http.Request) {
 	ctx := r.Context()
 	f := storage.DatasetFilter{
@@ -161,7 +256,11 @@ func (h *Handler) datasetDetail(w http.ResponseWriter, r *http.Request) {
 		http.NotFound(w, r)
 		return
 	}
-	h.render(w, r, DatasetDetailPage(d))
+	tab := r.URL.Query().Get("tab")
+	if tab == "" {
+		tab = "overview"
+	}
+	h.render(w, r, DatasetDetailPage(d, tab))
 }
 
 func (h *Handler) schema(w http.ResponseWriter, r *http.Request) {
@@ -233,9 +332,62 @@ func (h *Handler) partialJobs(w http.ResponseWriter, r *http.Request) {
 	h.render(w, r, JobsList(jobs))
 }
 
+func (h *Handler) partialJobsTable(w http.ResponseWriter, r *http.Request) {
+	jobs, _ := h.store.ListJobs(r.Context(), "", 100)
+	h.render(w, r, JobsTable(jobs))
+}
+
 func (h *Handler) partialActivity(w http.ResponseWriter, r *http.Request) {
 	evs, _ := h.store.ListEvents(r.Context(), "", 12)
 	h.render(w, r, ActivityFeed(evs))
+}
+
+func (h *Handler) partialDatasetPreview(w http.ResponseWriter, r *http.Request) {
+	ds, err := h.store.GetDataset(r.Context(), chi.URLParam(r, "id"))
+	if err != nil || ds == nil {
+		h.render(w, r, QueryError("dataset not found"))
+		return
+	}
+	res, err := h.preview.PreviewDataset(r.Context(), ds.BucketName, ds.Path, ds.Format, 100)
+	if err != nil {
+		h.render(w, r, QueryError(err.Error()))
+		return
+	}
+	h.render(w, r, ResultTable(res))
+}
+
+func (h *Handler) actionRunSQL(w http.ResponseWriter, r *http.Request) {
+	sql := r.FormValue("sql")
+	limit := intFrom(r.FormValue("limit"), 200)
+	res, err := h.preview.RunSQL(r.Context(), sql, limit)
+	if err != nil {
+		h.render(w, r, SQLResult(nil, err.Error()))
+		return
+	}
+	h.render(w, r, SQLResult(res, ""))
+}
+
+func (h *Handler) actionCrawlDirectory(w http.ResponseWriter, r *http.Request) {
+	bucket := r.FormValue("bucket")
+	prefix := r.FormValue("prefix")
+	if bucket == "" {
+		h.render(w, r, Toast("Bucket is required", "error"))
+		return
+	}
+	h.catalog.StartCrawlPrefix(bucket, prefix, model.CrawlFull, model.ScheduleManual)
+	label := bucket
+	if prefix != "" {
+		label = bucket + "/" + prefix
+	}
+	h.render(w, r, Toast("Crawl started for "+label, "success"))
+}
+
+func (h *Handler) actionCancelJob(w http.ResponseWriter, r *http.Request) {
+	if h.catalog.CancelJob(chi.URLParam(r, "id")) {
+		h.render(w, r, Toast("Job cancellation requested", "info"))
+		return
+	}
+	h.render(w, r, Toast("Job is not running", "error"))
 }
 
 func (h *Handler) partialSearch(w http.ResponseWriter, r *http.Request) {

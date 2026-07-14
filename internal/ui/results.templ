@@ -1,0 +1,52 @@
+package ui
+
+import (
+	"fmt"
+	"github.com/apexion/apexion/internal/preview"
+)
+
+// ResultTable renders a DuckDB query result (used by preview, dataset preview,
+// and the SQL scratchpad).
+templ ResultTable(res *preview.Result) {
+	<div class="flex items-center justify-between text-xs text-slate-500 mb-2">
+		<span>
+			{ fmt.Sprintf("%d rows · %d columns", res.RowCount, len(res.Columns)) }
+			if res.Truncated {
+				<span class="text-accent-amber">(truncated)</span>
+			}
+		</span>
+		<span>{ res.Elapsed }</span>
+	</div>
+	<div class="overflow-auto rounded-lg border border-base-800 max-h-[65vh]">
+		<table class="w-full text-sm">
+			<thead class="sticky top-0 bg-base-850">
+				<tr class="border-b border-base-800">
+					<th class="th w-10 text-right">#</th>
+					for i, col := range res.Columns {
+						<th class="th whitespace-nowrap">
+							{ col }
+							<div class="text-[10px] font-normal text-slate-600 normal-case">{ typeAt(res.Types, i) }</div>
+						</th>
+					}
+				</tr>
+			</thead>
+			<tbody class="divide-y divide-base-800 font-mono text-xs">
+				for ri, row := range res.Rows {
+					<tr class="hover:bg-base-850/50">
+						<td class="table-cell text-right text-slate-600">{ fmt.Sprintf("%d", ri+1) }</td>
+						for _, cell := range row {
+							<td class="table-cell whitespace-nowrap max-w-md truncate text-slate-300" title={ cell }>{ cellOrNull(cell) }</td>
+						}
+					</tr>
+				}
+			</tbody>
+		</table>
+	</div>
+}
+
+// QueryError renders a query error box.
+templ QueryError(msg string) {
+	<div class="rounded-lg border border-accent-rose/40 bg-accent-rose/5 p-3 text-sm text-accent-rose font-mono">
+		{ msg }
+	</div>
+}

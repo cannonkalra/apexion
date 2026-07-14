@@ -2,9 +2,48 @@ package ui
 
 import (
 	"github.com/apexion/apexion/internal/catalog"
+	"github.com/apexion/apexion/internal/explorer"
 	"github.com/apexion/apexion/internal/model"
+	"github.com/apexion/apexion/internal/preview"
 	"github.com/apexion/apexion/internal/storage"
 )
+
+// ExplorerVM powers the VS Code-style bucket/folder/file browser.
+type ExplorerVM struct {
+	Buckets []string // all buckets on the server
+	Bucket  string
+	Listing *explorer.DirListing
+	Crumbs  []explorer.Crumb
+	Error   string
+}
+
+// PreviewVM powers the instant file preview page.
+type PreviewVM struct {
+	Bucket      string
+	Key         string
+	Name        string
+	Format      model.Format
+	Compression model.Compression
+	Size        int64
+	Limit       int
+	Result      *preview.Result
+	Error       string
+	Ready       bool
+}
+
+// SQLVM powers the SQL scratchpad.
+type SQLVM struct {
+	DatasetID   string
+	DatasetName string
+	InitialSQL  string
+	Ready       bool
+	SetupError  string
+}
+
+// JobsVM powers the crawl jobs page.
+type JobsVM struct {
+	Jobs []model.Job
+}
 
 // SearchVM is the search result view model (used by both the topbar dropdown
 // and the full search page).

@@ -26,6 +26,9 @@ type Manager struct {
 	wg      sync.WaitGroup
 	baseCtx context.Context
 	cancel  context.CancelFunc
+
+	mu      sync.Mutex
+	cancels map[string]context.CancelFunc // jobID -> cancel
 }
 
 // NewManager creates a job manager with the given max concurrency.
@@ -40,7 +43,22 @@ func NewManager(store *storage.Store, log zerolog.Logger, concurrency int) *Mana
 		sem:     make(chan struct{}, concurrency),
 		baseCtx: ctx,
 		cancel:  cancel,
+		cancels: map[string]context.CancelFunc{},
 	}
+}
+
+// Cancel requests cancellation of a running or queued job. It returns false if
+// the job is unknown or already finished.
+func (m *Manager) Cancel(id string) bool {
+	m.mu.Lock()
+	cancel, ok := m.cancels[id]
+	m.mu.Unlock()
+	if !ok {
+		return false
+	}
+	cancel()
+	m.log.Info().Str("job", id).Msg("job cancellation requested")
+	return true
 }
 
 // Submit enqueues a job and returns its initial record. The job runs
@@ -53,21 +71,32 @@ func (m *Manager) Submit(jobType model.JobType, refID, label string, fn RunFunc)
 	}
 	_ = m.store.SaveJob(m.baseCtx, job)
 
+	jobCtx, cancel := context.WithCancel(m.baseCtx)
+	m.mu.Lock()
+	m.cancels[job.ID] = cancel
+	m.mu.Unlock()
+
 	m.wg.Add(1)
 	go func() {
 		defer m.wg.Done()
+		defer func() {
+			cancel()
+			m.mu.Lock()
+			delete(m.cancels, job.ID)
+			m.mu.Unlock()
+		}()
 		select {
 		case m.sem <- struct{}{}:
 			defer func() { <-m.sem }()
-		case <-m.baseCtx.Done():
+		case <-jobCtx.Done():
 			return
 		}
-		m.run(job, fn)
+		m.run(jobCtx, job, fn)
 	}()
 	return job
 }
 
-func (m *Manager) run(job *model.Job, fn RunFunc) {
+func (m *Manager) run(ctx context.Context, job *model.Job, fn RunFunc) {
 	start := time.Now().UTC()
 	job.Status = model.StatusRunning
 	job.StartedAt = &start
@@ -86,14 +115,20 @@ func (m *Manager) run(job *model.Job, fn RunFunc) {
 		}
 	}
 
-	err := safeRun(m.baseCtx, fn, progress)
+	err := safeRun(ctx, fn, progress)
 	end := time.Now().UTC()
 	job.FinishedAt = &end
-	if err != nil {
+	switch {
+	case ctx.Err() == context.Canceled && m.baseCtx.Err() == nil:
+		// Cancelled via Cancel(id), not process shutdown.
+		job.Status = model.StatusCancelled
+		job.Message = "cancelled"
+		m.log.Info().Str("job", job.ID).Msg("job cancelled")
+	case err != nil:
 		job.Status = model.StatusFailed
 		job.Error = err.Error()
 		m.log.Error().Err(err).Str("job", job.ID).Msg("job failed")
-	} else {
+	default:
 		job.Status = model.StatusCompleted
 		job.Progress = 1
 		job.Message = "completed"

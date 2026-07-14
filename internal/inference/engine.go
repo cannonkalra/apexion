@@ -4,6 +4,7 @@
 package inference
 
 import (
+	"fmt"
 	"sort"
 	"strconv"
 	"strings"
@@ -25,6 +26,9 @@ type RefColumn struct {
 // Input is the material the engine analyzes.
 type Input struct {
 	DatasetID       string
+	DatasetName     string
+	Format          model.Format
+	PartitionKeys   []string
 	Fields          []format.Field
 	Rows            [][]string
 	RefColumns      []RefColumn
@@ -144,7 +148,221 @@ func (e *Engine) Analyze(in Input) model.InferenceResult {
 		}
 	}
 	res.QualityScore = qualityScore(res.QualityMetrics)
+
+	// Extended Phase-1 analyses.
+	res.MissingValues = missingValues(cols, total)
+	res.DuplicateAnalysis = duplicateAnalysis(in.Rows)
+	res.RecommendedPartitions = recommendPartitions(cols, in.PartitionKeys, total)
+	res.DorisSchema = dorisSchema(in.DatasetName, cols, res.PrimaryKeys, res.RecommendedPartitions)
+	res.SparkOptimizations = sparkOptimizations(in.Format, res.RecommendedPartitions, cols)
+	res.FlinkOptimizations = flinkOptimizations(in.Format, cols)
+	res.DatasetSummary = datasetSummary(in, res)
+	res.BusinessDescription = res.DatasetSummary
 	return res
+}
+
+func missingValues(cols []model.ColumnInference, total int) []model.MissingValueStat {
+	out := make([]model.MissingValueStat, 0, len(cols))
+	for _, c := range cols {
+		nullRatio := 1 - c.Completeness
+		nullCount := int(nullRatio*float64(total) + 0.5)
+		out = append(out, model.MissingValueStat{
+			Column: c.Name, NullCount: nullCount, NullRatio: round2(nullRatio),
+		})
+	}
+	return out
+}
+
+func duplicateAnalysis(rows [][]string) model.DuplicateAnalysis {
+	total := len(rows)
+	seen := make(map[string]struct{}, total)
+	for _, r := range rows {
+		seen[strings.Join(r, "\x1f")] = struct{}{}
+	}
+	unique := len(seen)
+	dup := total - unique
+	da := model.DuplicateAnalysis{TotalRows: total, DuplicateRows: dup, UniqueRows: unique}
+	if total > 0 {
+		da.DuplicateRatio = round2(float64(dup) / float64(total))
+	}
+	return da
+}
+
+// recommendPartitions suggests good partition columns: existing partition keys,
+// plus low-cardinality categorical/temporal columns.
+func recommendPartitions(cols []model.ColumnInference, existing []string, total int) []string {
+	seen := map[string]bool{}
+	var out []string
+	add := func(name string) {
+		if name != "" && !seen[name] {
+			seen[name] = true
+			out = append(out, name)
+		}
+	}
+	for _, k := range existing {
+		add(k)
+	}
+	maxCard := total / 4
+	if maxCard < 2 {
+		maxCard = 2
+	}
+	if maxCard > 100 {
+		maxCard = 100
+	}
+	for _, c := range cols {
+		if c.IsPII || c.IsPKCandidate {
+			continue
+		}
+		switch c.DataType {
+		case model.TypeDate, model.TypeTimestamp:
+			add(c.Name)
+		case model.TypeString, model.TypeInteger, model.TypeBoolean:
+			if c.DistinctCount >= 2 && int(c.DistinctCount) <= maxCard {
+				add(c.Name)
+			}
+		}
+	}
+	if len(out) > 4 {
+		out = out[:4]
+	}
+	return out
+}
+
+// dorisSchema renders a suggested Apache Doris CREATE TABLE statement.
+func dorisSchema(name string, cols []model.ColumnInference, pks, partitions []string) string {
+	if name == "" {
+		name = "dataset"
+	}
+	table := sanitizeIdent(name)
+	var b strings.Builder
+	fmt.Fprintf(&b, "CREATE TABLE %s (\n", table)
+	for i, c := range cols {
+		comma := ","
+		if i == len(cols)-1 {
+			comma = ""
+		}
+		fmt.Fprintf(&b, "    `%s` %s%s\n", c.Name, dorisType(c.DataType), comma)
+	}
+	b.WriteString(")\n")
+	keyCols := pks
+	if len(keyCols) == 0 && len(cols) > 0 {
+		keyCols = []string{cols[0].Name}
+	}
+	fmt.Fprintf(&b, "DUPLICATE KEY(`%s`)\n", strings.Join(keyCols, "`, `"))
+	if len(partitions) > 0 {
+		fmt.Fprintf(&b, "-- suggested partitioning by: %s\n", strings.Join(partitions, ", "))
+	}
+	fmt.Fprintf(&b, "DISTRIBUTED BY HASH(`%s`) BUCKETS 10\n", keyCols[0])
+	b.WriteString("PROPERTIES (\"replication_num\" = \"1\");")
+	return b.String()
+}
+
+func dorisType(t model.DataType) string {
+	switch t {
+	case model.TypeInteger:
+		return "BIGINT"
+	case model.TypeFloat:
+		return "DOUBLE"
+	case model.TypeDecimal:
+		return "DECIMAL(38, 9)"
+	case model.TypeBoolean:
+		return "BOOLEAN"
+	case model.TypeDate:
+		return "DATE"
+	case model.TypeTimestamp:
+		return "DATETIME"
+	case model.TypeJSON, model.TypeStruct, model.TypeMap, model.TypeArray:
+		return "JSONB"
+	default:
+		return "VARCHAR(65533)"
+	}
+}
+
+func sparkOptimizations(f model.Format, partitions []string, cols []model.ColumnInference) []string {
+	var recs []string
+	switch f {
+	case model.FormatParquet, model.FormatIceberg, model.FormatDelta:
+		recs = append(recs, "Enable predicate & projection pushdown (spark.sql.parquet.filterPushdown=true)")
+		recs = append(recs, "Enable vectorized reader (spark.sql.parquet.enableVectorizedReader=true)")
+	case model.FormatCSV, model.FormatTSV, model.FormatJSON, model.FormatJSONL:
+		recs = append(recs, "Convert to Parquet/Delta for columnar scans and pushdown")
+		recs = append(recs, "Provide an explicit schema to avoid costly inference on read")
+	}
+	recs = append(recs, "Enable Adaptive Query Execution (spark.sql.adaptive.enabled=true)")
+	if len(partitions) > 0 {
+		recs = append(recs, fmt.Sprintf("Partition writes by %s to enable partition pruning", strings.Join(partitions, ", ")))
+	}
+	if hasType(cols, model.TypeString) {
+		recs = append(recs, "Broadcast small dimension tables to avoid shuffles on string joins")
+	}
+	return recs
+}
+
+func flinkOptimizations(f model.Format, cols []model.ColumnInference) []string {
+	var recs []string
+	switch f {
+	case model.FormatParquet, model.FormatIceberg, model.FormatDelta:
+		recs = append(recs, "Use the FileSystem/Iceberg connector with format='parquet' and filter pushdown")
+	default:
+		recs = append(recs, "Use the FileSystem connector; prefer Parquet source for streaming reads")
+	}
+	if ts := firstOfType(cols, model.TypeTimestamp); ts != "" {
+		recs = append(recs, fmt.Sprintf("Define an event-time watermark on `%s` for windowed aggregations", ts))
+	}
+	recs = append(recs, "Enable incremental checkpointing and tune parallelism to source splits")
+	recs = append(recs, "Enable mini-batch aggregation (table.exec.mini-batch.enabled=true) to reduce state access")
+	return recs
+}
+
+func datasetSummary(in Input, res model.InferenceResult) string {
+	name := in.DatasetName
+	if name == "" {
+		name = "This dataset"
+	}
+	parts := []string{fmt.Sprintf("%s is a %s dataset with %d columns", name, in.Format, len(res.Columns))}
+	if len(res.PrimaryKeys) > 0 {
+		parts = append(parts, fmt.Sprintf("keyed by %s", strings.Join(res.PrimaryKeys, ", ")))
+	}
+	if len(res.PIIColumns) > 0 {
+		parts = append(parts, fmt.Sprintf("containing PII in %d column(s)", len(res.PIIColumns)))
+	}
+	parts = append(parts, fmt.Sprintf("with an overall quality score of %.0f/100", res.QualityScore))
+	return strings.Join(parts, ", ") + "."
+}
+
+func hasType(cols []model.ColumnInference, t model.DataType) bool {
+	for _, c := range cols {
+		if c.DataType == t {
+			return true
+		}
+	}
+	return false
+}
+
+func firstOfType(cols []model.ColumnInference, t model.DataType) string {
+	for _, c := range cols {
+		if c.DataType == t {
+			return c.Name
+		}
+	}
+	return ""
+}
+
+func sanitizeIdent(s string) string {
+	var b strings.Builder
+	for _, r := range strings.ToLower(s) {
+		switch {
+		case r >= 'a' && r <= 'z', r >= '0' && r <= '9', r == '_':
+			b.WriteRune(r)
+		default:
+			b.WriteByte('_')
+		}
+	}
+	out := b.String()
+	if out == "" || (out[0] >= '0' && out[0] <= '9') {
+		out = "t_" + out
+	}
+	return out
 }
 
 // qualityScore blends the quality dimensions into a 0..100 score.

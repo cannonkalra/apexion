@@ -9,6 +9,20 @@ import (
 
 func itoa(i int) string { return strconv.Itoa(i) }
 
+func typeAt(types []string, i int) string {
+	if i >= 0 && i < len(types) {
+		return types[i]
+	}
+	return ""
+}
+
+func cellOrNull(s string) string {
+	if s == "" {
+		return "∅"
+	}
+	return s
+}
+
 // formatRow is a single bar in the dashboard format-distribution chart.
 type formatRow struct {
 	Label string

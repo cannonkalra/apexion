@@ -54,6 +54,49 @@ func statSamples(c model.Column) string {
 	return truncate(strings.Join(vals, ", "), 40)
 }
 
+func statNulls(c model.Column) string {
+	if c.Statistics == nil {
+		return "—"
+	}
+	return humanCount(c.Statistics.NullCount)
+}
+
+func statUnique(c model.Column) string {
+	if c.Statistics == nil {
+		return "—"
+	}
+	return pct(c.Statistics.Uniqueness)
+}
+
+func statMin(c model.Column) string {
+	if c.Statistics == nil || c.Statistics.MinValue == "" {
+		return "—"
+	}
+	return truncate(c.Statistics.MinValue, 18)
+}
+
+func statMax(c model.Column) string {
+	if c.Statistics == nil || c.Statistics.MaxValue == "" {
+		return "—"
+	}
+	return truncate(c.Statistics.MaxValue, 18)
+}
+
+func nullColumns(mv []model.MissingValueStat) int {
+	n := 0
+	for _, m := range mv {
+		if m.NullCount > 0 {
+			n++
+		}
+	}
+	return n
+}
+
+func previewURLForObject(o model.Object) string {
+	v := urlValues(o.BucketName, o.Key, string(o.Format))
+	return "/preview?" + v
+}
+
 func sampleHead(rows []map[string]string, n int) []map[string]string {
 	if len(rows) > n {
 		return rows[:n]

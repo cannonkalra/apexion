@@ -43,6 +43,10 @@ func NewProvider(cfg Config) Provider {
 	case "ollama":
 		base := orDefault(cfg.BaseURL, "http://localhost:11434/v1")
 		return &openAIProvider{base: base, key: cfg.APIKey, model: orDefault(cfg.Model, "llama3.1"), name: "ollama"}
+	case "groq":
+		// Groq exposes an OpenAI-compatible API, so it reuses the same client.
+		base := orDefault(cfg.BaseURL, "https://api.groq.com/openai/v1")
+		return &openAIProvider{base: base, key: cfg.APIKey, model: orDefault(cfg.Model, "llama-3.3-70b-versatile"), name: "groq"}
 	case "anthropic":
 		return &anthropicProvider{base: orDefault(cfg.BaseURL, "https://api.anthropic.com"), key: cfg.APIKey, model: orDefault(cfg.Model, "claude-3-5-haiku-latest")}
 	default:

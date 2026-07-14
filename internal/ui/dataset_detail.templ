@@ -6,7 +6,13 @@ import (
 	"github.com/apexion/apexion/internal/model"
 )
 
-templ DatasetDetailPage(d *catalog.DatasetDetail) {
+var datasetTabs = []struct{ Key, Label string }{
+	{"overview", "Overview"}, {"schema", "Schema"}, {"files", "Files"},
+	{"partitions", "Partitions"}, {"preview", "Preview"}, {"history", "History"},
+	{"statistics", "Statistics"},
+}
+
+templ DatasetDetailPage(d *catalog.DatasetDetail, tab string) {
 	@Layout("datasets", d.Dataset.Name) {
 		<div class="flex flex-wrap items-start justify-between gap-4 mb-5">
 			<div class="min-w-0">
@@ -20,8 +26,9 @@ templ DatasetDetailPage(d *catalog.DatasetDetail) {
 				}
 			</div>
 			<div class="flex items-center gap-2">
-				<button class="btn-ghost" hx-post={ "/ui/buckets/" + d.Dataset.BucketName + "/crawl" } hx-target="#toast-slot" hx-swap="innerHTML">@iconRefresh() Scan Again</button>
-				<button class="btn-primary" hx-post={ "/ui/datasets/" + d.Dataset.ID + "/infer" } hx-target="#toast-slot" hx-swap="innerHTML">@iconSpark() Run Inference</button>
+				<a class="btn-ghost" href={ templ.SafeURL("/sql?dataset_id=" + d.Dataset.ID) }>@iconTerminal() Open SQL</a>
+				<button class="btn-ghost" hx-post={ "/ui/buckets/" + d.Dataset.BucketName + "/crawl" } hx-target="#toast-slot" hx-swap="innerHTML">@iconRefresh() Refresh Crawl</button>
+				<button class="btn-primary" hx-post={ "/ui/datasets/" + d.Dataset.ID + "/infer" } hx-target="#toast-slot" hx-swap="innerHTML">@iconSpark() Infer</button>
 			</div>
 		</div>
 
@@ -34,20 +41,158 @@ templ DatasetDetailPage(d *catalog.DatasetDetail) {
 			@miniStat("Compression", string(d.Dataset.Compression))
 		</div>
 
-		<div class="grid grid-cols-1 xl:grid-cols-3 gap-4">
-			<div class="xl:col-span-2 space-y-4">
-				@schemaCard(d)
-				@sampleCard(d)
-				if len(d.Partitions) > 0 {
-					@partitionsCard(d)
-				}
-			</div>
-			<div class="space-y-4">
-				@inferenceCard(d)
-			</div>
+		<div class="flex items-center gap-1 border-b border-base-800 mb-5 overflow-x-auto">
+			for _, t := range datasetTabs {
+				@datasetTab(d.Dataset.ID, t.Key, t.Label, tab == t.Key)
+			}
 		</div>
+
+		switch tab {
+		case "schema":
+			@schemaCard(d)
+		case "files":
+			@filesPanel(d)
+		case "partitions":
+			@partitionsPanel(d)
+		case "preview":
+			@previewPanel(d)
+		case "history":
+			@historyPanel(d)
+		case "statistics":
+			@statisticsPanel(d)
+		default:
+			<div class="grid grid-cols-1 xl:grid-cols-3 gap-4">
+				<div class="xl:col-span-2 space-y-4">
+					@schemaCard(d)
+					@sampleCard(d)
+				</div>
+				<div class="space-y-4">
+					@inferenceCard(d)
+				</div>
+			</div>
+		}
 		<div id="toast-slot"></div>
 	}
+}
+
+templ datasetTab(id, key, label string, active bool) {
+	<a
+		href={ templ.SafeURL("/datasets/" + id + "?tab=" + key) }
+		class={ "px-4 py-2.5 text-sm border-b-2 -mb-px whitespace-nowrap transition-colors", templ.KV("border-brand-500 text-white", active), templ.KV("border-transparent text-slate-400 hover:text-slate-200", !active) }
+	>{ label }</a>
+}
+
+templ filesPanel(d *catalog.DatasetDetail) {
+	<div class="card p-5">
+		<h2 class="text-base font-semibold text-white mb-4">Files ({ fmt.Sprintf("%d", d.Dataset.FileCount) })</h2>
+		if len(d.Objects) == 0 {
+			<p class="text-sm text-slate-500">No files linked to this dataset.</p>
+		} else {
+			<div class="card overflow-hidden divide-y divide-base-800">
+				for _, o := range d.Objects {
+					<a href={ templ.SafeURL(previewURLForObject(o)) } class="flex items-center gap-3 px-4 py-2.5 hover:bg-base-850/60">
+						<span class="text-slate-500">@iconFile()</span>
+						<span class="text-sm text-slate-200 flex-1 truncate font-mono">{ o.Key }</span>
+						@FormatPill(o.Format)
+						<span class="text-xs text-slate-500 w-20 text-right">{ humanBytes(o.Size) }</span>
+						<span class="text-xs text-slate-600 w-24 text-right hidden sm:block">{ timeAgo(o.Modified) }</span>
+					</a>
+				}
+			</div>
+			if int64(len(d.Objects)) < d.Dataset.FileCount {
+				<p class="text-xs text-slate-500 mt-2">Showing first { fmt.Sprintf("%d", len(d.Objects)) } of { fmt.Sprintf("%d", d.Dataset.FileCount) } files.</p>
+			}
+		}
+	</div>
+}
+
+templ partitionsPanel(d *catalog.DatasetDetail) {
+	if len(d.Partitions) == 0 {
+		@EmptyState("No partitions", "This dataset is not partitioned.")
+	} else {
+		@partitionsCard(d)
+	}
+}
+
+templ previewPanel(d *catalog.DatasetDetail) {
+	<div class="card p-5">
+		<div class="flex items-center justify-between mb-4">
+			<div>
+				<h2 class="text-base font-semibold text-white">DuckDB preview</h2>
+				<p class="text-xs text-slate-500 font-mono">SELECT * FROM read_{ string(d.Dataset.Format) }('s3://{ d.Dataset.BucketName }/{ d.Dataset.Path }/…')</p>
+			</div>
+			<a class="btn-ghost text-xs" href={ templ.SafeURL("/sql?dataset_id=" + d.Dataset.ID) }>@iconTerminal() Open in SQL</a>
+		</div>
+		<div hx-get={ "/ui/datasets/" + d.Dataset.ID + "/preview" } hx-trigger="load" hx-swap="innerHTML">
+			<div class="p-8 text-center text-sm text-slate-500">Querying object storage…</div>
+		</div>
+	</div>
+}
+
+templ historyPanel(d *catalog.DatasetDetail) {
+	<div class="space-y-4">
+		<div class="card p-5">
+			<h2 class="text-base font-semibold text-white mb-4">Inference runs</h2>
+			if len(d.InferenceRuns) == 0 {
+				<p class="text-sm text-slate-500">No inference runs yet.</p>
+			} else {
+				<div class="overflow-x-auto">
+					<table class="w-full">
+						<thead><tr class="border-b border-base-800"><th class="th">Status</th><th class="th">Quality</th><th class="th">Sample rows</th><th class="th">Started</th></tr></thead>
+						<tbody class="divide-y divide-base-800">
+							for _, run := range d.InferenceRuns {
+								<tr class="hover:bg-base-850/50">
+									<td class="table-cell">@StatusPill(run.Status)</td>
+									<td class="table-cell text-slate-300">{ fmt.Sprintf("%.0f", run.QualityScore) }</td>
+									<td class="table-cell text-slate-400">{ fmt.Sprintf("%d", run.SampleRows) }</td>
+									<td class="table-cell text-slate-500">{ timeAgo(run.StartedAt) }</td>
+								</tr>
+							}
+						</tbody>
+					</table>
+				</div>
+			}
+		</div>
+		<div class="card p-5">
+			<h2 class="text-base font-semibold text-white mb-4">Crawler runs (bucket)</h2>
+			@runsTable(d.CrawlRuns, true)
+		</div>
+	</div>
+}
+
+templ statisticsPanel(d *catalog.DatasetDetail) {
+	<div class="card p-5">
+		<h2 class="text-base font-semibold text-white mb-4">Column statistics</h2>
+		if d.Schema == nil || len(d.Schema.Columns) == 0 {
+			<p class="text-sm text-slate-500">No statistics available. Run a crawl to profile columns.</p>
+		} else {
+			<div class="overflow-x-auto">
+				<table class="w-full">
+					<thead>
+						<tr class="border-b border-base-800">
+							<th class="th">Column</th><th class="th">Type</th><th class="th">Distinct</th>
+							<th class="th">Nulls</th><th class="th">Completeness</th><th class="th">Uniqueness</th>
+							<th class="th">Min</th><th class="th">Max</th>
+						</tr>
+					</thead>
+					<tbody class="divide-y divide-base-800">
+						for _, c := range d.Schema.Columns {
+							<tr class="hover:bg-base-850/50">
+								<td class="table-cell font-medium text-slate-200">{ c.Name }</td>
+								<td class="table-cell">@TypePill(c.DataType)</td>
+								<td class="table-cell text-slate-300">{ statDistinct(c) }</td>
+								<td class="table-cell text-slate-400">{ statNulls(c) }</td>
+								<td class="table-cell text-slate-300">{ statComplete(c) }</td>
+								<td class="table-cell text-slate-300">{ statUnique(c) }</td>
+								<td class="table-cell text-slate-500 font-mono text-xs">{ statMin(c) }</td>
+								<td class="table-cell text-slate-500 font-mono text-xs">{ statMax(c) }</td>
+							</tr>
+						}
+					</tbody>
+				</table>
+			</div>
+		}
+	</div>
 }
 
 templ miniStat(label, value string) {
@@ -230,6 +375,52 @@ templ inferenceResults(r *model.InferenceResult) {
 					}
 				</div>
 			</div>
+		}
+		if len(r.RecommendedPartitions) > 0 {
+			<div>
+				<div class="text-xs text-slate-500 mb-1">Recommended partition columns</div>
+				<div class="flex flex-wrap gap-1">
+					for _, p := range r.RecommendedPartitions {
+						<span class="badge bg-accent-amber/15 text-accent-amber font-mono">{ p }</span>
+					}
+				</div>
+			</div>
+		}
+		<div class="grid grid-cols-2 gap-2">
+			<div class="rounded-lg bg-base-850 border border-base-800 p-2">
+				<div class="text-[11px] text-slate-500">Duplicate rows</div>
+				<div class="text-sm text-slate-200">{ fmt.Sprintf("%d / %d (%.0f%%)", r.DuplicateAnalysis.DuplicateRows, r.DuplicateAnalysis.TotalRows, r.DuplicateAnalysis.DuplicateRatio*100) }</div>
+			</div>
+			<div class="rounded-lg bg-base-850 border border-base-800 p-2">
+				<div class="text-[11px] text-slate-500">Columns with nulls</div>
+				<div class="text-sm text-slate-200">{ fmt.Sprintf("%d", nullColumns(r.MissingValues)) }</div>
+			</div>
+		</div>
+		if r.DorisSchema != "" {
+			<details class="rounded-lg bg-base-850 border border-base-800 p-2">
+				<summary class="text-xs text-slate-400 cursor-pointer flex items-center gap-1.5">@iconDatabase() Recommended Doris schema</summary>
+				<pre class="mt-2 text-[11px] text-slate-300 font-mono overflow-x-auto whitespace-pre">{ r.DorisSchema }</pre>
+			</details>
+		}
+		if len(r.SparkOptimizations) > 0 {
+			<details class="rounded-lg bg-base-850 border border-base-800 p-2">
+				<summary class="text-xs text-slate-400 cursor-pointer">Spark optimizations</summary>
+				<ul class="mt-2 space-y-1 text-xs text-slate-400 list-disc pl-4">
+					for _, s := range r.SparkOptimizations {
+						<li>{ s }</li>
+					}
+				</ul>
+			</details>
+		}
+		if len(r.FlinkOptimizations) > 0 {
+			<details class="rounded-lg bg-base-850 border border-base-800 p-2">
+				<summary class="text-xs text-slate-400 cursor-pointer">Flink optimizations</summary>
+				<ul class="mt-2 space-y-1 text-xs text-slate-400 list-disc pl-4">
+					for _, s := range r.FlinkOptimizations {
+						<li>{ s }</li>
+					}
+				</ul>
+			</details>
 		}
 	</div>
 }

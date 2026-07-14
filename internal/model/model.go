@@ -340,6 +340,31 @@ type InferenceResult struct {
 	PIIColumns     []string              `json:"pii_columns"`
 	GeneratedAt    time.Time             `json:"generated_at"`
 	LLMSummary     string                `json:"llm_summary,omitempty"`
+
+	// Extended analyses (Phase 1).
+	BusinessDescription   string             `json:"business_description,omitempty"`
+	DatasetSummary        string             `json:"dataset_summary,omitempty"`
+	RecommendedPartitions []string           `json:"recommended_partitions"`
+	DuplicateAnalysis     DuplicateAnalysis  `json:"duplicate_analysis"`
+	MissingValues         []MissingValueStat `json:"missing_values"`
+	DorisSchema           string             `json:"doris_schema,omitempty"`
+	SparkOptimizations    []string           `json:"spark_optimizations"`
+	FlinkOptimizations    []string           `json:"flink_optimizations"`
+}
+
+// DuplicateAnalysis summarizes duplicate rows in the sample.
+type DuplicateAnalysis struct {
+	TotalRows      int     `json:"total_rows"`
+	DuplicateRows  int     `json:"duplicate_rows"`
+	DuplicateRatio float64 `json:"duplicate_ratio"`
+	UniqueRows     int     `json:"unique_rows"`
+}
+
+// MissingValueStat is a per-column null summary.
+type MissingValueStat struct {
+	Column    string  `json:"column"`
+	NullCount int     `json:"null_count"`
+	NullRatio float64 `json:"null_ratio"`
 }
 
 // ColumnInference is the per-column result of inference.

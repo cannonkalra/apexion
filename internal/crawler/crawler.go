@@ -52,6 +52,7 @@ func New(store *storage.Store, client *s3.Client, reg *format.Registry,
 // Options controls a single crawl.
 type Options struct {
 	Bucket   string
+	Prefix   string // restrict the crawl to a directory (empty = whole bucket)
 	Mode     model.CrawlMode
 	Trigger  model.ScheduleKind
 	Resume   string // crawler_run id to resume, empty for a fresh run
@@ -172,7 +173,7 @@ func (c *Crawler) walk(ctx context.Context, bucket *model.Bucket, run *model.Cra
 	now := time.Now().UTC()
 	incremental := opts.Mode == model.CrawlIncremental
 
-	err := c.client.WalkObjects(ctx, bucket.Name, "", startAfter, func(om s3.ObjectMeta) error {
+	err := c.client.WalkObjects(ctx, bucket.Name, opts.Prefix, startAfter, func(om s3.ObjectMeta) error {
 		if err := limiter.Wait(ctx); err != nil {
 			return err
 		}

@@ -8,6 +8,7 @@ import (
 	"context"
 	"fmt"
 	"io"
+	"strings"
 	"time"
 
 	"github.com/minio/minio-go/v7"
@@ -105,6 +106,33 @@ func (c *Client) WalkObjects(ctx context.Context, bucket, prefix string, startAf
 		}
 	}
 	return nil
+}
+
+// ListDirectory lists the immediate children of a prefix using a delimiter,
+// like a file browser: sub-folders (common prefixes) and files. It does not
+// recurse, so it is O(children) regardless of total object count.
+func (c *Client) ListDirectory(ctx context.Context, bucket, prefix string) (folders []string, files []ObjectMeta, err error) {
+	opts := minio.ListObjectsOptions{Prefix: prefix, Recursive: false}
+	for obj := range c.mc.ListObjects(ctx, bucket, opts) {
+		if obj.Err != nil {
+			return nil, nil, obj.Err
+		}
+		if strings.HasSuffix(obj.Key, "/") {
+			if obj.Key != prefix {
+				folders = append(folders, obj.Key)
+			}
+			continue
+		}
+		files = append(files, ObjectMeta{
+			Key:          obj.Key,
+			ETag:         obj.ETag,
+			Size:         obj.Size,
+			LastModified: obj.LastModified,
+			StorageClass: obj.StorageClass,
+			VersionID:    obj.VersionID,
+		})
+	}
+	return folders, files, nil
 }
 
 // ListPrefix lists objects directly under a prefix (used by table resolvers).

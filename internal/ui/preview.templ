@@ -1,0 +1,44 @@
+package ui
+
+templ FilePreviewPage(vm PreviewVM) {
+	@Layout("explorer", vm.Name) {
+		<div class="flex flex-wrap items-start justify-between gap-4 mb-4">
+			<div class="min-w-0">
+				<div class="flex items-center gap-2">
+					<h1 class="text-lg font-semibold text-white truncate">{ vm.Name }</h1>
+					@FormatPill(vm.Format)
+					if vm.Compression != "none" && vm.Compression != "" {
+						<span class="badge bg-base-700 text-slate-300">{ string(vm.Compression) }</span>
+					}
+				</div>
+				<p class="text-sm text-slate-500 font-mono truncate">s3://{ vm.Bucket }/{ vm.Key }</p>
+			</div>
+			<div class="flex items-center gap-2">
+				<a class="btn-ghost" href={ templ.SafeURL(parentExplorerURL(vm.Bucket, vm.Key)) }>← Back to folder</a>
+				<a class="btn-ghost" href={ templ.SafeURL(sqlURLForFile(vm)) }>@iconTerminal() Query in SQL</a>
+			</div>
+		</div>
+
+		<div class="grid grid-cols-2 md:grid-cols-4 gap-3 mb-4">
+			@miniStat("Size", humanBytes(vm.Size))
+			if vm.Result != nil {
+				@miniStat("Columns", itoa(len(vm.Result.Columns)))
+				@miniStat("Sample rows", itoa(vm.Result.RowCount))
+				@miniStat("Query time", vm.Result.Elapsed)
+			}
+		</div>
+
+		<div class="card p-5">
+			<h2 class="text-base font-semibold text-white mb-1">DuckDB preview</h2>
+			<p class="text-xs text-slate-500 mb-4 font-mono">queried directly from object storage — no download</p>
+			if vm.Error != "" {
+				@QueryError(vm.Error)
+				if !vm.Ready {
+					<p class="text-xs text-slate-500 mt-2">The DuckDB <span class="font-mono">httpfs</span> extension could not be loaded (needs network on first use). Preview will work once it is installed.</p>
+				}
+			} else if vm.Result != nil {
+				@ResultTable(vm.Result)
+			}
+		</div>
+	}
+}

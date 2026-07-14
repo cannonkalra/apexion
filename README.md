@@ -12,7 +12,38 @@ crawl  →  discover datasets  →  infer schema  →  detect PII / keys  →  c
 - **100% Go** crawler & backend (Go 1.24+, CGO for embedded DuckDB)
 - **Server-rendered UI** with **templ**, **HTMX**, **Tailwind** — no React, no Vue, dark mode
 - **Formats:** CSV, TSV, JSON, JSONL, Parquet, Avro, ORC, **Iceberg**, **Delta Lake**, Hive partitions
-- **Event-driven Agent SDK** with pluggable LLMs (offline Ollama or cloud OpenAI/Anthropic)
+- **Instant preview** — query files *directly from MinIO* with embedded DuckDB (`httpfs`), no download
+- **VS Code-style explorer** — browse buckets → folders → files, lazy-loaded
+- **SQL scratchpad** — run read-only DuckDB SQL over object storage
+- **Cancellable background jobs**, per-directory crawls
+- **Event-driven Agent SDK** with pluggable LLMs (offline Ollama, **Groq**, OpenAI/Anthropic)
+
+## Data Explorer & Preview (Phase 1)
+
+Apexion is a **Data Explorer + Data Catalog**, not an ETL tool. The explorer lets you
+browse and preview data before (and after) cataloging it:
+
+- **Explorer** (`/explorer`) — a VS Code-style tree over object storage. Click a bucket, drill
+  into folders (delimiter-based, lazy), see a live folder summary (files, size, formats, last
+  modified), and **Crawl Directory** to catalog just that prefix.
+- **Instant file preview** (`/preview`) — opens any CSV/TSV/JSON/JSONL/Parquet file and runs
+  `read_csv_auto` / `read_json_auto` / `read_parquet` **directly against `s3://…`** via DuckDB's
+  `httpfs` extension. Shows column names, DuckDB types, and 100 sample rows — the file is never
+  downloaded. Table-format files (Iceberg/Delta) use `iceberg_scan`/`delta_scan` with a DuckDB S3
+  secret.
+- **SQL Scratchpad** (`/sql`) — a read-only DuckDB editor. Only `SELECT`, `WITH`, `DESCRIBE`,
+  `SUMMARIZE`, `SHOW`, and `EXPLAIN` are permitted (destructive statements are rejected). Every
+  dataset has an **Open SQL** button that pre-fills a query over its files.
+- **Jobs** (`/jobs`) — background crawl/inference jobs with live progress and a **Cancel** button.
+- **Dataset tabs** — Overview, Schema, Files, Partitions, Preview, History, Statistics.
+
+The AI inference now also produces a **business description**, **recommended partition columns**,
+**duplicate & missing-value analysis**, a **recommended Apache Doris schema**, and **Spark/Flink
+optimization** hints — with **Groq** as a first-class LLM provider (`provider: groq`).
+
+> DuckDB's `httpfs`/`delta`/`iceberg` extensions are auto-installed on first use, which needs
+> network once. In a fully offline environment the preview reports a clear message instead of
+> failing, and everything else keeps working.
 
 ---
 
@@ -239,7 +270,14 @@ All endpoints return JSON under `/api`.
 | `GET  /api/schema?dataset_id=`        | latest schema                        |
 | `GET  /api/columns?dataset_id=`       | columns + statistics                 |
 | `GET  /api/jobs` · `/api/jobs/{id}`   | background jobs & progress            |
+| `POST /api/jobs/{id}/cancel`          | cancel a running job                 |
 | `GET  /api/runs`                      | crawler run history                  |
+| `GET  /api/explorer?bucket=&prefix=`  | browse folders & files (live S3)     |
+| `POST /api/directories/crawl`         | crawl a directory (`{bucket,prefix}`)|
+| `GET  /api/preview/file?bucket=&key=` | DuckDB preview of a file             |
+| `GET  /api/preview/dataset/{id}`      | DuckDB preview of a dataset          |
+| `POST /api/sql`                       | run read-only DuckDB SQL (`{sql}`)   |
+| `GET  /api/server/buckets`            | live buckets on the connected server |
 | `GET  /api/lineage`                   | lineage nodes + edges                |
 | `POST /api/infer`                     | run inference (`{"dataset_id": …}`)  |
 | `GET  /api/search?q=`                 | global search                        |

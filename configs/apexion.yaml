@@ -41,10 +41,11 @@ log:
 
 agents:
   enabled: true
-  # provider: noop | openai | anthropic | ollama
+  # provider: noop | groq | openai | anthropic | ollama
   # noop uses deterministic local text (works fully offline).
+  # groq is OpenAI-compatible; set api_key to your Groq key.
   provider: noop
   llm:
-    base_url: ""   # e.g. http://localhost:11434/v1 for Ollama
-    api_key: ""
-    model: ""      # e.g. gpt-4o-mini, claude-3-5-haiku-latest, llama3.1
+    base_url: ""   # e.g. http://localhost:11434/v1 (Ollama); Groq defaults to api.groq.com
+    api_key: ""    # e.g. APEXION_AGENTS_LLM_API_KEY=gsk_... for Groq
+    model: ""      # e.g. llama-3.3-70b-versatile (Groq), gpt-4o-mini, claude-3-5-haiku-latest

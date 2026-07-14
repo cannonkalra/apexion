@@ -12,23 +12,31 @@ import (
 
 	"github.com/apexion/apexion/internal/agents"
 	"github.com/apexion/apexion/internal/catalog"
+	"github.com/apexion/apexion/internal/explorer"
 	"github.com/apexion/apexion/internal/lineage"
 	"github.com/apexion/apexion/internal/model"
+	"github.com/apexion/apexion/internal/preview"
 	"github.com/apexion/apexion/internal/storage"
 )
 
 // API holds the REST handler dependencies.
 type API struct {
-	catalog *catalog.Service
-	lineage *lineage.Service
-	agents  *agents.Registry
-	store   *storage.Store
-	log     zerolog.Logger
+	catalog  *catalog.Service
+	lineage  *lineage.Service
+	agents   *agents.Registry
+	preview  *preview.Engine
+	explorer *explorer.Service
+	store    *storage.Store
+	log      zerolog.Logger
 }
 
 // New builds the API.
-func New(cat *catalog.Service, lin *lineage.Service, ag *agents.Registry, log zerolog.Logger) *API {
-	return &API{catalog: cat, lineage: lin, agents: ag, store: cat.Store(), log: log}
+func New(cat *catalog.Service, lin *lineage.Service, ag *agents.Registry,
+	prev *preview.Engine, expl *explorer.Service, log zerolog.Logger) *API {
+	return &API{
+		catalog: cat, lineage: lin, agents: ag, preview: prev, explorer: expl,
+		store: cat.Store(), log: log,
+	}
 }
 
 // Routes returns the mounted REST router.
@@ -51,7 +59,14 @@ func (a *API) Routes() http.Handler {
 
 	r.Get("/jobs", a.listJobs)
 	r.Get("/jobs/{id}", a.getJob)
+	r.Post("/jobs/{id}/cancel", a.cancelJob)
 	r.Get("/runs", a.listRuns)
+
+	r.Get("/explorer", a.explore)
+	r.Post("/directories/crawl", a.crawlDirectory)
+	r.Get("/preview/file", a.previewFile)
+	r.Get("/preview/dataset/{id}", a.previewDataset)
+	r.Post("/sql", a.runSQL)
 
 	r.Get("/lineage", a.getLineage)
 	r.Post("/infer", a.inferBody)
@@ -237,6 +252,90 @@ func (a *API) listJobs(w http.ResponseWriter, r *http.Request) {
 func (a *API) getJob(w http.ResponseWriter, r *http.Request) {
 	job, err := a.store.GetJob(r.Context(), chi.URLParam(r, "id"))
 	writeOrErr(w, job, err)
+}
+
+func (a *API) cancelJob(w http.ResponseWriter, r *http.Request) {
+	ok := a.catalog.CancelJob(chi.URLParam(r, "id"))
+	if !ok {
+		writeErr(w, http.StatusNotFound, "job not running")
+		return
+	}
+	writeJSON(w, http.StatusOK, map[string]string{"status": "cancelling"})
+}
+
+func (a *API) explore(w http.ResponseWriter, r *http.Request) {
+	bucket := r.URL.Query().Get("bucket")
+	if bucket == "" {
+		writeErr(w, http.StatusBadRequest, "bucket required")
+		return
+	}
+	listing, err := a.explorer.ListDir(r.Context(), bucket, r.URL.Query().Get("prefix"))
+	writeOrErr(w, listing, err)
+}
+
+func (a *API) crawlDirectory(w http.ResponseWriter, r *http.Request) {
+	var body struct {
+		Bucket string `json:"bucket"`
+		Prefix string `json:"prefix"`
+		Mode   string `json:"mode"`
+	}
+	if err := json.NewDecoder(r.Body).Decode(&body); err != nil || body.Bucket == "" {
+		writeErr(w, http.StatusBadRequest, "bucket required")
+		return
+	}
+	mode := model.CrawlFull
+	if body.Mode == "incremental" {
+		mode = model.CrawlIncremental
+	}
+	job := a.catalog.StartCrawlPrefix(body.Bucket, body.Prefix, mode, model.ScheduleManual)
+	writeJSON(w, http.StatusAccepted, job)
+}
+
+func (a *API) previewFile(w http.ResponseWriter, r *http.Request) {
+	q := r.URL.Query()
+	bucket, key := q.Get("bucket"), q.Get("key")
+	if bucket == "" || key == "" {
+		writeErr(w, http.StatusBadRequest, "bucket and key required")
+		return
+	}
+	format := model.Format(q.Get("format"))
+	res, err := a.preview.PreviewFile(r.Context(), bucket, key, format, intParam(r, "limit", 100))
+	if err != nil {
+		writeErr(w, http.StatusBadRequest, err.Error())
+		return
+	}
+	writeJSON(w, http.StatusOK, res)
+}
+
+func (a *API) previewDataset(w http.ResponseWriter, r *http.Request) {
+	ds, err := a.store.GetDataset(r.Context(), chi.URLParam(r, "id"))
+	if err != nil || ds == nil {
+		writeErr(w, http.StatusNotFound, "dataset not found")
+		return
+	}
+	res, err := a.preview.PreviewDataset(r.Context(), ds.BucketName, ds.Path, ds.Format, intParam(r, "limit", 100))
+	if err != nil {
+		writeErr(w, http.StatusBadRequest, err.Error())
+		return
+	}
+	writeJSON(w, http.StatusOK, res)
+}
+
+func (a *API) runSQL(w http.ResponseWriter, r *http.Request) {
+	var body struct {
+		SQL   string `json:"sql"`
+		Limit int    `json:"limit"`
+	}
+	if err := json.NewDecoder(r.Body).Decode(&body); err != nil || body.SQL == "" {
+		writeErr(w, http.StatusBadRequest, "sql required")
+		return
+	}
+	res, err := a.preview.RunSQL(r.Context(), body.SQL, body.Limit)
+	if err != nil {
+		writeErr(w, http.StatusBadRequest, err.Error())
+		return
+	}
+	writeJSON(w, http.StatusOK, res)
 }
 
 func (a *API) listRuns(w http.ResponseWriter, r *http.Request) {
