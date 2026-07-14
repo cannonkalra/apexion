@@ -314,6 +314,22 @@ type Job struct {
 	FinishedAt *time.Time `json:"finished_at,omitempty"`
 }
 
+// Connection is a stored object-store connection profile (one AWS/MinIO/S3
+// account). Exactly one connection is active at a time.
+type Connection struct {
+	ID        string    `json:"id"`
+	Name      string    `json:"name"`
+	Provider  string    `json:"provider"` // minio | aws | s3
+	Endpoint  string    `json:"endpoint"`
+	Region    string    `json:"region"`
+	AccessKey string    `json:"access_key"`
+	SecretKey string    `json:"secret_key"`
+	UseSSL    bool      `json:"use_ssl"`
+	IsActive  bool      `json:"is_active"`
+	CreatedAt time.Time `json:"created_at"`
+	UpdatedAt time.Time `json:"updated_at"`
+}
+
 // Event is a persisted, structured domain event (see internal/events).
 type Event struct {
 	ID        string    `json:"id"`

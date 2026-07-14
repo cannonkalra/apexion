@@ -36,6 +36,11 @@ browse and preview data before (and after) cataloging it:
   dataset has an **Open SQL** button that pre-fills a query over its files.
 - **Jobs** (`/jobs`) — background crawl/inference jobs with live progress and a **Cancel** button.
 - **Dataset tabs** — Overview, Schema, Files, Partitions, Preview, History, Statistics.
+- **Connections** (`/settings`) — connect multiple AWS / MinIO / S3 accounts, **test** and **activate**
+  one, then browse it. Switching the active connection instantly re-points the explorer, crawler,
+  and DuckDB preview engine (its S3 credentials + endpoint) at the new account — pick one from the
+  switcher in the Explorer or from Settings. Credentials are stored in the DuckDB catalog and
+  redacted in API listings.
 
 The AI inference now also produces a **business description**, **recommended partition columns**,
 **duplicate & missing-value analysis**, a **recommended Apache Doris schema**, and **Spark/Flink

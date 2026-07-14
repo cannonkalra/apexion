@@ -17,6 +17,13 @@ import (
 	"github.com/apexion/apexion/internal/crawler/format"
 )
 
+// Provider returns the currently-active S3 client. It lets long-lived services
+// (crawler, explorer, catalog) follow the user's active connection without
+// being rebuilt when it changes.
+type Provider interface {
+	Client() *Client
+}
+
 // Client is a thin wrapper over the MinIO SDK.
 type Client struct {
 	mc       *minio.Client

@@ -10,11 +10,13 @@ import (
 
 // ExplorerVM powers the VS Code-style bucket/folder/file browser.
 type ExplorerVM struct {
-	Buckets []string // all buckets on the server
-	Bucket  string
-	Listing *explorer.DirListing
-	Crumbs  []explorer.Crumb
-	Error   string
+	Buckets     []string // all buckets on the active connection
+	Bucket      string
+	Listing     *explorer.DirListing
+	Crumbs      []explorer.Crumb
+	Error       string
+	Connections []model.Connection
+	ActiveConn  *model.Connection
 }
 
 // PreviewVM powers the instant file preview page.
@@ -135,8 +137,8 @@ type lineageGroup struct {
 
 // SettingsVM powers the settings page.
 type SettingsVM struct {
-	MinIOEndpoint string
-	MinIORegion   string
+	Connections   []model.Connection
+	ActiveConnID  string
 	StoragePath   string
 	Workers       int
 	AgentProvider string

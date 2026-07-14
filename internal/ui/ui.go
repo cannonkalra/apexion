@@ -16,6 +16,7 @@ import (
 	"github.com/apexion/apexion/internal/agents"
 	"github.com/apexion/apexion/internal/catalog"
 	"github.com/apexion/apexion/internal/config"
+	"github.com/apexion/apexion/internal/connections"
 	"github.com/apexion/apexion/internal/crawler/format"
 	"github.com/apexion/apexion/internal/explorer"
 	"github.com/apexion/apexion/internal/lineage"
@@ -35,22 +36,23 @@ func intFrom(s string, def int) int {
 
 // Handler serves the UI.
 type Handler struct {
-	catalog  *catalog.Service
-	lineage  *lineage.Service
-	agents   *agents.Registry
-	preview  *preview.Engine
-	explorer *explorer.Service
-	store    *storage.Store
-	cfg      *config.Config
-	log      zerolog.Logger
+	catalog     *catalog.Service
+	lineage     *lineage.Service
+	agents      *agents.Registry
+	preview     *preview.Engine
+	explorer    *explorer.Service
+	connections *connections.Manager
+	store       *storage.Store
+	cfg         *config.Config
+	log         zerolog.Logger
 }
 
 // New builds the UI handler.
 func New(cat *catalog.Service, lin *lineage.Service, ag *agents.Registry,
-	prev *preview.Engine, expl *explorer.Service, cfg *config.Config, log zerolog.Logger) *Handler {
+	prev *preview.Engine, expl *explorer.Service, conns *connections.Manager, cfg *config.Config, log zerolog.Logger) *Handler {
 	return &Handler{
 		catalog: cat, lineage: lin, agents: ag, preview: prev, explorer: expl,
-		store: cat.Store(), cfg: cfg, log: log,
+		connections: conns, store: cat.Store(), cfg: cfg, log: log,
 	}
 }
 
@@ -86,6 +88,9 @@ func (h *Handler) Routes() http.Handler {
 		r.Delete("/datasets/{id}", h.actionDeleteDataset)
 		r.Post("/jobs/{id}/cancel", h.actionCancelJob)
 		r.Post("/settings/crawl", h.actionSettingsCrawl)
+		r.Post("/connections", h.actionCreateConnection)
+		r.Post("/connections/{id}/activate", h.actionActivateConnection)
+		r.Delete("/connections/{id}", h.actionDeleteConnection)
 	})
 	return r
 }
@@ -166,7 +171,11 @@ func (h *Handler) buckets(w http.ResponseWriter, r *http.Request) {
 func (h *Handler) explorerPage(w http.ResponseWriter, r *http.Request) {
 	ctx := r.Context()
 	_, names, _ := h.catalog.ServerBuckets(ctx)
-	vm := ExplorerVM{Buckets: names, Bucket: r.URL.Query().Get("bucket")}
+	conns, _ := h.connections.List(ctx)
+	vm := ExplorerVM{
+		Buckets: names, Bucket: r.URL.Query().Get("bucket"),
+		Connections: conns, ActiveConn: h.connections.Active(),
+	}
 	if vm.Bucket != "" {
 		prefix := r.URL.Query().Get("prefix")
 		listing, err := h.explorer.ListDir(ctx, vm.Bucket, prefix)
@@ -307,14 +316,20 @@ func (h *Handler) search(w http.ResponseWriter, r *http.Request) {
 }
 
 func (h *Handler) settings(w http.ResponseWriter, r *http.Request) {
-	bs, _ := h.store.ListBuckets(r.Context())
+	ctx := r.Context()
+	bs, _ := h.store.ListBuckets(ctx)
 	agentsVM := make([]AgentInfoVM, 0)
 	for _, a := range h.agents.Info() {
 		agentsVM = append(agentsVM, AgentInfoVM{Name: a.Name, Kind: a.Kind, Provider: a.Provider, Enabled: a.Enabled})
 	}
+	conns, _ := h.connections.List(ctx)
+	active := ""
+	if a := h.connections.Active(); a != nil {
+		active = a.ID
+	}
 	vm := SettingsVM{
-		MinIOEndpoint: h.cfg.MinIO.Endpoint,
-		MinIORegion:   h.cfg.MinIO.Region,
+		Connections:   conns,
+		ActiveConnID:  active,
 		StoragePath:   h.cfg.Storage.Path,
 		Workers:       h.cfg.Crawler.Workers,
 		AgentProvider: h.cfg.Agents.Provider,
@@ -323,6 +338,50 @@ func (h *Handler) settings(w http.ResponseWriter, r *http.Request) {
 		Buckets:       bs,
 	}
 	h.render(w, r, SettingsPage(vm))
+}
+
+func (h *Handler) actionCreateConnection(w http.ResponseWriter, r *http.Request) {
+	c := &model.Connection{
+		Name:      r.FormValue("name"),
+		Provider:  r.FormValue("provider"),
+		Endpoint:  r.FormValue("endpoint"),
+		Region:    r.FormValue("region"),
+		AccessKey: r.FormValue("access_key"),
+		SecretKey: r.FormValue("secret_key"),
+		UseSSL:    r.FormValue("use_ssl") == "on" || r.FormValue("use_ssl") == "true",
+	}
+	if c.Name == "" {
+		h.render(w, r, Toast("Connection name is required", "error"))
+		return
+	}
+	if err := h.connections.Create(r.Context(), c); err != nil {
+		h.render(w, r, Toast("Failed to add connection: "+err.Error(), "error"))
+		return
+	}
+	w.Header().Set("HX-Redirect", "/settings")
+	h.render(w, r, Toast("Connection added", "success"))
+}
+
+func (h *Handler) actionActivateConnection(w http.ResponseWriter, r *http.Request) {
+	if err := h.connections.SetActive(r.Context(), chi.URLParam(r, "id")); err != nil {
+		h.render(w, r, Toast("Failed to switch: "+err.Error(), "error"))
+		return
+	}
+	redirect := r.URL.Query().Get("redirect")
+	if redirect == "" {
+		redirect = "/settings"
+	}
+	w.Header().Set("HX-Redirect", redirect)
+	h.render(w, r, Toast("Active connection switched", "success"))
+}
+
+func (h *Handler) actionDeleteConnection(w http.ResponseWriter, r *http.Request) {
+	if err := h.connections.Delete(r.Context(), chi.URLParam(r, "id")); err != nil {
+		h.render(w, r, Toast("Failed to delete: "+err.Error(), "error"))
+		return
+	}
+	w.Header().Set("HX-Redirect", "/settings")
+	h.render(w, r, Toast("Connection deleted", "success"))
 }
 
 // ---- partials ------------------------------------------------------------

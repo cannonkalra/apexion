@@ -53,39 +53,32 @@ func New(cfg config.MinIOConfig, log zerolog.Logger) (*Engine, error) {
 	return e, nil
 }
 
+// Conn holds the S3 connection parameters the preview engine needs.
+type Conn struct {
+	Endpoint  string
+	Region    string
+	AccessKey string
+	SecretKey string
+	UseSSL    bool
+	// URLStyle is "path" (MinIO/custom) or "vhost" (AWS).
+	URLStyle string
+}
+
 func (e *Engine) configure(cfg config.MinIOConfig) {
+	if !e.ensureExtensions() {
+		return
+	}
+	_ = e.Reconfigure(Conn{
+		Endpoint: cfg.Endpoint, Region: cfg.Region, AccessKey: cfg.AccessKey,
+		SecretKey: cfg.SecretKey, UseSSL: cfg.UseSSL, URLStyle: "path",
+	})
+}
+
+// ensureExtensions installs httpfs (required) and delta/iceberg (optional). It
+// runs once; subsequent connection switches only re-apply credentials.
+func (e *Engine) ensureExtensions() bool {
 	ctx, cancel := context.WithTimeout(context.Background(), 60*time.Second)
 	defer cancel()
-
-	// The Delta/Iceberg extensions use their own object store (delta-kernel-rs /
-	// pyiceberg-style) that reads AWS_* env vars rather than DuckDB's s3_*
-	// settings, so we export both. AWS_ALLOW_HTTP is required for plain-HTTP
-	// MinIO.
-	scheme := "http://"
-	if cfg.UseSSL {
-		scheme = "https://"
-	}
-	region := cfg.Region
-	if region == "" {
-		region = "us-east-1"
-	}
-	setenv := map[string]string{
-		"AWS_ENDPOINT_URL":           scheme + cfg.Endpoint,
-		"AWS_ENDPOINT_URL_S3":        scheme + cfg.Endpoint,
-		"AWS_ACCESS_KEY_ID":          cfg.AccessKey,
-		"AWS_SECRET_ACCESS_KEY":      cfg.SecretKey,
-		"AWS_REGION":                 region,
-		"AWS_DEFAULT_REGION":         region,
-		"AWS_ALLOW_HTTP":             "true",
-		"AWS_S3_ALLOW_UNSAFE_RENAME": "true",
-		"AWS_EC2_METADATA_DISABLED":  "true", // stop the 169.254.169.254 lookups
-	}
-	for k, v := range setenv {
-		_ = os.Setenv(k, v)
-	}
-
-	// Best-effort extension install (needs network the first time). httpfs is
-	// required; delta/iceberg are optional (table-format preview).
 	for _, q := range []string{
 		"SET autoinstall_known_extensions=true",
 		"SET autoload_known_extensions=true",
@@ -95,7 +88,7 @@ func (e *Engine) configure(cfg config.MinIOConfig) {
 		if _, err := e.db.ExecContext(ctx, q); err != nil {
 			e.readErr = err.Error()
 			e.log.Warn().Err(err).Str("stmt", q).Msg("httpfs setup failed; S3 preview disabled")
-			return
+			return false
 		}
 	}
 	for _, ext := range []string{"delta", "iceberg"} {
@@ -105,40 +98,85 @@ func (e *Engine) configure(cfg config.MinIOConfig) {
 		}
 		_, _ = e.db.ExecContext(ctx, "LOAD "+ext)
 	}
+	return true
+}
 
-	useSSL := "false"
-	if cfg.UseSSL {
-		useSSL = "true"
+// Reconfigure points the preview engine at a different S3 connection. It is safe
+// to call whenever the active connection changes.
+func (e *Engine) Reconfigure(c Conn) error {
+	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
+	defer cancel()
+
+	region := c.Region
+	if region == "" {
+		region = "us-east-1"
 	}
+	urlStyle := c.URLStyle
+	if urlStyle == "" {
+		urlStyle = "path"
+	}
+	scheme := "http://"
+	if c.UseSSL {
+		scheme = "https://"
+	}
+
+	// Delta/Iceberg kernels read AWS_* env vars rather than DuckDB's s3_*
+	// settings. AWS_ALLOW_HTTP is required for plain-HTTP MinIO.
+	for k, v := range map[string]string{
+		"AWS_ENDPOINT_URL":           scheme + c.Endpoint,
+		"AWS_ENDPOINT_URL_S3":        scheme + c.Endpoint,
+		"AWS_ACCESS_KEY_ID":          c.AccessKey,
+		"AWS_SECRET_ACCESS_KEY":      c.SecretKey,
+		"AWS_REGION":                 region,
+		"AWS_DEFAULT_REGION":         region,
+		"AWS_ALLOW_HTTP":             boolStr(!c.UseSSL),
+		"AWS_S3_ALLOW_UNSAFE_RENAME": "true",
+		"AWS_EC2_METADATA_DISABLED":  "true",
+	} {
+		_ = os.Setenv(k, v)
+	}
+
+	useSSL := boolStr(c.UseSSL)
 	setup := []string{
-		fmt.Sprintf("SET s3_endpoint='%s'", esc(cfg.Endpoint)),
+		fmt.Sprintf("SET s3_endpoint='%s'", esc(c.Endpoint)),
 		"SET s3_use_ssl=" + useSSL,
-		"SET s3_url_style='path'",
+		fmt.Sprintf("SET s3_url_style='%s'", esc(urlStyle)),
 		fmt.Sprintf("SET s3_region='%s'", esc(region)),
-		fmt.Sprintf("SET s3_access_key_id='%s'", esc(cfg.AccessKey)),
-		fmt.Sprintf("SET s3_secret_access_key='%s'", esc(cfg.SecretKey)),
+		fmt.Sprintf("SET s3_access_key_id='%s'", esc(c.AccessKey)),
+		fmt.Sprintf("SET s3_secret_access_key='%s'", esc(c.SecretKey)),
 	}
 	for _, q := range setup {
 		if _, err := e.db.ExecContext(ctx, q); err != nil {
 			e.readErr = err.Error()
 			e.log.Warn().Err(err).Msg("s3 config failed")
-			return
+			return err
 		}
 	}
 
-	// A DuckDB Secret is the modern, unified S3 credential mechanism honored by
-	// httpfs, delta_scan, and iceberg_scan alike (unlike the legacy SET s3_*
-	// settings, which the table-format kernels ignore).
+	// A DuckDB Secret is honored by httpfs, delta_scan, and iceberg_scan alike.
+	endpointClause := ""
+	if c.Endpoint != "" {
+		endpointClause = fmt.Sprintf(", ENDPOINT '%s'", esc(c.Endpoint))
+	}
 	secret := fmt.Sprintf(`CREATE OR REPLACE SECRET apexion_s3 (
-		TYPE S3, KEY_ID '%s', SECRET '%s', ENDPOINT '%s',
-		URL_STYLE 'path', USE_SSL %s, REGION '%s')`,
-		esc(cfg.AccessKey), esc(cfg.SecretKey), esc(cfg.Endpoint), useSSL, esc(region))
+		TYPE S3, KEY_ID '%s', SECRET '%s'%s,
+		URL_STYLE '%s', USE_SSL %s, REGION '%s')`,
+		esc(c.AccessKey), esc(c.SecretKey), endpointClause, esc(urlStyle), useSSL, esc(region))
 	if _, err := e.db.ExecContext(ctx, secret); err != nil {
 		e.log.Debug().Err(err).Msg("create s3 secret failed (table-format preview may be limited)")
 	}
 
 	e.ready = true
-	e.log.Info().Str("endpoint", cfg.Endpoint).Msg("preview engine ready (DuckDB httpfs/s3)")
+	e.readErr = ""
+	e.log.Info().Str("endpoint", c.Endpoint).Str("url_style", urlStyle).Msg("preview engine configured")
+	return nil
+}
+
+func boolStr(b bool) string {
+	if b {
+		return "true"
+	}
+	return "false"
 }
 
 // Ready reports whether S3 preview is available.

@@ -12,6 +12,7 @@ import (
 
 	"github.com/apexion/apexion/internal/agents"
 	"github.com/apexion/apexion/internal/catalog"
+	"github.com/apexion/apexion/internal/connections"
 	"github.com/apexion/apexion/internal/explorer"
 	"github.com/apexion/apexion/internal/lineage"
 	"github.com/apexion/apexion/internal/model"
@@ -21,21 +22,22 @@ import (
 
 // API holds the REST handler dependencies.
 type API struct {
-	catalog  *catalog.Service
-	lineage  *lineage.Service
-	agents   *agents.Registry
-	preview  *preview.Engine
-	explorer *explorer.Service
-	store    *storage.Store
-	log      zerolog.Logger
+	catalog     *catalog.Service
+	lineage     *lineage.Service
+	agents      *agents.Registry
+	preview     *preview.Engine
+	explorer    *explorer.Service
+	connections *connections.Manager
+	store       *storage.Store
+	log         zerolog.Logger
 }
 
 // New builds the API.
 func New(cat *catalog.Service, lin *lineage.Service, ag *agents.Registry,
-	prev *preview.Engine, expl *explorer.Service, log zerolog.Logger) *API {
+	prev *preview.Engine, expl *explorer.Service, conns *connections.Manager, log zerolog.Logger) *API {
 	return &API{
 		catalog: cat, lineage: lin, agents: ag, preview: prev, explorer: expl,
-		store: cat.Store(), log: log,
+		connections: conns, store: cat.Store(), log: log,
 	}
 }
 
@@ -77,7 +79,90 @@ func (a *API) Routes() http.Handler {
 	r.Get("/events", a.listEvents)
 	r.Get("/agents", a.listAgents)
 
+	r.Get("/connections", a.listConnections)
+	r.Post("/connections", a.createConnection)
+	r.Post("/connections/test", a.testConnection)
+	r.Delete("/connections/{id}", a.deleteConnection)
+	r.Post("/connections/{id}/activate", a.activateConnection)
+
 	return r
+}
+
+// connectionInput is the create/test payload (secret_key omitted from reads).
+type connectionInput struct {
+	Name      string `json:"name"`
+	Provider  string `json:"provider"`
+	Endpoint  string `json:"endpoint"`
+	Region    string `json:"region"`
+	AccessKey string `json:"access_key"`
+	SecretKey string `json:"secret_key"`
+	UseSSL    bool   `json:"use_ssl"`
+}
+
+func (in connectionInput) toModel() *model.Connection {
+	return &model.Connection{
+		Name: in.Name, Provider: in.Provider, Endpoint: in.Endpoint, Region: in.Region,
+		AccessKey: in.AccessKey, SecretKey: in.SecretKey, UseSSL: in.UseSSL,
+	}
+}
+
+func (a *API) listConnections(w http.ResponseWriter, r *http.Request) {
+	conns, err := a.connections.List(r.Context())
+	if err != nil {
+		writeErr(w, http.StatusInternalServerError, err.Error())
+		return
+	}
+	// Redact secrets in listings.
+	for i := range conns {
+		if conns[i].SecretKey != "" {
+			conns[i].SecretKey = "••••••••"
+		}
+	}
+	writeJSON(w, http.StatusOK, conns)
+}
+
+func (a *API) createConnection(w http.ResponseWriter, r *http.Request) {
+	var in connectionInput
+	if err := json.NewDecoder(r.Body).Decode(&in); err != nil || in.Name == "" {
+		writeErr(w, http.StatusBadRequest, "name required")
+		return
+	}
+	c := in.toModel()
+	if err := a.connections.Create(r.Context(), c); err != nil {
+		writeErr(w, http.StatusInternalServerError, err.Error())
+		return
+	}
+	c.SecretKey = ""
+	writeJSON(w, http.StatusCreated, c)
+}
+
+func (a *API) testConnection(w http.ResponseWriter, r *http.Request) {
+	var in connectionInput
+	if err := json.NewDecoder(r.Body).Decode(&in); err != nil {
+		writeErr(w, http.StatusBadRequest, "invalid body")
+		return
+	}
+	if err := a.connections.TestConnection(r.Context(), in.toModel()); err != nil {
+		writeJSON(w, http.StatusOK, map[string]any{"ok": false, "error": err.Error()})
+		return
+	}
+	writeJSON(w, http.StatusOK, map[string]any{"ok": true})
+}
+
+func (a *API) deleteConnection(w http.ResponseWriter, r *http.Request) {
+	if err := a.connections.Delete(r.Context(), chi.URLParam(r, "id")); err != nil {
+		writeErr(w, http.StatusInternalServerError, err.Error())
+		return
+	}
+	writeJSON(w, http.StatusOK, map[string]string{"status": "deleted"})
+}
+
+func (a *API) activateConnection(w http.ResponseWriter, r *http.Request) {
+	if err := a.connections.SetActive(r.Context(), chi.URLParam(r, "id")); err != nil {
+		writeErr(w, http.StatusBadRequest, err.Error())
+		return
+	}
+	writeJSON(w, http.StatusOK, map[string]string{"status": "active"})
 }
 
 // ---- handlers ------------------------------------------------------------

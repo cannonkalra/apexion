@@ -13,8 +13,8 @@ import (
 	"github.com/apexion/apexion/internal/api"
 	"github.com/apexion/apexion/internal/catalog"
 	"github.com/apexion/apexion/internal/config"
+	"github.com/apexion/apexion/internal/connections"
 	"github.com/apexion/apexion/internal/crawler"
-	"github.com/apexion/apexion/internal/crawler/s3"
 	"github.com/apexion/apexion/internal/events"
 	"github.com/apexion/apexion/internal/explorer"
 	"github.com/apexion/apexion/internal/httpserver"
@@ -30,20 +30,20 @@ import (
 
 // App holds every wired dependency and the process lifecycle handles.
 type App struct {
-	Cfg       *config.Config
-	Log       zerolog.Logger
-	Store     *storage.Store
-	Bus       *events.Bus
-	S3        *s3.Client
-	Crawler   *crawler.Crawler
-	Catalog   *catalog.Service
-	Lineage   *lineage.Service
-	Jobs      *jobs.Manager
-	Scheduler *jobs.Scheduler
-	Agents    *agents.Registry
-	Preview   *preview.Engine
-	Explorer  *explorer.Service
-	Server    *httpserver.Server
+	Cfg         *config.Config
+	Log         zerolog.Logger
+	Store       *storage.Store
+	Bus         *events.Bus
+	Connections *connections.Manager
+	Crawler     *crawler.Crawler
+	Catalog     *catalog.Service
+	Lineage     *lineage.Service
+	Jobs        *jobs.Manager
+	Scheduler   *jobs.Scheduler
+	Agents      *agents.Registry
+	Preview     *preview.Engine
+	Explorer    *explorer.Service
+	Server      *httpserver.Server
 }
 
 // Build constructs the full application graph from configuration.
@@ -60,25 +60,27 @@ func Build(ctx context.Context, cfg *config.Config) (*App, error) {
 
 	bus := events.NewBus(log, 4096)
 
-	s3client, err := s3.New(s3.Config{
-		Endpoint:  cfg.MinIO.Endpoint,
-		AccessKey: cfg.MinIO.AccessKey,
-		SecretKey: cfg.MinIO.SecretKey,
-		UseSSL:    cfg.MinIO.UseSSL,
-		Region:    cfg.MinIO.Region,
-	})
+	// The preview engine and the connection manager come first: the manager
+	// seeds a default connection (from static config), tracks the active one,
+	// hands out the active S3 client, and reconfigures the preview engine on
+	// switch. Everything downstream depends on the active connection.
+	prev, err := preview.New(cfg.MinIO, log)
 	if err != nil {
+		return nil, err
+	}
+	conns := connections.New(store, prev, cfg.MinIO, log)
+	if err := conns.Init(ctx); err != nil {
 		return nil, err
 	}
 
 	registry := crawler.DefaultRegistry()
 	resolvers := crawler.DefaultResolvers()
-	cr := crawler.New(store, s3client, registry, resolvers, bus, cfg.Crawler, log)
+	cr := crawler.New(store, conns, registry, resolvers, bus, cfg.Crawler, log)
 
 	engine := inference.NewEngine()
 	jobMgr := jobs.NewManager(store, log, cfg.Crawler.Workers)
 
-	cat := catalog.New(store, s3client, cr, engine, jobMgr, bus, cfg.Inference, log)
+	cat := catalog.New(store, conns, cr, engine, jobMgr, bus, cfg.Inference, log)
 	cat.PersistEvents(bus)
 
 	lin := lineage.New(store, log)
@@ -89,18 +91,14 @@ func Build(ctx context.Context, cfg *config.Config) (*App, error) {
 
 	sched := jobs.NewScheduler(store, cat, log)
 
-	prev, err := preview.New(cfg.MinIO, log)
-	if err != nil {
-		return nil, err
-	}
-	expl := explorer.New(s3client)
+	expl := explorer.New(conns)
 
-	apiH := api.New(cat, lin, agentReg, prev, expl, log)
-	uiH := ui.New(cat, lin, agentReg, prev, expl, cfg, log)
+	apiH := api.New(cat, lin, agentReg, prev, expl, conns, log)
+	uiH := ui.New(cat, lin, agentReg, prev, expl, conns, cfg, log)
 	srv := httpserver.New(cfg.Server, apiH, uiH, log)
 
 	return &App{
-		Cfg: cfg, Log: log, Store: store, Bus: bus, S3: s3client, Crawler: cr,
+		Cfg: cfg, Log: log, Store: store, Bus: bus, Connections: conns, Crawler: cr,
 		Catalog: cat, Lineage: lin, Jobs: jobMgr, Scheduler: sched,
 		Agents: agentReg, Preview: prev, Explorer: expl, Server: srv,
 	}, nil

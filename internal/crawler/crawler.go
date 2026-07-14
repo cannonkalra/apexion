@@ -31,7 +31,7 @@ import (
 // Crawler orchestrates discovery for a bucket.
 type Crawler struct {
 	store     *storage.Store
-	client    *s3.Client
+	provider  s3.Provider
 	registry  *format.Registry
 	resolvers map[model.Format]format.TableResolver
 	bus       *events.Bus
@@ -39,15 +39,19 @@ type Crawler struct {
 	log       zerolog.Logger
 }
 
-// New constructs a Crawler.
-func New(store *storage.Store, client *s3.Client, reg *format.Registry,
+// New constructs a Crawler. The provider supplies the active S3 client, so the
+// crawler follows connection switches automatically.
+func New(store *storage.Store, provider s3.Provider, reg *format.Registry,
 	resolvers map[model.Format]format.TableResolver, bus *events.Bus,
 	cfg config.CrawlerConfig, log zerolog.Logger) *Crawler {
 	return &Crawler{
-		store: store, client: client, registry: reg, resolvers: resolvers,
+		store: store, provider: provider, registry: reg, resolvers: resolvers,
 		bus: bus, cfg: cfg, log: log.With().Str("component", "crawler").Logger(),
 	}
 }
+
+// client returns the currently-active S3 client.
+func (c *Crawler) client() *s3.Client { return c.provider.Client() }
 
 // Options controls a single crawl.
 type Options struct {
@@ -126,8 +130,8 @@ func (c *Crawler) ensureBucket(ctx context.Context, name string) (*model.Bucket,
 	}
 	now := time.Now().UTC()
 	b = &model.Bucket{
-		ID: uuid.NewString(), Name: name, Endpoint: c.client.Endpoint(),
-		Region: c.client.Region(), CreatedAt: now, UpdatedAt: now,
+		ID: uuid.NewString(), Name: name, Endpoint: c.client().Endpoint(),
+		Region: c.client().Region(), CreatedAt: now, UpdatedAt: now,
 	}
 	if err := c.store.UpsertBucket(ctx, b); err != nil {
 		return nil, err
@@ -173,7 +177,7 @@ func (c *Crawler) walk(ctx context.Context, bucket *model.Bucket, run *model.Cra
 	now := time.Now().UTC()
 	incremental := opts.Mode == model.CrawlIncremental
 
-	err := c.client.WalkObjects(ctx, bucket.Name, opts.Prefix, startAfter, func(om s3.ObjectMeta) error {
+	err := c.client().WalkObjects(ctx, bucket.Name, opts.Prefix, startAfter, func(om s3.ObjectMeta) error {
 		if err := limiter.Wait(ctx); err != nil {
 			return err
 		}

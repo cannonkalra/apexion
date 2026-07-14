@@ -6,7 +6,8 @@ templ ExplorerPage(vm ExplorerVM) {
 	@Layout("explorer", "Explorer") {
 		<div class="grid grid-cols-1 lg:grid-cols-4 gap-4">
 			<div class="card p-3 lg:col-span-1 h-fit">
-				<div class="text-xs uppercase tracking-wider text-slate-500 px-2 mb-2">Buckets</div>
+				@connectionSwitcher(vm)
+				<div class="text-xs uppercase tracking-wider text-slate-500 px-2 mb-2 mt-3">Buckets</div>
 				<div class="space-y-0.5">
 					if len(vm.Buckets) == 0 {
 						<p class="text-sm text-slate-500 px-2">No buckets on the server.</p>
@@ -37,6 +38,50 @@ templ ExplorerPage(vm ExplorerVM) {
 		</div>
 		<div id="toast-slot"></div>
 	}
+}
+
+// connectionSwitcher lets the user pick the active account without leaving the
+// explorer.
+templ connectionSwitcher(vm ExplorerVM) {
+	<div class="relative">
+		<details class="group">
+			<summary class="flex items-center gap-2 px-2 py-2 rounded-lg bg-base-850 hover:bg-base-800 cursor-pointer list-none">
+				<span class="grid place-items-center w-6 h-6 rounded bg-brand-500/15 text-brand-300">@iconDatabase()</span>
+				<div class="flex-1 min-w-0">
+					<div class="text-[11px] text-slate-500 leading-none">Connection</div>
+					<div class="text-sm text-slate-200 truncate">
+						if vm.ActiveConn != nil {
+							{ vm.ActiveConn.Name }
+						} else {
+							none
+						}
+					</div>
+				</div>
+				<span class="text-slate-500 group-open:rotate-180 transition-transform">▾</span>
+			</summary>
+			<div class="mt-1 space-y-0.5 border border-base-800 rounded-lg p-1 bg-base-900">
+				for _, c := range vm.Connections {
+					if vm.ActiveConn != nil && c.ID == vm.ActiveConn.ID {
+						<div class="flex items-center gap-2 px-2 py-1.5 rounded text-sm text-white bg-base-800">
+							<span class="w-1.5 h-1.5 rounded-full bg-accent-emerald"></span>
+							<span class="truncate flex-1">{ c.Name }</span>
+						</div>
+					} else {
+						<button
+							class="w-full flex items-center gap-2 px-2 py-1.5 rounded text-sm text-slate-300 hover:bg-base-800"
+							hx-post={ "/ui/connections/" + c.ID + "/activate?redirect=/explorer" }
+							hx-target="#toast-slot"
+							hx-swap="innerHTML"
+						>
+							<span class="w-1.5 h-1.5 rounded-full bg-base-600"></span>
+							<span class="truncate flex-1 text-left">{ c.Name }</span>
+						</button>
+					}
+				}
+				<a href="/settings" class="block px-2 py-1.5 rounded text-xs text-brand-300 hover:bg-base-800">+ Manage connections</a>
+			</div>
+		</details>
+	</div>
 }
 
 templ breadcrumbs(bucket string, crumbs []explorer.Crumb) {

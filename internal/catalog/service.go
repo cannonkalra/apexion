@@ -26,36 +26,37 @@ import (
 
 // Service coordinates crawling, inference, and cataloging.
 type Service struct {
-	store   *storage.Store
-	client  *s3.Client
-	crawler *crawler.Crawler
-	engine  *inference.Engine
-	jobs    *jobs.Manager
-	bus     *events.Bus
-	cfg     config.InferenceConfig
-	log     zerolog.Logger
+	store    *storage.Store
+	provider s3.Provider
+	crawler  *crawler.Crawler
+	engine   *inference.Engine
+	jobs     *jobs.Manager
+	bus      *events.Bus
+	cfg      config.InferenceConfig
+	log      zerolog.Logger
 }
 
 // New constructs the catalog service.
-func New(store *storage.Store, client *s3.Client, cr *crawler.Crawler, engine *inference.Engine,
+func New(store *storage.Store, provider s3.Provider, cr *crawler.Crawler, engine *inference.Engine,
 	jm *jobs.Manager, bus *events.Bus, cfg config.InferenceConfig, log zerolog.Logger) *Service {
 	return &Service{
-		store: store, client: client, crawler: cr, engine: engine, jobs: jm, bus: bus,
+		store: store, provider: provider, crawler: cr, engine: engine, jobs: jm, bus: bus,
 		cfg: cfg, log: log.With().Str("component", "catalog").Logger(),
 	}
 }
 
-// ServerBuckets lists the buckets that exist on the connected S3/MinIO server
+// ServerBuckets lists the buckets that exist on the active S3/MinIO connection
 // (via the ListAllMyBuckets API). This is independent of what has been crawled
 // into the catalog. The endpoint is returned so the UI can show what it is
 // connected to.
 func (s *Service) ServerBuckets(ctx context.Context) (endpoint string, names []string, err error) {
-	names, err = s.client.ListBuckets(ctx)
-	return s.client.Endpoint(), names, err
+	client := s.provider.Client()
+	names, err = client.ListBuckets(ctx)
+	return client.Endpoint(), names, err
 }
 
-// Endpoint returns the configured object-store endpoint.
-func (s *Service) Endpoint() string { return s.client.Endpoint() }
+// Endpoint returns the active object-store endpoint.
+func (s *Service) Endpoint() string { return s.provider.Client().Endpoint() }
 
 // Store exposes the underlying store for read handlers.
 func (s *Service) Store() *storage.Store { return s.store }

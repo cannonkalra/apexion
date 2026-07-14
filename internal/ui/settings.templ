@@ -1,15 +1,75 @@
 package ui
 
+import "github.com/apexion/apexion/internal/model"
+
 templ SettingsPage(vm SettingsVM) {
 	@Layout("settings", "Settings") {
+		<div class="card p-5 mb-4">
+			<div class="flex items-center justify-between mb-4">
+				<div>
+					<h2 class="text-base font-semibold text-white">Connections</h2>
+					<p class="text-sm text-slate-500">Connect multiple AWS / MinIO / S3 accounts. Activate one, then browse it in the Explorer.</p>
+				</div>
+			</div>
+			if len(vm.Connections) == 0 {
+				<p class="text-sm text-slate-500 mb-4">No connections yet. Add one below.</p>
+			} else {
+				<div class="space-y-2 mb-5">
+					for _, c := range vm.Connections {
+						@connectionRow(c, c.ID == vm.ActiveConnID)
+					}
+				</div>
+			}
+
+			<details class="rounded-lg border border-base-800 bg-base-850 p-4">
+				<summary class="text-sm font-medium text-slate-200 cursor-pointer flex items-center gap-2">@iconDatabase() Add a connection</summary>
+				<form hx-post="/ui/connections" hx-target="#toast-slot" hx-swap="innerHTML" class="mt-4 grid grid-cols-1 md:grid-cols-2 gap-3">
+					<div>
+						<label class="block text-xs text-slate-500 mb-1">Name</label>
+						<input name="name" required placeholder="Production AWS" class={ inputClass }/>
+					</div>
+					<div>
+						<label class="block text-xs text-slate-500 mb-1">Provider</label>
+						<select name="provider" class={ inputClass }>
+							<option value="minio">MinIO / S3-compatible</option>
+							<option value="aws">AWS S3</option>
+							<option value="s3">Other S3</option>
+						</select>
+					</div>
+					<div>
+						<label class="block text-xs text-slate-500 mb-1">Endpoint</label>
+						<input name="endpoint" placeholder="localhost:9000 or s3.amazonaws.com" class={ inputClass }/>
+					</div>
+					<div>
+						<label class="block text-xs text-slate-500 mb-1">Region</label>
+						<input name="region" value="us-east-1" class={ inputClass }/>
+					</div>
+					<div>
+						<label class="block text-xs text-slate-500 mb-1">Access key</label>
+						<input name="access_key" autocomplete="off" class={ inputClass }/>
+					</div>
+					<div>
+						<label class="block text-xs text-slate-500 mb-1">Secret key</label>
+						<input name="secret_key" type="password" autocomplete="new-password" class={ inputClass }/>
+					</div>
+					<label class="flex items-center gap-2 text-sm text-slate-300">
+						<input type="checkbox" name="use_ssl" class="rounded bg-base-950 border-base-700"/>
+						Use SSL (required for AWS)
+					</label>
+					<div class="md:col-span-2 flex justify-end">
+						<button class="btn-primary" type="submit">@iconPlay() Add connection</button>
+					</div>
+				</form>
+			</details>
+		</div>
+
 		<div class="grid grid-cols-1 lg:grid-cols-2 gap-4">
 			<div class="card p-5">
-				<h2 class="text-base font-semibold text-white mb-4">Connection</h2>
+				<h2 class="text-base font-semibold text-white mb-4">Platform</h2>
 				<dl class="space-y-3 text-sm">
-					@settingRow("MinIO endpoint", vm.MinIOEndpoint)
-					@settingRow("Region", vm.MinIORegion)
 					@settingRow("Catalog store", vm.StoragePath)
 					@settingRow("Crawler workers", itoa(vm.Workers))
+					@settingRow("Connections", itoa(len(vm.Connections)))
 				</dl>
 			</div>
 
@@ -79,6 +139,37 @@ templ SettingsPage(vm SettingsVM) {
 		</div>
 		<div id="toast-slot"></div>
 	}
+}
+
+templ connectionRow(c model.Connection, active bool) {
+	<div class={ "flex items-center gap-4 px-4 py-3 rounded-lg border", templ.KV("border-brand-500/40 bg-brand-500/5", active), templ.KV("border-base-800 bg-base-850", !active) }>
+		<div class="grid place-items-center w-9 h-9 rounded-lg bg-base-800 text-slate-400">
+			@iconDatabase()
+		</div>
+		<div class="flex-1 min-w-0">
+			<div class="flex items-center gap-2">
+				<span class="font-medium text-slate-100">{ c.Name }</span>
+				<span class="badge bg-base-700 text-slate-400">{ c.Provider }</span>
+				if active {
+					<span class="badge bg-accent-emerald/15 text-accent-emerald">active</span>
+				}
+			</div>
+			<div class="text-xs text-slate-500 font-mono truncate">{ connEndpoint(c) } · { c.Region }</div>
+		</div>
+		if !active {
+			<button class="btn-ghost text-xs" hx-post={ "/ui/connections/" + c.ID + "/activate" } hx-target="#toast-slot" hx-swap="innerHTML">Activate</button>
+		} else {
+			<a class="btn-ghost text-xs" href="/explorer">Explore →</a>
+		}
+		<button
+			class="btn-danger !px-2 !py-1"
+			title="Delete"
+			hx-delete={ "/ui/connections/" + c.ID }
+			hx-confirm="Delete this connection?"
+			hx-target="#toast-slot"
+			hx-swap="innerHTML"
+		>@iconTrash()</button>
+	</div>
 }
 
 templ settingRow(label, value string) {

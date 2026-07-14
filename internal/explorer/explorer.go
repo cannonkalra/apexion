@@ -16,13 +16,15 @@ import (
 	"github.com/apexion/apexion/internal/model"
 )
 
-// Service browses object storage.
+// Service browses object storage using the active connection.
 type Service struct {
-	client *s3.Client
+	provider s3.Provider
 }
 
-// New creates an explorer service.
-func New(client *s3.Client) *Service { return &Service{client: client} }
+// New creates an explorer service backed by a connection provider.
+func New(provider s3.Provider) *Service { return &Service{provider: provider} }
+
+func (s *Service) client() *s3.Client { return s.provider.Client() }
 
 // FolderEntry is a sub-directory in a listing.
 type FolderEntry struct {
@@ -61,7 +63,7 @@ type DirListing struct {
 // ListDir returns the immediate children of a prefix and a bounded summary of
 // everything beneath it.
 func (s *Service) ListDir(ctx context.Context, bucket, prefix string) (*DirListing, error) {
-	folders, files, err := s.client.ListDirectory(ctx, bucket, prefix)
+	folders, files, err := s.client().ListDirectory(ctx, bucket, prefix)
 	if err != nil {
 		return nil, err
 	}
@@ -95,7 +97,7 @@ func (s *Service) FolderSummary(ctx context.Context, bucket, prefix string) (*Fo
 	const cap = 20000
 	sum := &FolderSummary{}
 	formats := map[model.Format]bool{}
-	err := s.client.WalkObjects(ctx, bucket, prefix, "", func(om s3.ObjectMeta) error {
+	err := s.client().WalkObjects(ctx, bucket, prefix, "", func(om s3.ObjectMeta) error {
 		if strings.HasSuffix(om.Key, "/") {
 			return nil
 		}
