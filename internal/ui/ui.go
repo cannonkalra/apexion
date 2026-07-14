@@ -87,17 +87,51 @@ func (h *Handler) dashboard(w http.ResponseWriter, r *http.Request) {
 
 func (h *Handler) buckets(w http.ResponseWriter, r *http.Request) {
 	ctx := r.Context()
-	bs, err := h.store.ListBuckets(ctx)
+
+	// Catalog state: buckets already crawled, keyed by name.
+	cataloged, err := h.store.ListBuckets(ctx)
 	if err != nil {
 		h.fail(w, err)
 		return
 	}
-	dm := map[string][]model.Dataset{}
-	for _, b := range bs {
-		ds, _ := h.store.ListDatasets(ctx, storage.DatasetFilter{BucketID: b.ID, Limit: 100})
-		dm[b.ID] = ds
+	byName := map[string]model.Bucket{}
+	for _, b := range cataloged {
+		byName[b.Name] = b
 	}
-	h.render(w, r, BucketsPage(BucketsVM{Buckets: bs, Datasets: dm}))
+
+	// Live server state: every bucket the credentials can see.
+	endpoint, serverNames, serverErr := h.catalog.ServerBuckets(ctx)
+	vm := BucketsVM{Endpoint: endpoint, ServerOK: serverErr == nil}
+	if serverErr != nil {
+		vm.ServerError = serverErr.Error()
+		h.log.Warn().Err(serverErr).Msg("list server buckets")
+	}
+
+	// Union of server buckets and cataloged buckets, de-duplicated by name.
+	seen := map[string]bool{}
+	add := func(name string) {
+		if seen[name] {
+			return
+		}
+		seen[name] = true
+		row := BucketRow{Name: name}
+		if b, ok := byName[name]; ok {
+			row.Cataloged = true
+			row.Bucket = b
+			row.Datasets, _ = h.store.ListDatasets(ctx, storage.DatasetFilter{BucketID: b.ID, Limit: 100})
+		}
+		vm.Rows = append(vm.Rows, row)
+	}
+	sort.Strings(serverNames)
+	for _, n := range serverNames {
+		add(n)
+	}
+	// Cataloged buckets the server didn't return (e.g. ListBuckets restricted).
+	for _, b := range cataloged {
+		add(b.Name)
+	}
+
+	h.render(w, r, BucketsPage(vm))
 }
 
 func (h *Handler) datasets(w http.ResponseWriter, r *http.Request) {

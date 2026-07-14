@@ -23,11 +23,38 @@ func (s SearchVM) Empty() bool {
 // Total counts all hits.
 func (s SearchVM) Total() int { return len(s.Datasets) + len(s.Columns) + len(s.Buckets) }
 
-// BucketsVM lists buckets plus their datasets for the expandable view.
+// BucketsVM lists every bucket on the connected server (via S3 ListBuckets),
+// merged with catalog state so the page shows both connected and available
+// buckets.
 type BucketsVM struct {
-	Buckets  []model.Bucket
-	Datasets map[string][]model.Dataset // bucketID -> datasets
+	Endpoint    string
+	ServerOK    bool   // did ListBuckets succeed?
+	ServerError string // populated when ListBuckets failed
+	Rows        []BucketRow
 }
+
+// BucketRow is one bucket on the page — either already cataloged (connected) or
+// merely available on the server (not yet crawled).
+type BucketRow struct {
+	Name      string
+	Cataloged bool
+	Bucket    model.Bucket
+	Datasets  []model.Dataset
+}
+
+// Connected counts cataloged buckets.
+func (vm BucketsVM) Connected() int {
+	n := 0
+	for _, r := range vm.Rows {
+		if r.Cataloged {
+			n++
+		}
+	}
+	return n
+}
+
+// Available counts server buckets not yet crawled.
+func (vm BucketsVM) Available() int { return len(vm.Rows) - vm.Connected() }
 
 // DatasetsVM is the datasets listing view model.
 type DatasetsVM struct {

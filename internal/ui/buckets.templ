@@ -7,20 +7,51 @@ import (
 
 templ BucketsPage(vm BucketsVM) {
 	@Layout("buckets", "Buckets") {
-		<div class="flex items-center justify-between mb-4">
-			<p class="text-sm text-slate-500">{ fmt.Sprintf("%d bucket(s) connected", len(vm.Buckets)) }</p>
+		<div class="card p-4 mb-4 flex flex-wrap items-center justify-between gap-4">
+			<div class="flex items-center gap-3">
+				<div class="grid place-items-center w-10 h-10 rounded-lg bg-brand-500/15 text-brand-300">
+					@iconDatabase()
+				</div>
+				<div>
+					<div class="text-sm text-slate-500">Connected server</div>
+					<div class="font-mono text-slate-200">{ vm.Endpoint }</div>
+				</div>
+				<div class="hidden sm:flex items-center gap-2 ml-4">
+					<span class="badge bg-accent-emerald/15 text-accent-emerald">{ fmt.Sprintf("%d connected", vm.Connected()) }</span>
+					if vm.ServerOK {
+						<span class="badge bg-base-700 text-slate-300">{ fmt.Sprintf("%d available", vm.Available()) }</span>
+					}
+				</div>
+			</div>
 			<form hx-post="/ui/buckets/crawl" hx-target="#toast-slot" hx-swap="innerHTML" class="flex items-center gap-2">
-				<input name="bucket" placeholder="bucket name" class="px-3 py-1.5 rounded-lg bg-base-900 border border-base-800 text-sm text-slate-200 placeholder-slate-500 focus:outline-none focus:ring-2 focus:ring-brand-500/40"/>
-				<button class="btn-primary" type="submit">@iconPlay() Crawl</button>
+				<input name="bucket" placeholder="connect a bucket by name…" class="px-3 py-1.5 rounded-lg bg-base-950 border border-base-800 text-sm text-slate-200 placeholder-slate-500 focus:outline-none focus:ring-2 focus:ring-brand-500/40"/>
+				<button class="btn-primary" type="submit">@iconPlay() Connect</button>
 			</form>
 		</div>
 
-		if len(vm.Buckets) == 0 {
-			@EmptyState("No buckets yet", "Enter a bucket name above and click Crawl to discover datasets.")
+		if !vm.ServerOK {
+			<div class="card border-accent-amber/40 bg-accent-amber/5 p-4 mb-4">
+				<div class="flex items-start gap-3">
+					<span class="text-accent-amber mt-0.5">@iconShield()</span>
+					<div>
+						<div class="text-sm text-slate-200 font-medium">Could not list buckets from the server</div>
+						<div class="text-xs text-slate-500 mt-1">{ truncate(vm.ServerError, 160) }</div>
+						<div class="text-xs text-slate-500 mt-1">The credentials may lack <span class="font-mono">s3:ListAllMyBuckets</span>. You can still connect a bucket by typing its name above.</div>
+					</div>
+				</div>
+			</div>
+		}
+
+		if len(vm.Rows) == 0 {
+			@EmptyState("No buckets found", "Type a bucket name above and click Connect to crawl it.")
 		} else {
 			<div class="space-y-3">
-				for _, b := range vm.Buckets {
-					@bucketCard(b, vm.Datasets[b.ID])
+				for _, row := range vm.Rows {
+					if row.Cataloged {
+						@connectedBucketCard(row.Bucket, row.Datasets)
+					} else {
+						@availableBucketCard(row.Name)
+					}
 				}
 			</div>
 		}
@@ -28,14 +59,39 @@ templ BucketsPage(vm BucketsVM) {
 	}
 }
 
-templ bucketCard(b model.Bucket, datasets []model.Dataset) {
+// availableBucketCard is a bucket that exists on the server but has not been
+// crawled into the catalog yet.
+templ availableBucketCard(name string) {
+	<div class="card px-5 py-4 flex items-center gap-4">
+		<div class="grid place-items-center w-10 h-10 rounded-lg bg-base-800 text-slate-500">
+			@iconBucket()
+		</div>
+		<div class="flex-1 min-w-0">
+			<div class="font-medium text-slate-200">{ name }</div>
+			<div class="text-xs text-slate-500">on server · not yet connected</div>
+		</div>
+		<span class="badge bg-base-700 text-slate-400">available</span>
+		<button
+			class="btn-primary"
+			hx-post={ "/ui/buckets/" + name + "/crawl" }
+			hx-target="#toast-slot"
+			hx-swap="innerHTML"
+		>@iconPlay() Connect</button>
+	</div>
+}
+
+// connectedBucketCard is a cataloged bucket, expandable to show its datasets.
+templ connectedBucketCard(b model.Bucket, datasets []model.Dataset) {
 	<details class="card overflow-hidden group">
 		<summary class="flex items-center gap-4 px-5 py-4 cursor-pointer list-none hover:bg-base-850/50">
 			<div class="grid place-items-center w-10 h-10 rounded-lg bg-brand-500/15 text-brand-300">
 				@iconBucket()
 			</div>
 			<div class="flex-1 min-w-0">
-				<div class="font-medium text-white">{ b.Name }</div>
+				<div class="flex items-center gap-2">
+					<span class="font-medium text-white">{ b.Name }</span>
+					<span class="badge bg-accent-emerald/15 text-accent-emerald">connected</span>
+				</div>
 				<div class="text-xs text-slate-500">{ b.Endpoint } · { b.Region }</div>
 			</div>
 			<div class="hidden sm:flex items-center gap-6 text-sm">

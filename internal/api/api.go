@@ -36,6 +36,7 @@ func (a *API) Routes() http.Handler {
 	r := chi.NewRouter()
 
 	r.Get("/buckets", a.listBuckets)
+	r.Get("/server/buckets", a.listServerBuckets)
 	r.Get("/buckets/{id}", a.getBucket)
 	r.Post("/buckets/{name}/crawl", a.crawlBucket)
 
@@ -69,6 +70,34 @@ func (a *API) Routes() http.Handler {
 func (a *API) listBuckets(w http.ResponseWriter, r *http.Request) {
 	bs, err := a.store.ListBuckets(r.Context())
 	writeOrErr(w, bs, err)
+}
+
+// listServerBuckets returns the buckets that physically exist on the connected
+// S3/MinIO server (ListAllMyBuckets), each flagged with whether it has been
+// crawled into the catalog.
+func (a *API) listServerBuckets(w http.ResponseWriter, r *http.Request) {
+	endpoint, names, err := a.catalog.ServerBuckets(r.Context())
+	if err != nil {
+		writeJSON(w, http.StatusBadGateway, map[string]any{
+			"endpoint": endpoint, "error": err.Error(), "buckets": []any{},
+		})
+		return
+	}
+	cataloged := map[string]bool{}
+	if bs, err := a.store.ListBuckets(r.Context()); err == nil {
+		for _, b := range bs {
+			cataloged[b.Name] = true
+		}
+	}
+	type serverBucket struct {
+		Name      string `json:"name"`
+		Cataloged bool   `json:"cataloged"`
+	}
+	out := make([]serverBucket, 0, len(names))
+	for _, n := range names {
+		out = append(out, serverBucket{Name: n, Cataloged: cataloged[n]})
+	}
+	writeJSON(w, http.StatusOK, map[string]any{"endpoint": endpoint, "buckets": out})
 }
 
 func (a *API) getBucket(w http.ResponseWriter, r *http.Request) {

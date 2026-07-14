@@ -74,7 +74,7 @@ func Build(ctx context.Context, cfg *config.Config) (*App, error) {
 	engine := inference.NewEngine()
 	jobMgr := jobs.NewManager(store, log, cfg.Crawler.Workers)
 
-	cat := catalog.New(store, cr, engine, jobMgr, bus, cfg.Inference, log)
+	cat := catalog.New(store, s3client, cr, engine, jobMgr, bus, cfg.Inference, log)
 	cat.PersistEvents(bus)
 
 	lin := lineage.New(store, log)
