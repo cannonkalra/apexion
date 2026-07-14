@@ -29,6 +29,11 @@ browse and preview data before (and after) cataloging it:
   all buckets (no `s3:ListAllMyBuckets`, common on scoped AWS roles), the rail still shows the
   buckets you've already connected and offers an **Open a bucket by name** box — browsing a single
   bucket only needs `s3:ListBucket` on it.
+  - Built for **large buckets**: listings are **paginated** (default 500 immediate children, with
+    *Load more*) and stop the S3 LIST early instead of enumerating millions of keys; the recursive
+    folder summary is **loaded lazily** so folders open instantly; a **name-prefix search** filters
+    the folder **server-side** (S3 `Prefix`, so it also cuts the LIST cost); and results can be
+    **sorted** by name/size/modified, ascending or descending.
 - **Instant file preview** (`/preview`) — opens any CSV/TSV/JSON/JSONL/Parquet file and runs
   `read_csv_auto` / `read_json_auto` / `read_parquet` **directly against `s3://…`** via DuckDB's
   `httpfs` extension. Shows column names, DuckDB types, and 100 sample rows — the file is never

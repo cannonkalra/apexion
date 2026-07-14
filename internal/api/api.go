@@ -357,7 +357,9 @@ func (a *API) explore(w http.ResponseWriter, r *http.Request) {
 		writeErr(w, http.StatusBadRequest, "bucket required")
 		return
 	}
-	listing, err := a.explorer.ListDir(r.Context(), bucket, r.URL.Query().Get("prefix"))
+	listing, err := a.explorer.ListDir(r.Context(), bucket,
+		r.URL.Query().Get("prefix"), r.URL.Query().Get("search"), r.URL.Query().Get("sort"),
+		intParam(r, "limit", explorer.DefaultPageSize))
 	writeOrErr(w, listing, err)
 }
 

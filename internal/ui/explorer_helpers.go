@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"net/url"
 	"path"
+	"strconv"
 	"time"
 
 	"github.com/apexion/apexion/internal/explorer"
@@ -88,4 +89,61 @@ func truncatedMark(truncated bool) string {
 		return "+"
 	}
 	return ""
+}
+
+// summaryQuery builds the query string for the lazy folder-summary partial.
+func summaryQuery(bucket, prefix string) string {
+	v := url.Values{}
+	v.Set("bucket", bucket)
+	if prefix != "" {
+		v.Set("prefix", prefix)
+	}
+	return v.Encode()
+}
+
+// loadMoreURL bumps the page size to reveal more of a large folder, preserving
+// the current search and sort.
+func loadMoreURL(l *explorer.DirListing) string {
+	next := l.Limit * 4
+	if next <= 0 {
+		next = explorer.DefaultPageSize * 4
+	}
+	v := url.Values{}
+	v.Set("bucket", l.Bucket)
+	if l.Prefix != "" {
+		v.Set("prefix", l.Prefix)
+	}
+	if l.Search != "" {
+		v.Set("search", l.Search)
+	}
+	if l.Sort != "" {
+		v.Set("sort", l.Sort)
+	}
+	v.Set("limit", strconv.Itoa(next))
+	return "/explorer?" + v.Encode()
+}
+
+type sortOption struct {
+	Value    string
+	Label    string
+	Selected bool
+}
+
+// sortOptions returns the sort dropdown options with the current one selected.
+func sortOptions(current string) []sortOption {
+	if current == "" {
+		current = explorer.SortNameAsc
+	}
+	opts := []sortOption{
+		{explorer.SortNameAsc, "Name ↑", false},
+		{explorer.SortNameDesc, "Name ↓", false},
+		{explorer.SortSizeDesc, "Size ↓", false},
+		{explorer.SortSizeAsc, "Size ↑", false},
+		{explorer.SortModifiedDesc, "Modified ↓", false},
+		{explorer.SortModifiedAsc, "Modified ↑", false},
+	}
+	for i := range opts {
+		opts[i].Selected = opts[i].Value == current
+	}
+	return opts
 }

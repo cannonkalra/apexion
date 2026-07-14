@@ -78,6 +78,7 @@ func (h *Handler) Routes() http.Handler {
 		r.Get("/partials/jobs", h.partialJobs)
 		r.Get("/partials/jobs-table", h.partialJobsTable)
 		r.Get("/partials/activity", h.partialActivity)
+		r.Get("/partials/explorer-summary", h.partialExplorerSummary)
 		r.Get("/datasets/{id}/preview", h.partialDatasetPreview)
 		r.Get("/search", h.partialSearch)
 		r.Post("/sql", h.actionRunSQL)
@@ -203,7 +204,10 @@ func (h *Handler) explorerPage(w http.ResponseWriter, r *http.Request) {
 	}
 	if selected != "" {
 		prefix := r.URL.Query().Get("prefix")
-		listing, err := h.explorer.ListDir(ctx, selected, prefix)
+		search := r.URL.Query().Get("search")
+		sortBy := r.URL.Query().Get("sort")
+		limit := intFrom(r.URL.Query().Get("limit"), explorer.DefaultPageSize)
+		listing, err := h.explorer.ListDir(ctx, selected, prefix, search, sortBy, limit)
 		if err != nil {
 			vm.Error = err.Error()
 		} else {
@@ -212,6 +216,22 @@ func (h *Handler) explorerPage(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 	h.render(w, r, ExplorerPage(vm))
+}
+
+// partialExplorerSummary lazily computes a folder's recursive summary so the
+// directory listing renders instantly.
+func (h *Handler) partialExplorerSummary(w http.ResponseWriter, r *http.Request) {
+	bucket := r.URL.Query().Get("bucket")
+	if bucket == "" {
+		w.WriteHeader(http.StatusOK)
+		return
+	}
+	summary, err := h.explorer.FolderSummary(r.Context(), bucket, r.URL.Query().Get("prefix"))
+	if err != nil {
+		h.render(w, r, FolderStatsError())
+		return
+	}
+	h.render(w, r, FolderStats(*summary))
 }
 
 func (h *Handler) filePreview(w http.ResponseWriter, r *http.Request) {

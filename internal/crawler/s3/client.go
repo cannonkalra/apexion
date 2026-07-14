@@ -150,29 +150,42 @@ func (c *Client) WalkObjects(ctx context.Context, bucket, prefix string, startAf
 
 // ListDirectory lists the immediate children of a prefix using a delimiter,
 // like a file browser: sub-folders (common prefixes) and files. It does not
-// recurse, so it is O(children) regardless of total object count.
-func (c *Client) ListDirectory(ctx context.Context, bucket, prefix string) (folders []string, files []ObjectMeta, err error) {
+// recurse. When limit > 0 it stops after that many entries and reports
+// truncated=true, cancelling the underlying paginated LIST so a folder with
+// millions of children returns immediately instead of enumerating them all.
+func (c *Client) ListDirectory(ctx context.Context, bucket, prefix string, limit int) (folders []string, files []ObjectMeta, truncated bool, err error) {
+	lctx, cancel := context.WithCancel(ctx)
+	defer cancel()
+
 	opts := minio.ListObjectsOptions{Prefix: prefix, Recursive: false}
-	for obj := range c.mc.ListObjects(ctx, bucket, opts) {
+	for obj := range c.mc.ListObjects(lctx, bucket, opts) {
 		if obj.Err != nil {
-			return nil, nil, obj.Err
+			if lctx.Err() != nil {
+				break // we cancelled after reaching the limit
+			}
+			return nil, nil, false, obj.Err
 		}
 		if strings.HasSuffix(obj.Key, "/") {
 			if obj.Key != prefix {
 				folders = append(folders, obj.Key)
 			}
-			continue
+		} else {
+			files = append(files, ObjectMeta{
+				Key:          obj.Key,
+				ETag:         obj.ETag,
+				Size:         obj.Size,
+				LastModified: obj.LastModified,
+				StorageClass: obj.StorageClass,
+				VersionID:    obj.VersionID,
+			})
 		}
-		files = append(files, ObjectMeta{
-			Key:          obj.Key,
-			ETag:         obj.ETag,
-			Size:         obj.Size,
-			LastModified: obj.LastModified,
-			StorageClass: obj.StorageClass,
-			VersionID:    obj.VersionID,
-		})
+		if limit > 0 && len(folders)+len(files) >= limit {
+			truncated = true
+			cancel() // stop the SDK's background pagination goroutine
+			break
+		}
 	}
-	return folders, files, nil
+	return folders, files, truncated, nil
 }
 
 // ListPrefix lists objects directly under a prefix (used by table resolvers).

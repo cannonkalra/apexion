@@ -51,23 +51,47 @@ type FolderSummary struct {
 	Truncated    bool
 }
 
-// DirListing is the immediate contents of a prefix plus a summary.
+// DirListing is the immediate contents of a prefix (paginated). The folder
+// summary is computed separately (lazily) — it is a recursive scan and would
+// otherwise make every click slow on a large bucket.
 type DirListing struct {
-	Bucket  string
-	Prefix  string
-	Folders []FolderEntry
-	Files   []FileEntry
-	Summary FolderSummary
+	Bucket    string
+	Prefix    string
+	Search    string // server-side name prefix filter within the folder
+	Sort      string // one of the Sort* constants
+	Folders   []FolderEntry
+	Files     []FileEntry
+	Limit     int
+	Truncated bool // more children exist than were returned
 }
 
-// ListDir returns the immediate children of a prefix and a bounded summary of
-// everything beneath it.
-func (s *Service) ListDir(ctx context.Context, bucket, prefix string) (*DirListing, error) {
-	folders, files, err := s.clientFor(bucket).ListDirectory(ctx, bucket, prefix)
+// DefaultPageSize bounds how many immediate children a listing returns.
+const DefaultPageSize = 500
+
+// Sort options for a listing.
+const (
+	SortNameAsc      = "name_asc"
+	SortNameDesc     = "name_desc"
+	SortSizeAsc      = "size_asc"
+	SortSizeDesc     = "size_desc"
+	SortModifiedAsc  = "modified_asc"
+	SortModifiedDesc = "modified_desc"
+)
+
+// ListDir returns up to `limit` immediate children of a prefix. `search`
+// filters by name prefix server-side (S3 Prefix), which also reduces the amount
+// listed. `sortBy` orders the returned page. The recursive summary is computed
+// separately (lazily).
+func (s *Service) ListDir(ctx context.Context, bucket, prefix, search, sortBy string, limit int) (*DirListing, error) {
+	if limit <= 0 {
+		limit = DefaultPageSize
+	}
+	// Server-side prefix filter: list keys beginning with prefix+search.
+	folders, files, truncated, err := s.clientFor(bucket).ListDirectory(ctx, bucket, prefix+search, limit)
 	if err != nil {
 		return nil, err
 	}
-	out := &DirListing{Bucket: bucket, Prefix: prefix}
+	out := &DirListing{Bucket: bucket, Prefix: prefix, Search: search, Sort: sortBy, Limit: limit, Truncated: truncated}
 	for _, f := range folders {
 		out.Folders = append(out.Folders, FolderEntry{Name: folderName(f), Path: f})
 	}
@@ -81,20 +105,43 @@ func (s *Service) ListDir(ctx context.Context, bucket, prefix string) (*DirListi
 			Compression: format.DetectCompression(om.Key),
 		})
 	}
-	sort.Slice(out.Folders, func(i, j int) bool { return out.Folders[i].Name < out.Folders[j].Name })
-	sort.Slice(out.Files, func(i, j int) bool { return out.Files[i].Name < out.Files[j].Name })
-
-	summary, err := s.FolderSummary(ctx, bucket, prefix)
-	if err == nil {
-		out.Summary = *summary
-	}
+	sortListing(out, sortBy)
 	return out, nil
 }
 
+// sortListing orders folders and files. Folders always sort by name (they carry
+// no size/date); files sort by the requested field. Sorting applies to the
+// fetched page — for a truncated listing, use a narrower search to sort the full
+// set.
+func sortListing(l *DirListing, sortBy string) {
+	desc := strings.HasSuffix(sortBy, "_desc")
+	sort.Slice(l.Folders, func(i, j int) bool {
+		if desc {
+			return l.Folders[i].Name > l.Folders[j].Name
+		}
+		return l.Folders[i].Name < l.Folders[j].Name
+	})
+	less := func(i, j int) bool { return l.Files[i].Name < l.Files[j].Name }
+	switch sortBy {
+	case SortNameDesc:
+		less = func(i, j int) bool { return l.Files[i].Name > l.Files[j].Name }
+	case SortSizeAsc:
+		less = func(i, j int) bool { return l.Files[i].Size < l.Files[j].Size }
+	case SortSizeDesc:
+		less = func(i, j int) bool { return l.Files[i].Size > l.Files[j].Size }
+	case SortModifiedAsc:
+		less = func(i, j int) bool { return l.Files[i].Modified.Before(l.Files[j].Modified) }
+	case SortModifiedDesc:
+		less = func(i, j int) bool { return l.Files[i].Modified.After(l.Files[j].Modified) }
+	}
+	sort.Slice(l.Files, less)
+}
+
 // FolderSummary walks up to a bounded number of objects under a prefix to
-// compute file count, size, formats, and last-modified.
+// compute file count, size, formats, and last-modified. It is deliberately
+// bounded (and loaded lazily by the UI) so it never blocks browsing.
 func (s *Service) FolderSummary(ctx context.Context, bucket, prefix string) (*FolderSummary, error) {
-	const cap = 20000
+	const cap = 5000
 	sum := &FolderSummary{}
 	formats := map[model.Format]bool{}
 	err := s.clientFor(bucket).WalkObjects(ctx, bucket, prefix, "", func(om s3.ObjectMeta) error {
