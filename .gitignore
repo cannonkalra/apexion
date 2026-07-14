@@ -1,0 +1,18 @@
+# Binaries & tools
+/bin/
+apexion
+seed
+
+# Local catalog / data
+/data/*.duckdb
+*.duckdb
+*.duckdb.wal
+
+# OS / editor
+.DS_Store
+*.swp
+.idea/
+.vscode/
+
+# Note: generated *_templ.go and assets/css/app.css ARE committed so the
+# project builds without the templ/tailwind toolchains.

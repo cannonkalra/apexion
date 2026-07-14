@@ -1,0 +1,99 @@
+package ui
+
+import (
+	"github.com/apexion/apexion/internal/catalog"
+	"github.com/apexion/apexion/internal/model"
+	"github.com/apexion/apexion/internal/storage"
+)
+
+// SearchVM is the search result view model (used by both the topbar dropdown
+// and the full search page).
+type SearchVM struct {
+	Query    string
+	Datasets []model.Dataset
+	Columns  []storage.ColumnHit
+	Buckets  []model.Bucket
+}
+
+// Empty reports whether there are no results.
+func (s SearchVM) Empty() bool {
+	return len(s.Datasets) == 0 && len(s.Columns) == 0 && len(s.Buckets) == 0
+}
+
+// Total counts all hits.
+func (s SearchVM) Total() int { return len(s.Datasets) + len(s.Columns) + len(s.Buckets) }
+
+// BucketsVM lists buckets plus their datasets for the expandable view.
+type BucketsVM struct {
+	Buckets  []model.Bucket
+	Datasets map[string][]model.Dataset // bucketID -> datasets
+}
+
+// DatasetsVM is the datasets listing view model.
+type DatasetsVM struct {
+	Datasets []model.Dataset
+	Buckets  []model.Bucket
+	Filter   storage.DatasetFilter
+}
+
+// SchemaVM powers the schema explorer.
+type SchemaVM struct {
+	Datasets []model.Dataset
+	Selected *catalog.DatasetDetail
+}
+
+// InferenceVM powers the inference page.
+type InferenceVM struct {
+	Datasets []model.Dataset
+	Selected *catalog.DatasetDetail
+	Runs     []model.InferenceRun
+}
+
+// RunsVM powers the crawler runs page.
+type RunsVM struct {
+	Runs []model.CrawlerRun
+}
+
+// LineageVM powers the lineage page.
+type LineageVM struct {
+	Nodes  []model.LineageNode
+	Edges  []model.LineageEdge
+	Groups []lineageGroup
+}
+
+type lineageGroup struct {
+	Kind  string
+	Label string
+	Nodes []model.LineageNode
+}
+
+// SettingsVM powers the settings page.
+type SettingsVM struct {
+	MinIOEndpoint string
+	MinIORegion   string
+	StoragePath   string
+	Workers       int
+	AgentProvider string
+	AgentModel    string
+	Agents        []AgentInfoVM
+	Buckets       []model.Bucket
+}
+
+// AgentInfoVM is a UI-facing agent summary.
+type AgentInfoVM struct {
+	Name     string
+	Kind     string
+	Provider string
+	Enabled  bool
+}
+
+func toastTone(tone string) string {
+	switch tone {
+	case "error":
+		return "border-accent-rose"
+	case "info":
+		return "border-brand-500"
+	default:
+		return "border-accent-emerald"
+	}
+}

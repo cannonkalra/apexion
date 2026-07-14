@@ -1,0 +1,50 @@
+# Apexion configuration.
+# Every value can be overridden with an APEXION_-prefixed environment variable,
+# e.g. APEXION_MINIO_ENDPOINT, APEXION_AGENTS_PROVIDER.
+
+server:
+  host: 0.0.0.0
+  port: 8080
+  read_timeout: 30s
+  write_timeout: 60s
+  shutdown_timeout: 15s
+
+storage:
+  # Embedded DuckDB catalog. Use ":memory:" for an ephemeral catalog.
+  path: data/apexion.duckdb
+  max_open_conns: 1
+
+minio:
+  endpoint: localhost:9000
+  access_key: minioadmin
+  secret_key: minioadmin
+  use_ssl: false
+  region: us-east-1
+
+crawler:
+  workers: 8
+  rate_limit: 0        # ops/sec, 0 = unlimited
+  list_page_size: 1000
+  sample_bytes: 262144 # bytes read per file for schema detection
+  checkpoint_every: 500
+  ignore_hidden: true
+  timeout: 1h
+
+inference:
+  sample_rows: 1000
+  max_sample_values: 10
+  detect_pii: true
+
+log:
+  level: info
+  pretty: true
+
+agents:
+  enabled: true
+  # provider: noop | openai | anthropic | ollama
+  # noop uses deterministic local text (works fully offline).
+  provider: noop
+  llm:
+    base_url: ""   # e.g. http://localhost:11434/v1 for Ollama
+    api_key: ""
+    model: ""      # e.g. gpt-4o-mini, claude-3-5-haiku-latest, llama3.1

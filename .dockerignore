@@ -1,0 +1,10 @@
+.git
+.gitignore
+bin/
+data/
+*.duckdb
+*.duckdb.wal
+.DS_Store
+README.md
+docs/
+node_modules/

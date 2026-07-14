@@ -1,0 +1,75 @@
+package ui
+
+import (
+	"fmt"
+	"github.com/apexion/apexion/internal/model"
+)
+
+// JobsList renders the live jobs panel (polled via HTMX).
+templ JobsList(jobs []model.Job) {
+	if len(jobs) == 0 {
+		<p class="text-sm text-slate-500">No jobs running. Trigger a crawl or inference.</p>
+	} else {
+		<ul class="space-y-3">
+			for _, j := range jobs {
+				<li>
+					<div class="flex items-center justify-between mb-1.5">
+						<span class="text-sm text-slate-200 truncate">{ j.Label }</span>
+						@StatusPill(j.Status)
+					</div>
+					@ProgressBar(j.Progress)
+					if j.Message != "" {
+						<div class="text-xs text-slate-500 mt-1">{ truncate(j.Message, 60) }</div>
+					}
+					if j.Error != "" {
+						<div class="text-xs text-accent-rose mt-1">{ truncate(j.Error, 80) }</div>
+					}
+				</li>
+			}
+		</ul>
+	}
+}
+
+// SearchResultsPartial renders the topbar search dropdown.
+templ SearchResultsPartial(res SearchVM) {
+	if res.Empty() {
+		if res.Query != "" {
+			<div class="card p-3 text-sm text-slate-500">No results for "{ res.Query }"</div>
+		}
+	} else {
+		<div class="card p-2 max-h-96 overflow-y-auto divide-y divide-base-800">
+			for _, d := range res.Datasets {
+				<a href={ templ.SafeURL("/datasets/" + d.ID) } class="flex items-center gap-2 px-2 py-2 rounded-md hover:bg-base-800">
+					@iconTable()
+					<span class="text-sm text-slate-200 flex-1 truncate">{ d.Name }</span>
+					@FormatPill(d.Format)
+				</a>
+			}
+			for _, c := range res.Columns {
+				<a href={ templ.SafeURL("/datasets/" + c.DatasetID) } class="flex items-center gap-2 px-2 py-2 rounded-md hover:bg-base-800">
+					@iconColumns()
+					<span class="text-sm text-slate-300 flex-1 truncate">{ c.Column } <span class="text-slate-600">in { c.DatasetName }</span></span>
+					<span class="badge bg-base-700 text-slate-400 font-mono">{ c.DataType }</span>
+				</a>
+			}
+			for _, b := range res.Buckets {
+				<a href={ templ.SafeURL("/buckets") } class="flex items-center gap-2 px-2 py-2 rounded-md hover:bg-base-800">
+					@iconBucket()
+					<span class="text-sm text-slate-200 flex-1 truncate">{ b.Name }</span>
+					<span class="text-xs text-slate-500">{ fmt.Sprintf("%d datasets", b.DatasetCount) }</span>
+				</a>
+			}
+		</div>
+	}
+}
+
+// Toast renders an ephemeral confirmation used after HTMX actions. It removes
+// itself after a few seconds via a tiny inline script (no extra JS library).
+templ Toast(message, tone string) {
+	<div class={ "fixed bottom-6 right-6 z-50 card px-4 py-3 text-sm shadow-lg border-l-4", toastTone(tone) }>
+		{ message }
+		<script>
+			(function(){ var el = document.currentScript.parentElement; setTimeout(function(){ el.remove(); }, 3500); })();
+		</script>
+	</div>
+}

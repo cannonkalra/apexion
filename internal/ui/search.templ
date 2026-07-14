@@ -1,0 +1,66 @@
+package ui
+
+import "fmt"
+
+templ SearchPage(vm SearchVM) {
+	@Layout("search", "Search") {
+		<form method="get" class="card p-4 mb-4 flex items-center gap-3">
+			<div class="relative flex-1">
+				<div class="absolute left-3 top-1/2 -translate-y-1/2 text-slate-500">@iconSearch()</div>
+				<input name="q" value={ vm.Query } autofocus placeholder="Search datasets, columns, buckets, schemas…" class="w-full pl-9 pr-3 py-2 rounded-lg bg-base-950 border border-base-800 text-sm text-slate-200 focus:outline-none focus:ring-2 focus:ring-brand-500/40"/>
+			</div>
+			<button class="btn-primary" type="submit">Search</button>
+		</form>
+
+		if vm.Query == "" {
+			@EmptyState("Search the catalog", "Find datasets, columns, and buckets across every crawled store.")
+		} else if vm.Empty() {
+			@EmptyState("No results", fmt.Sprintf("Nothing matched \"%s\".", vm.Query))
+		} else {
+			<div class="space-y-4">
+				if len(vm.Datasets) > 0 {
+					<div class="card p-5">
+						<h2 class="text-base font-semibold text-white mb-3">Datasets ({ fmt.Sprintf("%d", len(vm.Datasets)) })</h2>
+						<div class="grid grid-cols-1 md:grid-cols-2 gap-2">
+							for _, d := range vm.Datasets {
+								<a href={ templ.SafeURL("/datasets/" + d.ID) } class="flex items-center gap-3 px-3 py-2 rounded-lg bg-base-850 hover:bg-base-800 border border-base-800">
+									@iconTable()
+									<span class="text-sm text-slate-200 flex-1 truncate">{ d.Name }</span>
+									@FormatPill(d.Format)
+								</a>
+							}
+						</div>
+					</div>
+				}
+				if len(vm.Columns) > 0 {
+					<div class="card p-5">
+						<h2 class="text-base font-semibold text-white mb-3">Columns ({ fmt.Sprintf("%d", len(vm.Columns)) })</h2>
+						<div class="grid grid-cols-1 md:grid-cols-2 gap-2">
+							for _, c := range vm.Columns {
+								<a href={ templ.SafeURL("/datasets/" + c.DatasetID) } class="flex items-center gap-3 px-3 py-2 rounded-lg bg-base-850 hover:bg-base-800 border border-base-800">
+									@iconColumns()
+									<span class="text-sm text-slate-200 flex-1 truncate">{ c.Column } <span class="text-slate-600">· { c.DatasetName }</span></span>
+									<span class="badge bg-base-700 text-slate-400 font-mono">{ c.DataType }</span>
+								</a>
+							}
+						</div>
+					</div>
+				}
+				if len(vm.Buckets) > 0 {
+					<div class="card p-5">
+						<h2 class="text-base font-semibold text-white mb-3">Buckets ({ fmt.Sprintf("%d", len(vm.Buckets)) })</h2>
+						<div class="grid grid-cols-1 md:grid-cols-2 gap-2">
+							for _, b := range vm.Buckets {
+								<a href="/buckets" class="flex items-center gap-3 px-3 py-2 rounded-lg bg-base-850 hover:bg-base-800 border border-base-800">
+									@iconBucket()
+									<span class="text-sm text-slate-200 flex-1 truncate">{ b.Name }</span>
+									<span class="text-xs text-slate-500">{ fmt.Sprintf("%d datasets", b.DatasetCount) }</span>
+								</a>
+							}
+						</div>
+					</div>
+				}
+			</div>
+		}
+	}
+}

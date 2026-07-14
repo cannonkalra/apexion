@@ -1,0 +1,50 @@
+package ui
+
+import (
+	"fmt"
+	"github.com/apexion/apexion/internal/model"
+)
+
+templ LineagePage(vm LineageVM) {
+	@Layout("lineage", "Lineage") {
+		<div class="card p-5 mb-4">
+			<div class="flex items-center justify-between">
+				<div>
+					<h2 class="text-base font-semibold text-white">Lineage graph</h2>
+					<p class="text-sm text-slate-500">Bucket → Dataset → Table → Columns / Partitions</p>
+				</div>
+				<div class="flex items-center gap-4 text-sm text-slate-400">
+					<span>{ fmt.Sprintf("%d nodes", len(vm.Nodes)) }</span>
+					<span>{ fmt.Sprintf("%d edges", len(vm.Edges)) }</span>
+				</div>
+			</div>
+		</div>
+
+		if len(vm.Nodes) == 0 {
+			@EmptyState("No lineage yet", "Crawl a bucket to build the lineage graph.")
+		} else {
+			<div class="flex gap-4 overflow-x-auto pb-4">
+				for _, g := range vm.Groups {
+					<div class="min-w-[200px] flex-1">
+						<div class="flex items-center gap-2 mb-3">
+							<span class={ "w-2 h-2 rounded-full", lineageKindColor(g.Kind) }></span>
+							<h3 class="text-sm font-semibold text-slate-300">{ g.Label }</h3>
+							<span class="text-xs text-slate-600">({ fmt.Sprintf("%d", len(g.Nodes)) })</span>
+						</div>
+						<div class="space-y-2 max-h-[65vh] overflow-y-auto pr-1">
+							for _, n := range lineageNodeHead(g.Nodes, 60) {
+								@lineageNode(n)
+							}
+						</div>
+					</div>
+				}
+			</div>
+		}
+	}
+}
+
+templ lineageNode(n model.LineageNode) {
+	<div class={ "rounded-lg border px-3 py-2 text-sm", lineageKindBorder(n.Kind) }>
+		<div class="text-slate-200 truncate font-mono text-xs">{ truncate(n.Label, 28) }</div>
+	</div>
+}

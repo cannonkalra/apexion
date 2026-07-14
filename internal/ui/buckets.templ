@@ -1,0 +1,76 @@
+package ui
+
+import (
+	"fmt"
+	"github.com/apexion/apexion/internal/model"
+)
+
+templ BucketsPage(vm BucketsVM) {
+	@Layout("buckets", "Buckets") {
+		<div class="flex items-center justify-between mb-4">
+			<p class="text-sm text-slate-500">{ fmt.Sprintf("%d bucket(s) connected", len(vm.Buckets)) }</p>
+			<form hx-post="/ui/buckets/crawl" hx-target="#toast-slot" hx-swap="innerHTML" class="flex items-center gap-2">
+				<input name="bucket" placeholder="bucket name" class="px-3 py-1.5 rounded-lg bg-base-900 border border-base-800 text-sm text-slate-200 placeholder-slate-500 focus:outline-none focus:ring-2 focus:ring-brand-500/40"/>
+				<button class="btn-primary" type="submit">@iconPlay() Crawl</button>
+			</form>
+		</div>
+
+		if len(vm.Buckets) == 0 {
+			@EmptyState("No buckets yet", "Enter a bucket name above and click Crawl to discover datasets.")
+		} else {
+			<div class="space-y-3">
+				for _, b := range vm.Buckets {
+					@bucketCard(b, vm.Datasets[b.ID])
+				}
+			</div>
+		}
+		<div id="toast-slot"></div>
+	}
+}
+
+templ bucketCard(b model.Bucket, datasets []model.Dataset) {
+	<details class="card overflow-hidden group">
+		<summary class="flex items-center gap-4 px-5 py-4 cursor-pointer list-none hover:bg-base-850/50">
+			<div class="grid place-items-center w-10 h-10 rounded-lg bg-brand-500/15 text-brand-300">
+				@iconBucket()
+			</div>
+			<div class="flex-1 min-w-0">
+				<div class="font-medium text-white">{ b.Name }</div>
+				<div class="text-xs text-slate-500">{ b.Endpoint } · { b.Region }</div>
+			</div>
+			<div class="hidden sm:flex items-center gap-6 text-sm">
+				<div class="text-center"><div class="text-white font-medium">{ humanCount(b.DatasetCount) }</div><div class="text-xs text-slate-500">datasets</div></div>
+				<div class="text-center"><div class="text-white font-medium">{ humanCount(b.ObjectCount) }</div><div class="text-xs text-slate-500">objects</div></div>
+				<div class="text-center"><div class="text-white font-medium">{ humanBytes(b.TotalSize) }</div><div class="text-xs text-slate-500">size</div></div>
+				<div class="text-center"><div class="text-white font-medium">{ timeAgoPtr(b.LastCrawlAt) }</div><div class="text-xs text-slate-500">last crawl</div></div>
+			</div>
+			<div class="flex items-center gap-2">
+				<button
+					class="btn-ghost text-xs"
+					hx-post={ "/ui/buckets/" + b.Name + "/crawl" }
+					hx-target="#toast-slot"
+					hx-swap="innerHTML"
+				>@iconRefresh() Scan</button>
+				<span class="text-slate-500 transition-transform group-open:rotate-180">▾</span>
+			</div>
+		</summary>
+		<div class="border-t border-base-800 px-5 py-4">
+			if len(datasets) == 0 {
+				<p class="text-sm text-slate-500">No datasets discovered in this bucket yet.</p>
+			} else {
+				<div class="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-2">
+					for _, d := range datasets {
+						<a href={ templ.SafeURL("/datasets/" + d.ID) } class="flex items-center gap-3 px-3 py-2 rounded-lg bg-base-850 hover:bg-base-800 border border-base-800">
+							@iconTable()
+							<div class="min-w-0 flex-1">
+								<div class="text-sm text-slate-200 truncate">{ d.Name }</div>
+								<div class="text-xs text-slate-500 truncate">{ fmt.Sprintf("%d files · %s", d.FileCount, humanBytes(d.TotalSize)) }</div>
+							</div>
+							@FormatPill(d.Format)
+						</a>
+					}
+				</div>
+			}
+		</div>
+	</details>
+}

@@ -1,0 +1,89 @@
+package ui
+
+templ SettingsPage(vm SettingsVM) {
+	@Layout("settings", "Settings") {
+		<div class="grid grid-cols-1 lg:grid-cols-2 gap-4">
+			<div class="card p-5">
+				<h2 class="text-base font-semibold text-white mb-4">Connection</h2>
+				<dl class="space-y-3 text-sm">
+					@settingRow("MinIO endpoint", vm.MinIOEndpoint)
+					@settingRow("Region", vm.MinIORegion)
+					@settingRow("Catalog store", vm.StoragePath)
+					@settingRow("Crawler workers", itoa(vm.Workers))
+				</dl>
+			</div>
+
+			<div class="card p-5">
+				<h2 class="text-base font-semibold text-white mb-4">AI Agents</h2>
+				<div class="mb-3 text-sm text-slate-400">
+					Provider: <span class="badge bg-accent-violet/15 text-accent-violet">{ vm.AgentProvider }</span>
+					if vm.AgentModel != "" {
+						<span class="badge bg-base-700 text-slate-300 ml-1">{ vm.AgentModel }</span>
+					}
+				</div>
+				<div class="space-y-2">
+					for _, a := range vm.Agents {
+						<div class="flex items-center justify-between px-3 py-2 rounded-lg bg-base-850 border border-base-800">
+							<div class="flex items-center gap-2">
+								@iconSpark()
+								<div>
+									<div class="text-sm text-slate-200">{ a.Name }</div>
+									<div class="text-xs text-slate-500">{ a.Kind } agent</div>
+								</div>
+							</div>
+							if a.Enabled {
+								<span class="badge bg-accent-emerald/15 text-accent-emerald">enabled</span>
+							} else {
+								<span class="badge bg-base-700 text-slate-400">disabled</span>
+							}
+						</div>
+					}
+				</div>
+			</div>
+
+			<div class="card p-5 lg:col-span-2">
+				<h2 class="text-base font-semibold text-white mb-4">Trigger a crawl</h2>
+				<form hx-post="/ui/settings/crawl" hx-target="#toast-slot" hx-swap="innerHTML" class="flex flex-wrap items-end gap-3">
+					<div>
+						<label class="block text-xs text-slate-500 mb-1">Bucket name</label>
+						<input name="bucket" placeholder="e.g. warehouse" class="px-3 py-1.5 rounded-lg bg-base-950 border border-base-800 text-sm text-slate-200 focus:outline-none focus:ring-2 focus:ring-brand-500/40"/>
+					</div>
+					<div>
+						<label class="block text-xs text-slate-500 mb-1">Mode</label>
+						<select name="mode" class="px-3 py-1.5 rounded-lg bg-base-950 border border-base-800 text-sm text-slate-200 focus:outline-none focus:ring-2 focus:ring-brand-500/40">
+							<option value="full">Full</option>
+							<option value="incremental">Incremental</option>
+						</select>
+					</div>
+					<button class="btn-primary" type="submit">@iconPlay() Start crawl</button>
+				</form>
+
+				if len(vm.Buckets) > 0 {
+					<div class="mt-5">
+						<div class="text-xs uppercase tracking-wider text-slate-500 mb-2">Scheduled buckets</div>
+						<div class="space-y-1">
+							for _, b := range vm.Buckets {
+								<div class="flex items-center justify-between px-3 py-2 rounded-lg bg-base-850 border border-base-800 text-sm">
+									<span class="text-slate-200">{ b.Name }</span>
+									if b.Schedule != "" {
+										<span class="badge bg-brand-500/15 text-brand-300 font-mono">{ b.Schedule }</span>
+									} else {
+										<span class="text-slate-600 text-xs">manual</span>
+									}
+								</div>
+							}
+						</div>
+					</div>
+				}
+			</div>
+		</div>
+		<div id="toast-slot"></div>
+	}
+}
+
+templ settingRow(label, value string) {
+	<div class="flex items-center justify-between">
+		<dt class="text-slate-500">{ label }</dt>
+		<dd class="text-slate-200 font-mono text-xs">{ value }</dd>
+	</div>
+}

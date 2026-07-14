@@ -1,0 +1,131 @@
+package ui
+
+import (
+	"github.com/apexion/apexion/internal/model"
+)
+
+templ InferencePage(vm InferenceVM) {
+	@Layout("inference", "Inference") {
+		<div class="grid grid-cols-1 lg:grid-cols-4 gap-4">
+			<div class="card p-3 lg:col-span-1 h-fit">
+				<div class="text-xs uppercase tracking-wider text-slate-500 px-2 mb-2">Datasets</div>
+				<div class="space-y-0.5 max-h-[70vh] overflow-y-auto">
+					for _, d := range vm.Datasets {
+						@inferenceListItem(d, vm.Selected != nil && vm.Selected.Dataset.ID == d.ID)
+					}
+					if len(vm.Datasets) == 0 {
+						<p class="text-sm text-slate-500 px-2">No datasets yet.</p>
+					}
+				</div>
+			</div>
+			<div class="lg:col-span-3 space-y-4">
+				if vm.Selected == nil {
+					@EmptyState("Select a dataset", "Run the inference engine to detect semantic types, PII, keys, and quality.")
+				} else {
+					<div class="card p-5">
+						<div class="flex items-center justify-between mb-2">
+							<div class="flex items-center gap-2">
+								<h2 class="text-base font-semibold text-white">{ vm.Selected.Dataset.Name }</h2>
+								@FormatPill(vm.Selected.Dataset.Format)
+							</div>
+							<button class="btn-primary" hx-post={ "/ui/datasets/" + vm.Selected.Dataset.ID + "/infer" } hx-target="#toast-slot" hx-swap="innerHTML">@iconSpark() Run Inference</button>
+						</div>
+						if vm.Selected.Inference == nil {
+							<p class="text-sm text-slate-500">No inference run yet for this dataset. Click Run Inference.</p>
+						} else {
+							@inferenceDetail(vm.Selected.Inference)
+						}
+					</div>
+					if vm.Selected.Inference != nil {
+						<div class="card p-5">
+							<h2 class="text-base font-semibold text-white mb-4">Column analysis</h2>
+							@columnAnalysisTable(vm.Selected.Inference.Columns)
+						</div>
+					}
+				}
+			</div>
+		</div>
+		<div id="toast-slot"></div>
+	}
+}
+
+templ inferenceListItem(d model.Dataset, active bool) {
+	<a
+		href={ templ.SafeURL("/inference?dataset_id=" + d.ID) }
+		class={ "flex items-center gap-2 px-2 py-2 rounded-lg text-sm", templ.KV("bg-base-800 text-white", active), templ.KV("text-slate-300 hover:bg-base-850", !active) }
+	>
+		@iconSpark()
+		<span class="truncate flex-1">{ d.Name }</span>
+	</a>
+}
+
+templ inferenceDetail(r *model.InferenceResult) {
+	<div class="grid grid-cols-1 md:grid-cols-3 gap-4">
+		<div class="md:col-span-1 flex flex-col justify-center items-center card bg-base-850 p-4">
+			@QualityRing(r.QualityScore)
+		</div>
+		<div class="md:col-span-2 space-y-2">
+			@qualityBar("Completeness", r.QualityMetrics.Completeness)
+			@qualityBar("Uniqueness", r.QualityMetrics.Uniqueness)
+			@qualityBar("Validity", r.QualityMetrics.Validity)
+			@qualityBar("Consistency", r.QualityMetrics.Consistency)
+		</div>
+	</div>
+	if r.LLMSummary != "" {
+		<div class="rounded-lg bg-base-850 border border-base-800 p-3 mt-4">
+			<div class="flex items-center gap-1.5 text-xs text-accent-violet mb-1">@iconSpark() Agent summary</div>
+			<p class="text-sm text-slate-300">{ r.LLMSummary }</p>
+		</div>
+	}
+}
+
+templ columnAnalysisTable(cols []model.ColumnInference) {
+	<div class="overflow-x-auto">
+		<table class="w-full">
+			<thead>
+				<tr class="border-b border-base-800">
+					<th class="th">Column</th>
+					<th class="th">Type</th>
+					<th class="th">Semantic</th>
+					<th class="th">PII</th>
+					<th class="th">PK</th>
+					<th class="th">Complete</th>
+					<th class="th">Unique</th>
+					<th class="th">Min / Max</th>
+				</tr>
+			</thead>
+			<tbody class="divide-y divide-base-800">
+				for _, c := range cols {
+					<tr class="hover:bg-base-850/50">
+						<td class="table-cell font-medium text-slate-200">{ c.Name }</td>
+						<td class="table-cell">@TypePill(c.DataType)</td>
+						<td class="table-cell">
+							if c.SemanticType != "" {
+								<span class="badge bg-accent-violet/15 text-accent-violet">{ string(c.SemanticType) }</span>
+							} else {
+								<span class="text-slate-600">—</span>
+							}
+						</td>
+						<td class="table-cell">
+							if c.IsPII {
+								<span class="badge bg-accent-rose/15 text-accent-rose">PII</span>
+							} else {
+								<span class="text-slate-600">—</span>
+							}
+						</td>
+						<td class="table-cell">
+							if c.IsPKCandidate {
+								<span class="badge bg-brand-500/15 text-brand-300">key</span>
+							} else {
+								<span class="text-slate-600">—</span>
+							}
+						</td>
+						<td class="table-cell text-slate-300">{ pct(c.Completeness) }</td>
+						<td class="table-cell text-slate-300">{ pct(c.Uniqueness) }</td>
+						<td class="table-cell text-slate-500 font-mono text-xs">{ truncate(c.MinValue, 14) } / { truncate(c.MaxValue, 14) }</td>
+					</tr>
+				}
+			</tbody>
+		</table>
+	</div>
+}

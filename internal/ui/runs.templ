@@ -1,0 +1,59 @@
+package ui
+
+import (
+	"fmt"
+	"github.com/apexion/apexion/internal/model"
+)
+
+templ RunsPage(vm RunsVM) {
+	@Layout("runs", "Crawler Runs") {
+		<div class="card p-5">
+			@SectionHeader("Crawler runs", "history of discovery executions") {
+			}
+			@runsTable(vm.Runs, false)
+		</div>
+	}
+}
+
+templ runsTable(runs []model.CrawlerRun, compact bool) {
+	if len(runs) == 0 {
+		@EmptyState("No crawler runs yet", "Start a crawl from Buckets or Settings.")
+	} else {
+		<div class="overflow-x-auto">
+			<table class="w-full">
+				<thead>
+					<tr class="border-b border-base-800">
+						<th class="th">Bucket</th>
+						<th class="th">Mode</th>
+						<th class="th">Status</th>
+						<th class="th">Objects</th>
+						if !compact {
+							<th class="th">New</th>
+							<th class="th">Changed</th>
+							<th class="th">Bytes</th>
+						}
+						<th class="th">Datasets</th>
+						<th class="th">Started</th>
+					</tr>
+				</thead>
+				<tbody class="divide-y divide-base-800">
+					for _, r := range runs {
+						<tr class="hover:bg-base-850/50">
+							<td class="table-cell font-medium text-slate-200">{ r.BucketName }</td>
+							<td class="table-cell text-slate-400">{ string(r.Mode) }</td>
+							<td class="table-cell">@StatusPill(r.Status)</td>
+							<td class="table-cell text-slate-300">{ humanCount(r.ObjectsScanned) }</td>
+							if !compact {
+								<td class="table-cell text-accent-emerald">{ humanCount(r.ObjectsNew) }</td>
+								<td class="table-cell text-accent-amber">{ humanCount(r.ObjectsChanged) }</td>
+								<td class="table-cell text-slate-400">{ humanBytes(r.BytesScanned) }</td>
+							}
+							<td class="table-cell text-slate-300">{ fmt.Sprintf("%d", r.DatasetsFound) }</td>
+							<td class="table-cell text-slate-500">{ timeAgo(r.StartedAt) }</td>
+						</tr>
+					}
+				</tbody>
+			</table>
+		</div>
+	}
+}

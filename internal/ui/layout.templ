@@ -1,0 +1,105 @@
+package ui
+
+// Layout is the base shell: sidebar, topbar, and content slot. Dark mode is the
+// default; a vanilla-JS toggle persists the preference (no Alpine needed).
+templ Layout(active string, pageTitle string) {
+	<!doctype html>
+	<html lang="en" class="dark">
+		<head>
+			<meta charset="utf-8"/>
+			<meta name="viewport" content="width=device-width, initial-scale=1"/>
+			<title>{ pageTitle } · Apexion</title>
+			<link rel="stylesheet" href="/assets/css/app.css"/>
+			<link rel="icon" href="/assets/img/favicon.svg" type="image/svg+xml"/>
+			<script src="/assets/js/htmx.min.js" defer></script>
+			<script>
+				// Restore theme preference before paint.
+				if (localStorage.getItem('theme') === 'light') { document.documentElement.classList.remove('dark'); }
+			</script>
+		</head>
+		<body class="min-h-screen">
+			<div class="flex min-h-screen">
+				@sidebar(active)
+				<div class="flex-1 flex flex-col min-w-0 md:pl-64">
+					@topbar(pageTitle)
+					<main class="flex-1 px-6 py-6 max-w-[1600px] w-full mx-auto">
+						{ children... }
+					</main>
+					<footer class="px-6 py-4 text-xs text-slate-600 border-t border-base-800">
+						Apexion · open-source data discovery · DuckDB + MinIO + templ
+					</footer>
+				</div>
+			</div>
+			<script>
+				function toggleTheme() {
+					const root = document.documentElement;
+					root.classList.toggle('dark');
+					localStorage.setItem('theme', root.classList.contains('dark') ? 'dark' : 'light');
+				}
+			</script>
+		</body>
+	</html>
+}
+
+templ sidebar(active string) {
+	<aside class="fixed inset-y-0 left-0 z-30 hidden w-64 flex-col border-r border-base-800 bg-base-900 md:flex">
+		<div class="flex items-center gap-2.5 px-5 h-16 border-b border-base-800">
+			<div class="grid place-items-center w-9 h-9 rounded-lg bg-brand-600 text-white font-bold">A</div>
+			<div>
+				<div class="font-semibold text-white leading-tight">Apexion</div>
+				<div class="text-[11px] text-slate-500 leading-tight">Data Discovery</div>
+			</div>
+		</div>
+		<nav class="flex-1 overflow-y-auto p-3 space-y-1">
+			@navLink("/", "Dashboard", active == "dashboard", iconGrid())
+			@navLink("/buckets", "Buckets", active == "buckets", iconBucket())
+			@navLink("/datasets", "Datasets", active == "datasets", iconTable())
+			@navLink("/runs", "Crawler Runs", active == "runs", iconPlay())
+			@navLink("/schema", "Schema Explorer", active == "schema", iconColumns())
+			@navLink("/inference", "Inference", active == "inference", iconSpark())
+			@navLink("/lineage", "Lineage", active == "lineage", iconGraph())
+			@navLink("/search", "Search", active == "search", iconSearch())
+			<div class="pt-3 mt-3 border-t border-base-800"></div>
+			@navLink("/settings", "Settings", active == "settings", iconGear())
+		</nav>
+		<div class="p-3 text-[11px] text-slate-600 border-t border-base-800">
+			v1.0 · Glue-compatible catalog
+		</div>
+	</aside>
+}
+
+templ navLink(href, label string, isActive bool, icon templ.Component) {
+	<a
+		href={ templ.SafeURL(href) }
+		class={ "nav-link", templ.KV("nav-link-active", isActive) }
+	>
+		@icon
+		<span>{ label }</span>
+	</a>
+}
+
+templ topbar(pageTitle string) {
+	<header class="sticky top-0 z-20 flex items-center gap-4 h-16 px-6 border-b border-base-800 bg-base-950/80 backdrop-blur">
+		<h1 class="text-lg font-semibold text-white">{ pageTitle }</h1>
+		<div class="flex-1"></div>
+		<div class="relative w-full max-w-sm hidden sm:block">
+			<div class="absolute left-3 top-1/2 -translate-y-1/2 text-slate-500">
+				@iconSearch()
+			</div>
+			<input
+				type="search"
+				name="q"
+				placeholder="Search datasets, columns, buckets…"
+				class="w-full pl-9 pr-3 py-2 rounded-lg bg-base-900 border border-base-800 text-sm text-slate-200 placeholder-slate-500 focus:outline-none focus:ring-2 focus:ring-brand-500/40"
+				hx-get="/ui/search"
+				hx-trigger="keyup changed delay:250ms, search"
+				hx-target="#global-search-results"
+				hx-indicator="#search-spin"
+			/>
+			<div id="global-search-results" class="absolute mt-2 w-full"></div>
+		</div>
+		<button onclick="toggleTheme()" class="btn-ghost" title="Toggle theme">
+			@iconMoon()
+		</button>
+	</header>
+}
