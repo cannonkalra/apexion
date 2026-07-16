@@ -3,24 +3,34 @@ package crawler
 import (
 	"testing"
 
+	"github.com/apexion/apexion/internal/catalog/discovery"
 	"github.com/apexion/apexion/internal/model"
 )
 
 func TestDeriveDataset(t *testing.T) {
+	disp := discovery.New(discovery.ModePositional, "pt", "")
 	cases := []struct {
-		key      string
-		wantRoot string
-		wantKeys []string
+		key       string
+		crawlRoot string
+		wantRoot  string
+		wantStrat string
+		wantKeys  []string
 	}{
-		{"customers/customers.csv", "customers", nil},
-		{"orders/year=2023/month=01/part-0.parquet", "orders", []string{"year", "month"}},
-		{"a/b/c/data.json", "a/b/c", nil},
-		{"top.csv", "", nil},
+		// Hive is detected and unchanged (backward compatible).
+		{"orders/year=2023/month=01/part-0.parquet", "", "orders", "hive", []string{"year", "month"}},
+		// Bare directories become positional partitions rooted at the crawl root.
+		{"2023-10-11/US/IDFA/file.parquet", "", "", "positional", []string{"pt0", "pt1", "pt2"}},
+		{"feed/2023/US/f.parquet", "feed", "feed", "positional", []string{"pt0", "pt1"}},
+		// A file directly under the crawl root has no partitions.
+		{"top.csv", "", "", "positional", nil},
 	}
 	for _, c := range cases {
-		got := deriveDataset(c.key)
+		got := deriveDataset(c.key, c.crawlRoot, disp)
 		if got.root != c.wantRoot {
 			t.Errorf("deriveDataset(%q).root = %q, want %q", c.key, got.root, c.wantRoot)
+		}
+		if got.strategy != c.wantStrat {
+			t.Errorf("deriveDataset(%q).strategy = %q, want %q", c.key, got.strategy, c.wantStrat)
 		}
 		if len(got.keys) != len(c.wantKeys) {
 			t.Errorf("deriveDataset(%q).keys = %v, want %v", c.key, got.keys, c.wantKeys)

@@ -16,7 +16,25 @@ type Config struct {
 	Storage StorageConfig `mapstructure:"storage"`
 	MinIO   MinIOConfig   `mapstructure:"minio"`
 	Crawler CrawlerConfig `mapstructure:"crawler"`
+	Catalog CatalogConfig `mapstructure:"catalog"`
 	Log     LogConfig     `mapstructure:"log"`
+}
+
+// CatalogConfig tunes the logical SQL catalog.
+type CatalogConfig struct {
+	// VirtualPartitionPrefix names generated partition columns for bare-directory
+	// datasets, e.g. "pt" → pt0, pt1. VirtualPartitionSeparator sits between the
+	// prefix and index, e.g. "_" → pt_0, pt_1.
+	VirtualPartitionPrefix    string          `mapstructure:"virtual_partition_prefix"`
+	VirtualPartitionSeparator string          `mapstructure:"virtual_partition_separator"`
+	Discovery                 DiscoveryConfig `mapstructure:"discovery"`
+}
+
+// DiscoveryConfig selects how the crawler groups objects into datasets.
+type DiscoveryConfig struct {
+	// Strategy is positional (default; bare dirs → pt0/pt1/…), hive (only
+	// key=value dirs partition; others are per-directory datasets), or auto.
+	Strategy string `mapstructure:"strategy"`
 }
 
 // ServerConfig configures the HTTP server.
@@ -114,6 +132,10 @@ func setDefaults(v *viper.Viper) {
 	v.SetDefault("crawler.checkpoint_every", 500)
 	v.SetDefault("crawler.ignore_hidden", true)
 	v.SetDefault("crawler.timeout", "1h")
+
+	v.SetDefault("catalog.virtual_partition_prefix", "pt")
+	v.SetDefault("catalog.virtual_partition_separator", "")
+	v.SetDefault("catalog.discovery.strategy", "positional")
 
 	v.SetDefault("log.level", "info")
 	v.SetDefault("log.pretty", true)

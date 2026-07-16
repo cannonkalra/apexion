@@ -13,19 +13,20 @@ import (
 func (s *Store) UpsertDataset(ctx context.Context, d *model.Dataset) error {
 	_, err := s.db.ExecContext(ctx, `
 		INSERT INTO datasets (id, bucket_id, bucket_name, name, path, format, compression,
-			file_count, total_size, row_count, partition_keys, schema_id, description,
-			created_at, updated_at, last_scan_at)
-		VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)
+			file_count, total_size, row_count, partition_keys, partition_depth,
+			discovery_strategy, schema_id, description, created_at, updated_at, last_scan_at)
+		VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)
 		ON CONFLICT (id) DO UPDATE SET
 			bucket_name=excluded.bucket_name, name=excluded.name, path=excluded.path,
 			format=excluded.format, compression=excluded.compression,
 			file_count=excluded.file_count, total_size=excluded.total_size,
 			row_count=excluded.row_count, partition_keys=excluded.partition_keys,
+			partition_depth=excluded.partition_depth, discovery_strategy=excluded.discovery_strategy,
 			schema_id=excluded.schema_id, description=excluded.description,
 			updated_at=excluded.updated_at, last_scan_at=excluded.last_scan_at`,
 		d.ID, d.BucketID, d.BucketName, d.Name, d.Path, d.Format, d.Compression,
-		d.FileCount, d.TotalSize, d.RowCount, toJSON(d.PartitionKeys), d.SchemaID,
-		d.Description, d.CreatedAt, d.UpdatedAt, nullTime(d.LastScanAt))
+		d.FileCount, d.TotalSize, d.RowCount, toJSON(d.PartitionKeys), d.PartitionDepth,
+		d.DiscoveryStrategy, d.SchemaID, d.Description, d.CreatedAt, d.UpdatedAt, nullTime(d.LastScanAt))
 	return err
 }
 
@@ -119,16 +120,16 @@ func (s *Store) DeleteDataset(ctx context.Context, id string) error {
 }
 
 const datasetSelect = `SELECT id, bucket_id, bucket_name, name, path, format, compression,
-	file_count, total_size, row_count, partition_keys, schema_id, description,
-	created_at, updated_at, last_scan_at FROM datasets`
+	file_count, total_size, row_count, partition_keys, partition_depth, discovery_strategy,
+	schema_id, description, created_at, updated_at, last_scan_at FROM datasets`
 
 func scanDataset(r rowScanner) (*model.Dataset, error) {
 	var d model.Dataset
 	var pk string
 	var last sql.NullTime
 	if err := r.Scan(&d.ID, &d.BucketID, &d.BucketName, &d.Name, &d.Path, &d.Format,
-		&d.Compression, &d.FileCount, &d.TotalSize, &d.RowCount, &pk, &d.SchemaID,
-		&d.Description, &d.CreatedAt, &d.UpdatedAt, &last); err != nil {
+		&d.Compression, &d.FileCount, &d.TotalSize, &d.RowCount, &pk, &d.PartitionDepth,
+		&d.DiscoveryStrategy, &d.SchemaID, &d.Description, &d.CreatedAt, &d.UpdatedAt, &last); err != nil {
 		return nil, err
 	}
 	fromJSON(pk, &d.PartitionKeys)

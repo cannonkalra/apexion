@@ -11,6 +11,8 @@ import (
 
 	"github.com/apexion/apexion/internal/api"
 	"github.com/apexion/apexion/internal/catalog"
+	"github.com/apexion/apexion/internal/catalog/discovery"
+	"github.com/apexion/apexion/internal/catalog/virtualpath"
 	"github.com/apexion/apexion/internal/config"
 	"github.com/apexion/apexion/internal/connections"
 	"github.com/apexion/apexion/internal/crawler"
@@ -74,11 +76,13 @@ func New(ctx context.Context, cfg *config.Config) (*App, error) {
 
 	registry := crawler.DefaultRegistry()
 	resolvers := crawler.DefaultResolvers()
-	cr := crawler.New(store, conns, registry, resolvers, bus, cfg.Crawler, log)
+	disp := discovery.New(cfg.Catalog.Discovery.Strategy, cfg.Catalog.VirtualPartitionPrefix, cfg.Catalog.VirtualPartitionSeparator)
+	cr := crawler.New(store, conns, registry, resolvers, disp, bus, cfg.Crawler, log)
 
 	jobMgr := jobs.NewManager(store, log, cfg.Crawler.Workers)
 
-	cat := catalog.New(store, conns, cr, jobMgr, bus, prev, log)
+	vpath := virtualpath.New(cfg.Catalog.VirtualPartitionPrefix, cfg.Catalog.VirtualPartitionSeparator)
+	cat := catalog.New(store, conns, cr, jobMgr, bus, prev, vpath, log)
 	cat.PersistEvents(bus)
 	// Recreate registered catalog views in the (in-memory) query engine.
 	cat.RecreateViews(ctx)

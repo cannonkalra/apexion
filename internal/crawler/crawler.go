@@ -25,6 +25,7 @@ import (
 	"golang.org/x/sync/errgroup"
 	"golang.org/x/time/rate"
 
+	"github.com/apexion/apexion/internal/catalog/discovery"
 	"github.com/apexion/apexion/internal/config"
 	"github.com/apexion/apexion/internal/events"
 	"github.com/apexion/apexion/internal/format"
@@ -39,19 +40,21 @@ type Crawler struct {
 	provider  objstore.Provider
 	registry  *format.Registry
 	resolvers map[model.Format]format.TableResolver
+	discovery discovery.Dispatcher
 	bus       *events.Bus
 	cfg       config.CrawlerConfig
 	log       zerolog.Logger
 }
 
 // New constructs a Crawler. The provider supplies the active object store, so
-// the crawler follows connection switches automatically.
+// the crawler follows connection switches automatically. disp classifies object
+// keys into datasets and partitions.
 func New(store *storage.Store, provider objstore.Provider, reg *format.Registry,
-	resolvers map[model.Format]format.TableResolver, bus *events.Bus,
+	resolvers map[model.Format]format.TableResolver, disp discovery.Dispatcher, bus *events.Bus,
 	cfg config.CrawlerConfig, log zerolog.Logger) *Crawler {
 	return &Crawler{
 		store: store, provider: provider, registry: reg, resolvers: resolvers,
-		bus: bus, cfg: cfg, log: log.With().Str("component", "crawler").Logger(),
+		discovery: disp, bus: bus, cfg: cfg, log: log.With().Str("component", "crawler").Logger(),
 	}
 }
 
@@ -244,7 +247,7 @@ func (c *Crawler) walk(ctx context.Context, bucket *model.Bucket, run *model.Cra
 			}
 		}
 
-		pi := deriveDataset(om.Key)
+		pi := deriveDataset(om.Key, opts.Prefix, c.discovery)
 		agg.add(pi, f, om, changed || !incremental)
 		return c.checkpoint(ctx, run, om.Key)
 	})

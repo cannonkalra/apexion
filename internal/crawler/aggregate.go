@@ -32,6 +32,7 @@ type partAgg struct {
 
 type dsAgg struct {
 	root        string
+	strategy    string // discovery strategy: hive | positional | legacy
 	tableFormat model.Format
 	formatVotes map[model.Format]int
 	fileCount   int64
@@ -71,6 +72,9 @@ func (a *aggregate) markTable(root string, f model.Format) {
 
 func (a *aggregate) add(pi partitionInfo, f model.Format, om objstore.ObjectMeta, changed bool) {
 	d := a.get(pi.root)
+	if pi.strategy != "" {
+		d.strategy = pi.strategy
+	}
 	d.formatVotes[f]++
 	d.fileCount++
 	d.totalSize += om.Size

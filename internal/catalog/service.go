@@ -17,6 +17,7 @@ import (
 
 	"github.com/rs/zerolog"
 
+	"github.com/apexion/apexion/internal/catalog/virtualpath"
 	"github.com/apexion/apexion/internal/crawler"
 	"github.com/apexion/apexion/internal/duckdb"
 	"github.com/apexion/apexion/internal/events"
@@ -34,15 +35,16 @@ type Service struct {
 	jobs     *jobs.Manager
 	bus      *events.Bus
 	duckdb   *duckdb.Engine
+	vpath    virtualpath.Builder
 	log      zerolog.Logger
 }
 
 // New constructs the catalog service.
 func New(store *storage.Store, provider objstore.Provider, cr *crawler.Crawler,
-	jm *jobs.Manager, bus *events.Bus, ddb *duckdb.Engine, log zerolog.Logger) *Service {
+	jm *jobs.Manager, bus *events.Bus, ddb *duckdb.Engine, vp virtualpath.Builder, log zerolog.Logger) *Service {
 	return &Service{
-		store: store, provider: provider, crawler: cr,
-		jobs: jm, bus: bus, duckdb: ddb, log: log.With().Str("component", "catalog").Logger(),
+		store: store, provider: provider, crawler: cr, jobs: jm, bus: bus,
+		duckdb: ddb, vpath: vp, log: log.With().Str("component", "catalog").Logger(),
 	}
 }
 

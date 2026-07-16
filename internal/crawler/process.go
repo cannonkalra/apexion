@@ -28,20 +28,22 @@ func (c *Crawler) processOne(ctx context.Context, bucket *model.Bucket, d *dsAgg
 	// Reuse an existing dataset record (preserve id + created_at).
 	existing, _ := c.store.GetDatasetByPath(ctx, bucket.ID, d.root)
 	ds := &model.Dataset{
-		ID:            uuid.NewString(),
-		BucketID:      bucket.ID,
-		BucketName:    bucket.Name,
-		Name:          d.name(bucket.Name),
-		Path:          d.root,
-		Format:        f,
-		Compression:   result.Compression,
-		FileCount:     d.fileCount,
-		TotalSize:     d.totalSize,
-		RowCount:      estimateDatasetRows(result, d.fileCount),
-		PartitionKeys: partKeys,
-		CreatedAt:     now,
-		UpdatedAt:     now,
-		LastScanAt:    &now,
+		ID:                uuid.NewString(),
+		BucketID:          bucket.ID,
+		BucketName:        bucket.Name,
+		Name:              d.name(bucket.Name),
+		Path:              d.root,
+		Format:            f,
+		Compression:       result.Compression,
+		FileCount:         d.fileCount,
+		TotalSize:         d.totalSize,
+		RowCount:          estimateDatasetRows(result, d.fileCount),
+		PartitionKeys:     partKeys,
+		PartitionDepth:    len(partKeys),
+		DiscoveryStrategy: d.strategy,
+		CreatedAt:         now,
+		UpdatedAt:         now,
+		LastScanAt:        &now,
 	}
 	if existing != nil {
 		ds.ID = existing.ID

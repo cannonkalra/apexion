@@ -54,6 +54,20 @@ func statSamples(c model.Column) string {
 	return truncate(strings.Join(vals, ", "), 40)
 }
 
+func discoveryLabel(strategy string) string {
+	if strategy == "" {
+		return "—"
+	}
+	return strategy
+}
+
+func datasetRootLabel(d *catalog.DatasetDetail) string {
+	if d.Dataset.Path == "" {
+		return d.Dataset.BucketName + "/ (bucket root)"
+	}
+	return d.Dataset.BucketName + "/" + d.Dataset.Path
+}
+
 func partitionKeysLabel(d *catalog.DatasetDetail) string {
 	if len(d.Dataset.PartitionKeys) == 0 {
 		return "None"
