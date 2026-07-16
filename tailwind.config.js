@@ -11,7 +11,15 @@ const v = (name) => `rgb(var(--${name}) / <alpha-value>)`;
 
 module.exports = {
   darkMode: ["selector", '[data-theme="dark"]'],
-  content: ["./internal/ui/**/*.templ", "./internal/ui/**/*_templ.go"],
+  content: [
+    "./internal/ui/**/*.templ",
+    "./internal/ui/**/*_templ.go",
+    // The reusable data-viewer components live outside internal/ui; scan their
+    // templates, generated Go, and the helper .go files that return class names.
+    "./internal/dataviewer/**/*.templ",
+    "./internal/dataviewer/**/*_templ.go",
+    "./internal/dataviewer/components/*.go",
+  ],
   theme: {
     extend: {
       colors: {

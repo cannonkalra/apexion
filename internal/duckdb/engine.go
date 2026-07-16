@@ -273,6 +273,20 @@ func (e *Engine) PreviewDatasetPartitioned(ctx context.Context, bucket, prefix s
 	return e.query(ctx, sel, limit)
 }
 
+// QueryProfile runs a caller-built, read-only profiling query as-is and returns
+// the stringified result. The query is expected to be self-bounding (aggregates
+// or per-branch LIMITs); a generous outer cap guards against a runaway builder.
+// It reuses the single shared connection, so callers must keep round-trips small.
+func (e *Engine) QueryProfile(ctx context.Context, sql string) (*Result, error) {
+	if !e.ready {
+		return nil, fmt.Errorf("profiling unavailable: %s", e.readErr)
+	}
+	if err := readOnly(sql); err != nil {
+		return nil, err
+	}
+	return e.query(ctx, sql, 100000)
+}
+
 // query executes an arbitrary (already-built) query, applying a row limit.
 func (e *Engine) query(ctx context.Context, q string, limit int) (*Result, error) {
 	if limit <= 0 {

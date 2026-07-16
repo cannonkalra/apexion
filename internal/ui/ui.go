@@ -17,6 +17,7 @@ import (
 	"github.com/apexion/apexion/internal/catalog/virtualpath"
 	"github.com/apexion/apexion/internal/config"
 	"github.com/apexion/apexion/internal/connections"
+	"github.com/apexion/apexion/internal/dataviewer"
 	"github.com/apexion/apexion/internal/duckdb"
 	"github.com/apexion/apexion/internal/explorer"
 	"github.com/apexion/apexion/internal/format"
@@ -38,6 +39,7 @@ func intFrom(s string, def int) int {
 type Handler struct {
 	catalog     *catalog.Service
 	preview     *duckdb.Engine
+	profiler    *dataviewer.Profiler
 	explorer    *explorer.Service
 	connections *connections.Manager
 	selection   *selection.SelectionService
@@ -50,7 +52,8 @@ type Handler struct {
 func New(cat *catalog.Service, prev *duckdb.Engine, expl *explorer.Service,
 	conns *connections.Manager, sel *selection.SelectionService, cfg *config.Config, log zerolog.Logger) *Handler {
 	return &Handler{
-		catalog: cat, preview: prev, explorer: expl, connections: conns,
+		catalog: cat, preview: prev, profiler: dataviewer.New(prev, log),
+		explorer: expl, connections: conns,
 		selection: sel, store: cat.Store(), cfg: cfg, log: log,
 	}
 }
@@ -74,6 +77,7 @@ func (h *Handler) Routes() http.Handler {
 		r.Get("/partials/explorer-summary", h.partialExplorerSummary)
 		r.Get("/partials/explorer-page", h.partialExplorerPage)
 		r.Get("/preview", h.partialFilePreview)
+		r.Get("/insights", h.partialColumnInsights)
 		r.Get("/datasets/{id}/preview", h.partialDatasetPreview)
 		r.Post("/datasets/{id}/register", h.actionRegisterDataset)
 		r.Post("/datasets/{id}/refresh", h.actionRefreshDataset)

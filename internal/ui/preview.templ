@@ -49,7 +49,7 @@ templ FilePreviewPage(vm PreviewVM) {
 					@PreviewOptions(filePreviewOptsVM(vm))
 					<div id="file-preview-result">
 						if vm.Result != nil {
-							@PreviewResult(vm.Result)
+							@PreviewResultWith(vm.Result, insightsHref(vm.Bucket, vm.Key, vm.Format, vm.Opts))
 						} else {
 							@EmptyState("No preview available", "This file could not be previewed.")
 						}
@@ -98,15 +98,22 @@ templ PreviewOptions(vm PreviewOptsVM) {
 }
 
 // PreviewResult shows the exact generated SQL (Result.SQL) above the sample rows,
-// so the preview surfaces double as a live SQL builder.
+// so the preview surfaces double as a live SQL builder. Insights are off — used
+// by the dataset preview tab and any caller that opts out.
 templ PreviewResult(res *duckdb.Result) {
+	@PreviewResultWith(res, "")
+}
+
+// PreviewResultWith is PreviewResult plus lazy-loaded column insights when
+// insightsURL is non-empty (the single-file preview surface).
+templ PreviewResultWith(res *duckdb.Result, insightsURL string) {
 	if res.SQL != "" {
 		<div class="mb-3">
 			<div class="eyebrow mb-1">Generated SQL</div>
 			<pre class="text-xs font-mono text-slate-400 bg-base-950/50 border border-base-800 rounded-lg px-3 py-2 overflow-x-auto whitespace-pre-wrap break-all">{ res.SQL }</pre>
 		</div>
 	}
-	@ResultTable(res)
+	@ResultTableWith(res, insightsURL)
 }
 
 // partitionPanel shows how the object's parent directories map to virtual Hive

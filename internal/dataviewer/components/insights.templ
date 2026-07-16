@@ -1,0 +1,55 @@
+package components
+
+import "github.com/apexion/apexion/internal/dataviewer"
+
+// InsightSkeleton is the loading placeholder shown in a column's insight cell
+// until profiling completes and swaps the populated row in.
+templ InsightSkeleton() {
+	<th class="th !font-normal align-top">
+		<div class="flex flex-col gap-1.5 min-w-[7rem] animate-pulse">
+			<div class="h-2 w-16 rounded bg-base-700"></div>
+			<div class="h-9 w-full rounded bg-base-800"></div>
+			<div class="h-2 w-12 rounded bg-base-700"></div>
+		</div>
+	</th>
+}
+
+// InsightCell renders one column's computed insights: null/distinct %, an inline
+// SVG mini distribution (numeric histogram or categorical top-N), and up to two
+// quality/pattern badges.
+templ InsightCell(p dataviewer.ColumnProfile) {
+	<th class="th !font-normal align-top">
+		<div class="flex flex-col gap-1.5 min-w-[7rem] max-w-[13rem]">
+			<div class="flex items-center gap-1.5 text-[10px] normal-case tracking-normal text-slate-500">
+				<span>{ nullPctText(p) }</span>
+				if distinctPctText(p) != "" {
+					<span class="text-slate-600">·</span>
+					<span>{ distinctPctText(p) }</span>
+				}
+			</div>
+			if bars := distBars(p); len(bars) > 0 {
+				@miniDist(bars)
+			} else {
+				<div class="h-9"></div>
+			}
+			if len(p.Badges) > 0 {
+				<div class="flex flex-wrap gap-1">
+					for _, b := range p.Badges {
+						<span class={ "badge normal-case tracking-normal", badgeClass(b.Tone) }>{ b.Label }</span>
+					}
+				</div>
+			}
+		</div>
+	</th>
+}
+
+// miniDist draws the pre-laid-out bars as a lightweight inline SVG (no JS).
+templ miniDist(bars []bar) {
+	<svg viewBox="0 0 112 36" width="112" height="36" preserveAspectRatio="none" class="text-brand-400/70" role="img" aria-label="distribution">
+		for _, b := range bars {
+			<rect x={ b.X } y={ b.Y } width={ b.W } height={ b.H } fill="currentColor">
+				<title>{ b.Title }</title>
+			</rect>
+		}
+	</svg>
+}

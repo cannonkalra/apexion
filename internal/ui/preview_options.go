@@ -2,9 +2,14 @@ package ui
 
 import (
 	"net/http"
+	"net/url"
 
+	"github.com/apexion/apexion/internal/dataviewer"
 	"github.com/apexion/apexion/internal/model"
 )
+
+// insightsSampleCap bounds the DuckDB sample used for column profiling.
+const insightsSampleCap = 5000
 
 // This file adds live DuckDB reader-option toggles (Header, Union by name,
 // Ignore errors) to the data-preview surfaces — the single-file preview page and
@@ -98,10 +103,58 @@ func (h *Handler) partialFilePreview(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	f := model.Format(q.Get("format"))
-	res, err := h.preview.PreviewFileWith(r.Context(), bucket, key, f, previewOptsFromRequest(r), 100)
+	opts := previewOptsFromRequest(r)
+	res, err := h.preview.PreviewFileWith(r.Context(), bucket, key, f, opts, 100)
 	if err != nil {
 		h.render(w, r, QueryError(err.Error()))
 		return
 	}
-	h.render(w, r, PreviewResult(res))
+	h.render(w, r, PreviewResultWith(res, insightsHref(bucket, key, f, opts)))
+}
+
+// insightsHref builds the lazy-load URL for a single file's column insights. It
+// carries bucket/key/format + the reader options (not raw SQL) so the profiler
+// reconstructs the reader server-side and stays consistent with the visible
+// preview. applied=1 signals previewOptsFromRequest to honour the toggles.
+func insightsHref(bucket, key string, f model.Format, opts model.ReadOptions) string {
+	v := url.Values{}
+	v.Set("bucket", bucket)
+	v.Set("key", key)
+	v.Set("format", string(f))
+	v.Set("applied", "1")
+	if opts.Header != "" {
+		v.Set("header", opts.Header)
+	}
+	if opts.UnionByName {
+		v.Set("union_by_name", "on")
+	}
+	if opts.IgnoreErrors {
+		v.Set("ignore_errors", "on")
+	}
+	return "/ui/insights?" + v.Encode()
+}
+
+// partialColumnInsights computes column profiles for a single-file preview and
+// returns just the populated insight header row, which HTMX swaps in over the
+// skeleton row. Errors degrade gracefully to nothing (the name/type header
+// remains); the endpoint never blocks the already-rendered data rows.
+func (h *Handler) partialColumnInsights(w http.ResponseWriter, r *http.Request) {
+	q := r.URL.Query()
+	bucket, key := q.Get("bucket"), q.Get("key")
+	if bucket == "" || key == "" {
+		return
+	}
+	f := model.Format(q.Get("format"))
+	opts := previewOptsFromRequest(r)
+	res, err := h.preview.PreviewFileWith(r.Context(), bucket, key, f, opts, 100)
+	if err != nil {
+		h.log.Warn().Err(err).Msg("insights preview failed")
+		return
+	}
+	src := dataviewer.Source{Bucket: bucket, Key: key, Format: f, Opts: opts}
+	profiles, err := h.profiler.Profile(r.Context(), src, res, insightsSampleCap)
+	if err != nil {
+		h.log.Warn().Err(err).Msg("column profiling failed")
+	}
+	h.render(w, r, InsightsRow(profiles))
 }
