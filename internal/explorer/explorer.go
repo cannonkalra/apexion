@@ -1,7 +1,11 @@
 // Package explorer provides a VS Code-style browse experience over object
 // storage: lazy directory listings, folder summaries, and file metadata. It
-// reads live from S3 (no catalog dependency), so it works before anything is
-// crawled.
+// reads live through objstore (no catalog dependency), so it works before
+// anything is crawled.
+//
+// Depends on: objstore, format, model.
+// Deliberately does NOT: import ui/api/http; read or write the catalog database;
+// or import a storage SDK (it only sees the objstore.Provider interface).
 package explorer
 
 import (
@@ -11,20 +15,20 @@ import (
 	"strings"
 	"time"
 
-	"github.com/apexion/apexion/internal/crawler/format"
-	"github.com/apexion/apexion/internal/crawler/s3"
+	"github.com/apexion/apexion/internal/format"
 	"github.com/apexion/apexion/internal/model"
+	"github.com/apexion/apexion/internal/objstore"
 )
 
 // Service browses object storage using the active connection.
 type Service struct {
-	provider s3.Provider
+	provider objstore.Provider
 }
 
 // New creates an explorer service backed by a connection provider.
-func New(provider s3.Provider) *Service { return &Service{provider: provider} }
+func New(provider objstore.Provider) *Service { return &Service{provider: provider} }
 
-func (s *Service) clientFor(bucket string) *s3.Client { return s.provider.ClientFor(bucket) }
+func (s *Service) storeFor(bucket string) objstore.ObjectStore { return s.provider.StoreFor(bucket) }
 
 // FolderEntry is a sub-directory in a listing.
 type FolderEntry struct {
@@ -87,7 +91,7 @@ func (s *Service) ListDir(ctx context.Context, bucket, prefix, search, sortBy st
 		limit = DefaultPageSize
 	}
 	// Server-side prefix filter: list keys beginning with prefix+search.
-	folders, files, truncated, err := s.clientFor(bucket).ListDirectory(ctx, bucket, prefix+search, limit)
+	folders, files, truncated, err := s.storeFor(bucket).ListDirectory(ctx, bucket, prefix+search, limit)
 	if err != nil {
 		return nil, err
 	}
@@ -144,7 +148,7 @@ func (s *Service) FolderSummary(ctx context.Context, bucket, prefix string) (*Fo
 	const cap = 5000
 	sum := &FolderSummary{}
 	formats := map[model.Format]bool{}
-	err := s.clientFor(bucket).WalkObjects(ctx, bucket, prefix, "", func(om s3.ObjectMeta) error {
+	err := s.storeFor(bucket).WalkObjects(ctx, bucket, prefix, "", func(om objstore.ObjectMeta) error {
 		if strings.HasSuffix(om.Key, "/") {
 			return nil
 		}

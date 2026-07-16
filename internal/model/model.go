@@ -106,9 +106,7 @@ const (
 type JobType string
 
 const (
-	JobCrawl     JobType = "crawl"
-	JobInference JobType = "inference"
-	JobLineage   JobType = "lineage"
+	JobCrawl JobType = "crawl"
 )
 
 // CrawlMode is how much of a bucket a crawl covers.
@@ -212,7 +210,9 @@ type Column struct {
 	Statistics   *Statistics  `json:"statistics,omitempty"`
 }
 
-// Statistics holds per-column profiling numbers.
+// Statistics holds per-column profiling numbers. The crawler fills the base
+// fields from a 1000-row sample; the profiler (internal/profiler) recomputes
+// them over the whole dataset with DuckDB and fills the extended fields.
 type Statistics struct {
 	ID            string   `json:"id"`
 	ColumnID      string   `json:"column_id"`
@@ -225,6 +225,25 @@ type Statistics struct {
 	Completeness  float64  `json:"completeness"` // 1 - null_ratio
 	Uniqueness    float64  `json:"uniqueness"`   // distinct/count
 	SampleValues  []string `json:"sample_values"`
+
+	// Extended profiling (populated by the profiling engine over the full data).
+	StdDev     *float64     `json:"std_dev,omitempty"`
+	Variance   *float64     `json:"variance,omitempty"`
+	Q25        *float64     `json:"q25,omitempty"`
+	Median     *float64     `json:"median,omitempty"`
+	Q75        *float64     `json:"q75,omitempty"`
+	MinLength  int64        `json:"min_length"`
+	MaxLength  int64        `json:"max_length"`
+	AvgLength  float64      `json:"avg_length"`
+	Entropy    float64      `json:"entropy"`    // Shannon entropy (bits), approximate
+	TopValues  []ValueCount `json:"top_values"` // most-frequent values
+	ProfiledAt *time.Time   `json:"profiled_at,omitempty"`
+}
+
+// ValueCount is one (value, frequency) pair in a column's value distribution.
+type ValueCount struct {
+	Value string `json:"value"`
+	Count int64  `json:"count"`
 }
 
 // Partition is one Hive-style partition of a dataset.
@@ -237,24 +256,6 @@ type Partition struct {
 	Size      int64             `json:"size"`
 	RowCount  int64             `json:"row_count"`
 	CreatedAt time.Time         `json:"created_at"`
-}
-
-// LineageNode is a vertex in the lineage graph.
-type LineageNode struct {
-	ID        string    `json:"id"`
-	Kind      string    `json:"kind"` // bucket|dataset|table|column|partition
-	RefID     string    `json:"ref_id"`
-	Label     string    `json:"label"`
-	CreatedAt time.Time `json:"created_at"`
-}
-
-// LineageEdge connects two lineage nodes.
-type LineageEdge struct {
-	ID        string    `json:"id"`
-	FromID    string    `json:"from_id"`
-	ToID      string    `json:"to_id"`
-	Relation  string    `json:"relation"` // contains|derives|partitions
-	CreatedAt time.Time `json:"created_at"`
 }
 
 // CrawlerRun records a single execution of the crawler.
@@ -274,20 +275,6 @@ type CrawlerRun struct {
 	Error          string       `json:"error"`
 	StartedAt      time.Time    `json:"started_at"`
 	FinishedAt     *time.Time   `json:"finished_at,omitempty"`
-}
-
-// InferenceRun records a single execution of the inference engine.
-type InferenceRun struct {
-	ID           string     `json:"id"`
-	DatasetID    string     `json:"dataset_id"`
-	DatasetName  string     `json:"dataset_name"`
-	Status       RunStatus  `json:"status"`
-	SampleRows   int64      `json:"sample_rows"`
-	QualityScore float64    `json:"quality_score"`
-	Findings     string     `json:"findings"` // JSON blob of InferenceResult
-	Error        string     `json:"error"`
-	StartedAt    time.Time  `json:"started_at"`
-	FinishedAt   *time.Time `json:"finished_at,omitempty"`
 }
 
 // DataSample is a captured sample of rows for a dataset (as JSON).
@@ -339,85 +326,4 @@ type Event struct {
 	Subject   string    `json:"subject"` // ref id the event is about
 	Payload   string    `json:"payload"` // JSON
 	CreatedAt time.Time `json:"created_at"`
-}
-
-// ---------------------------------------------------------------------------
-// Value objects used by inference (not persisted as separate tables)
-// ---------------------------------------------------------------------------
-
-// InferenceResult is the rich output of an inference run, serialized into
-// InferenceRun.Findings.
-type InferenceResult struct {
-	DatasetID      string                `json:"dataset_id"`
-	SampleRows     int                   `json:"sample_rows"`
-	Columns        []ColumnInference     `json:"columns"`
-	PrimaryKeys    []string              `json:"primary_keys"`
-	ForeignKeys    []ForeignKeyCandidate `json:"foreign_keys"`
-	QualityScore   float64               `json:"quality_score"`
-	QualityMetrics QualityMetrics        `json:"quality_metrics"`
-	PIIColumns     []string              `json:"pii_columns"`
-	GeneratedAt    time.Time             `json:"generated_at"`
-	LLMSummary     string                `json:"llm_summary,omitempty"`
-
-	// Extended analyses (Phase 1).
-	BusinessDescription   string             `json:"business_description,omitempty"`
-	DatasetSummary        string             `json:"dataset_summary,omitempty"`
-	RecommendedPartitions []string           `json:"recommended_partitions"`
-	DuplicateAnalysis     DuplicateAnalysis  `json:"duplicate_analysis"`
-	MissingValues         []MissingValueStat `json:"missing_values"`
-	DorisSchema           string             `json:"doris_schema,omitempty"`
-	SparkOptimizations    []string           `json:"spark_optimizations"`
-	FlinkOptimizations    []string           `json:"flink_optimizations"`
-}
-
-// DuplicateAnalysis summarizes duplicate rows in the sample.
-type DuplicateAnalysis struct {
-	TotalRows      int     `json:"total_rows"`
-	DuplicateRows  int     `json:"duplicate_rows"`
-	DuplicateRatio float64 `json:"duplicate_ratio"`
-	UniqueRows     int     `json:"unique_rows"`
-}
-
-// MissingValueStat is a per-column null summary.
-type MissingValueStat struct {
-	Column    string  `json:"column"`
-	NullCount int     `json:"null_count"`
-	NullRatio float64 `json:"null_ratio"`
-}
-
-// ColumnInference is the per-column result of inference.
-type ColumnInference struct {
-	Name          string       `json:"name"`
-	DataType      DataType     `json:"data_type"`
-	SemanticType  SemanticType `json:"semantic_type"`
-	Nullable      bool         `json:"nullable"`
-	IsPII         bool         `json:"is_pii"`
-	IsPKCandidate bool         `json:"is_pk_candidate"`
-	Completeness  float64      `json:"completeness"`
-	Uniqueness    float64      `json:"uniqueness"`
-	DistinctCount int64        `json:"distinct_count"`
-	MinValue      string       `json:"min_value"`
-	MaxValue      string       `json:"max_value"`
-	SampleValues  []string     `json:"sample_values"`
-	DateFormat    string       `json:"date_format,omitempty"`
-	Confidence    float64      `json:"confidence"`
-}
-
-// ForeignKeyCandidate is a suspected FK relationship.
-type ForeignKeyCandidate struct {
-	Column       string  `json:"column"`
-	RefDataset   string  `json:"ref_dataset"`
-	RefColumn    string  `json:"ref_column"`
-	OverlapRatio float64 `json:"overlap_ratio"`
-	Confidence   float64 `json:"confidence"`
-}
-
-// QualityMetrics summarizes dataset-level data quality.
-type QualityMetrics struct {
-	Completeness float64 `json:"completeness"` // avg non-null ratio
-	Uniqueness   float64 `json:"uniqueness"`   // avg distinct ratio
-	Validity     float64 `json:"validity"`     // fraction of values matching inferred type
-	Consistency  float64 `json:"consistency"`  // fraction of columns with a single stable type
-	Rows         int     `json:"rows"`
-	Columns      int     `json:"columns"`
 }

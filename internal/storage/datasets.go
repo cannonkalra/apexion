@@ -106,6 +106,7 @@ func (s *Store) DeleteDataset(ctx context.Context, id string) error {
 		`DELETE FROM partitions WHERE dataset_id = ?`,
 		`DELETE FROM data_samples WHERE dataset_id = ?`,
 		`DELETE FROM inference_runs WHERE dataset_id = ?`,
+		`DELETE FROM dataset_profiles WHERE dataset_id = ?`,
 		`UPDATE objects SET dataset_id = '' WHERE dataset_id = ?`,
 		`DELETE FROM datasets WHERE id = ?`,
 	}

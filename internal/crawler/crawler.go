@@ -2,6 +2,11 @@
 // groups them into datasets (honoring Hive partitions and table formats),
 // infers schemas, catalogs metadata, and emits structured events. It supports
 // worker pools, rate limiting, checkpointing, resume, and incremental crawls.
+//
+// Depends on: objstore, format (via the features registry), storage, events, model, config.
+// Deliberately does NOT: import ui/api/http; import a concrete file-format
+// reader (it asks the features registry); or run DuckDB queries / create tables
+// (that is package duckdb).
 package crawler
 
 import (
@@ -21,17 +26,17 @@ import (
 	"golang.org/x/time/rate"
 
 	"github.com/apexion/apexion/internal/config"
-	"github.com/apexion/apexion/internal/crawler/format"
-	"github.com/apexion/apexion/internal/crawler/s3"
 	"github.com/apexion/apexion/internal/events"
+	"github.com/apexion/apexion/internal/format"
 	"github.com/apexion/apexion/internal/model"
+	"github.com/apexion/apexion/internal/objstore"
 	"github.com/apexion/apexion/internal/storage"
 )
 
 // Crawler orchestrates discovery for a bucket.
 type Crawler struct {
 	store     *storage.Store
-	provider  s3.Provider
+	provider  objstore.Provider
 	registry  *format.Registry
 	resolvers map[model.Format]format.TableResolver
 	bus       *events.Bus
@@ -39,9 +44,9 @@ type Crawler struct {
 	log       zerolog.Logger
 }
 
-// New constructs a Crawler. The provider supplies the active S3 client, so the
-// crawler follows connection switches automatically.
-func New(store *storage.Store, provider s3.Provider, reg *format.Registry,
+// New constructs a Crawler. The provider supplies the active object store, so
+// the crawler follows connection switches automatically.
+func New(store *storage.Store, provider objstore.Provider, reg *format.Registry,
 	resolvers map[model.Format]format.TableResolver, bus *events.Bus,
 	cfg config.CrawlerConfig, log zerolog.Logger) *Crawler {
 	return &Crawler{
@@ -50,11 +55,8 @@ func New(store *storage.Store, provider s3.Provider, reg *format.Registry,
 	}
 }
 
-// client returns the currently-active S3 client.
-func (c *Crawler) client() *s3.Client { return c.provider.Client() }
-
-// clientFor returns a client with addressing suited to the bucket name.
-func (c *Crawler) clientFor(bucket string) *s3.Client { return c.provider.ClientFor(bucket) }
+// storeFor returns the store with addressing suited to the bucket name.
+func (c *Crawler) storeFor(bucket string) objstore.ObjectStore { return c.provider.StoreFor(bucket) }
 
 // Options controls a single crawl.
 type Options struct {
@@ -130,7 +132,7 @@ func (c *Crawler) ensureBucket(ctx context.Context, name string) (*model.Bucket,
 	// Resolve the bucket's real region up front. This primes the SDK region
 	// cache so the subsequent walk signs correctly for buckets outside the
 	// client's default region (essential for AWS multi-region accounts).
-	cf := c.clientFor(name)
+	cf := c.storeFor(name)
 	region := cf.Region()
 	if r, err := cf.BucketRegion(ctx, name); err == nil && r != "" {
 		region = r
@@ -194,7 +196,7 @@ func (c *Crawler) walk(ctx context.Context, bucket *model.Bucket, run *model.Cra
 	now := time.Now().UTC()
 	incremental := opts.Mode == model.CrawlIncremental
 
-	err := c.clientFor(bucket.Name).WalkObjects(ctx, bucket.Name, opts.Prefix, startAfter, func(om s3.ObjectMeta) error {
+	err := c.storeFor(bucket.Name).WalkObjects(ctx, bucket.Name, opts.Prefix, startAfter, func(om objstore.ObjectMeta) error {
 		if err := limiter.Wait(ctx); err != nil {
 			return err
 		}
@@ -292,7 +294,7 @@ func (c *Crawler) processDatasets(ctx context.Context, bucket *model.Bucket, run
 }
 
 // metadataHash hashes the fields that change when an object is rewritten.
-func metadataHash(om s3.ObjectMeta) string {
+func metadataHash(om objstore.ObjectMeta) string {
 	h := sha256.New()
 	fmt.Fprintf(h, "%s|%d|%s|%s", om.ETag, om.Size, om.VersionID, om.LastModified.UTC().Format(time.RFC3339Nano))
 	return hex.EncodeToString(h.Sum(nil))[:32]

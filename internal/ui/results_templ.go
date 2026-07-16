@@ -10,12 +10,12 @@ import templruntime "github.com/a-h/templ/runtime"
 
 import (
 	"fmt"
-	"github.com/apexion/apexion/internal/preview"
+	"github.com/apexion/apexion/internal/duckdb"
 )
 
 // ResultTable renders a DuckDB query result (used by preview, dataset preview,
 // and the SQL scratchpad).
-func ResultTable(res *preview.Result) templ.Component {
+func ResultTable(res *duckdb.Result) templ.Component {
 	return templruntime.GeneratedTemplate(func(templ_7745c5c3_Input templruntime.GeneratedComponentInput) (templ_7745c5c3_Err error) {
 		templ_7745c5c3_W, ctx := templ_7745c5c3_Input.Writer, templ_7745c5c3_Input.Context
 		if templ_7745c5c3_CtxErr := ctx.Err(); templ_7745c5c3_CtxErr != nil {

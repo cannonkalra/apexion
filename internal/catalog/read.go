@@ -10,16 +10,12 @@ import (
 
 // DatasetDetail is the composite read model for the dataset page.
 type DatasetDetail struct {
-	Dataset       model.Dataset          `json:"dataset"`
-	Schema        *model.Schema          `json:"schema"`
-	Partitions    []model.Partition      `json:"partitions"`
-	SampleColumns []string               `json:"sample_columns"`
-	SampleRows    []map[string]string    `json:"sample_rows"`
-	Inference     *model.InferenceResult `json:"inference"`
-	InferenceRun  *model.InferenceRun    `json:"inference_run"`
-	Objects       []model.Object         `json:"objects"`
-	InferenceRuns []model.InferenceRun   `json:"inference_runs"`
-	CrawlRuns     []model.CrawlerRun     `json:"crawl_runs"`
+	Dataset       model.Dataset       `json:"dataset"`
+	Schema        *model.Schema       `json:"schema"`
+	Partitions    []model.Partition   `json:"partitions"`
+	SampleColumns []string            `json:"sample_columns"`
+	SampleRows    []map[string]string `json:"sample_rows"`
+	Objects       []model.Object      `json:"objects"`
 }
 
 // DatasetDetail assembles everything the dataset page needs.
@@ -56,17 +52,6 @@ func (s *Service) DatasetDetail(ctx context.Context, id string) (*DatasetDetail,
 		}
 	}
 
-	if run, _ := s.store.LatestInferenceRun(ctx, id); run != nil {
-		d.InferenceRun = run
-		if run.Status == model.StatusCompleted {
-			var res model.InferenceResult
-			if json.Unmarshal([]byte(run.Findings), &res) == nil {
-				d.Inference = &res
-			}
-		}
-	}
-	d.InferenceRuns, _ = s.store.ListInferenceRuns(ctx, id, 20)
-	d.CrawlRuns, _ = s.store.ListCrawlerRuns(ctx, ds.BucketID, 10)
 	return d, nil
 }
 

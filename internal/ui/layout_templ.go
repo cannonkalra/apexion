@@ -101,47 +101,11 @@ func sidebar(active string) templ.Component {
 		if templ_7745c5c3_Err != nil {
 			return templ_7745c5c3_Err
 		}
-		templ_7745c5c3_Err = navLink("/", "Dashboard", active == "dashboard", iconGrid()).Render(ctx, templ_7745c5c3_Buffer)
-		if templ_7745c5c3_Err != nil {
-			return templ_7745c5c3_Err
-		}
 		templ_7745c5c3_Err = navLink("/explorer", "Explorer", active == "explorer", iconFolder()).Render(ctx, templ_7745c5c3_Buffer)
 		if templ_7745c5c3_Err != nil {
 			return templ_7745c5c3_Err
 		}
-		templ_7745c5c3_Err = navLink("/buckets", "Buckets", active == "buckets", iconBucket()).Render(ctx, templ_7745c5c3_Buffer)
-		if templ_7745c5c3_Err != nil {
-			return templ_7745c5c3_Err
-		}
-		templ_7745c5c3_Err = navLink("/datasets", "Catalog", active == "datasets", iconTable()).Render(ctx, templ_7745c5c3_Buffer)
-		if templ_7745c5c3_Err != nil {
-			return templ_7745c5c3_Err
-		}
-		templ_7745c5c3_Err = navLink("/sql", "SQL", active == "sql", iconTerminal()).Render(ctx, templ_7745c5c3_Buffer)
-		if templ_7745c5c3_Err != nil {
-			return templ_7745c5c3_Err
-		}
-		templ_7745c5c3_Err = navLink("/jobs", "Jobs", active == "jobs", iconPlay()).Render(ctx, templ_7745c5c3_Buffer)
-		if templ_7745c5c3_Err != nil {
-			return templ_7745c5c3_Err
-		}
-		templ_7745c5c3_Err = navLink("/runs", "Crawler Runs", active == "runs", iconRefresh()).Render(ctx, templ_7745c5c3_Buffer)
-		if templ_7745c5c3_Err != nil {
-			return templ_7745c5c3_Err
-		}
-		templ_7745c5c3_Err = navLink("/schema", "Schema Explorer", active == "schema", iconColumns()).Render(ctx, templ_7745c5c3_Buffer)
-		if templ_7745c5c3_Err != nil {
-			return templ_7745c5c3_Err
-		}
-		templ_7745c5c3_Err = navLink("/inference", "Inference", active == "inference", iconSpark()).Render(ctx, templ_7745c5c3_Buffer)
-		if templ_7745c5c3_Err != nil {
-			return templ_7745c5c3_Err
-		}
-		templ_7745c5c3_Err = navLink("/lineage", "Lineage", active == "lineage", iconGraph()).Render(ctx, templ_7745c5c3_Buffer)
-		if templ_7745c5c3_Err != nil {
-			return templ_7745c5c3_Err
-		}
-		templ_7745c5c3_Err = navLink("/search", "Search", active == "search", iconSearch()).Render(ctx, templ_7745c5c3_Buffer)
+		templ_7745c5c3_Err = navLink("/datasets", "Datasets", active == "datasets", iconTable()).Render(ctx, templ_7745c5c3_Buffer)
 		if templ_7745c5c3_Err != nil {
 			return templ_7745c5c3_Err
 		}
@@ -153,7 +117,7 @@ func sidebar(active string) templ.Component {
 		if templ_7745c5c3_Err != nil {
 			return templ_7745c5c3_Err
 		}
-		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 8, "</nav><div class=\"p-3 text-[11px] text-slate-600 border-t border-base-800\">v1.0 · Glue-compatible catalog</div></aside>")
+		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 8, "</nav><div class=\"p-3 text-[11px] text-slate-600 border-t border-base-800\">Apexion · Explorer</div></aside>")
 		if templ_7745c5c3_Err != nil {
 			return templ_7745c5c3_Err
 		}
@@ -194,7 +158,7 @@ func navLink(href, label string, isActive bool, icon templ.Component) templ.Comp
 		var templ_7745c5c3_Var6 templ.SafeURL
 		templ_7745c5c3_Var6, templ_7745c5c3_Err = templ.JoinURLErrs(templ.SafeURL(href))
 		if templ_7745c5c3_Err != nil {
-			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/ui/layout.templ`, Line: 76, Col: 28}
+			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/ui/layout.templ`, Line: 67, Col: 28}
 		}
 		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var6))
 		if templ_7745c5c3_Err != nil {
@@ -228,7 +192,7 @@ func navLink(href, label string, isActive bool, icon templ.Component) templ.Comp
 		var templ_7745c5c3_Var8 string
 		templ_7745c5c3_Var8, templ_7745c5c3_Err = templ.JoinStringErrs(label)
 		if templ_7745c5c3_Err != nil {
-			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/ui/layout.templ`, Line: 80, Col: 15}
+			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/ui/layout.templ`, Line: 71, Col: 15}
 		}
 		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var8))
 		if templ_7745c5c3_Err != nil {
@@ -270,21 +234,13 @@ func topbar(pageTitle string) templ.Component {
 		var templ_7745c5c3_Var10 string
 		templ_7745c5c3_Var10, templ_7745c5c3_Err = templ.JoinStringErrs(pageTitle)
 		if templ_7745c5c3_Err != nil {
-			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/ui/layout.templ`, Line: 86, Col: 58}
+			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/ui/layout.templ`, Line: 77, Col: 58}
 		}
 		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var10))
 		if templ_7745c5c3_Err != nil {
 			return templ_7745c5c3_Err
 		}
-		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 15, "</h1><div class=\"flex-1\"></div><div class=\"relative w-full max-w-sm hidden sm:block\"><div class=\"absolute left-3 top-1/2 -translate-y-1/2 text-slate-500\">")
-		if templ_7745c5c3_Err != nil {
-			return templ_7745c5c3_Err
-		}
-		templ_7745c5c3_Err = iconSearch().Render(ctx, templ_7745c5c3_Buffer)
-		if templ_7745c5c3_Err != nil {
-			return templ_7745c5c3_Err
-		}
-		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 16, "</div><input type=\"search\" name=\"q\" placeholder=\"Search datasets, columns, buckets…\" class=\"w-full pl-9 pr-3 py-2 rounded-lg bg-base-900 border border-base-800 text-sm text-slate-200 placeholder-slate-500 focus:outline-none focus:ring-2 focus:ring-brand-500/40\" hx-get=\"/ui/search\" hx-trigger=\"keyup changed delay:250ms, search\" hx-target=\"#global-search-results\" hx-indicator=\"#search-spin\"><div id=\"global-search-results\" class=\"absolute mt-2 w-full\"></div></div><button onclick=\"toggleTheme()\" class=\"btn-ghost\" title=\"Toggle theme\">")
+		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 15, "</h1><div class=\"flex-1\"></div><button onclick=\"toggleTheme()\" class=\"btn-ghost\" title=\"Toggle theme\">")
 		if templ_7745c5c3_Err != nil {
 			return templ_7745c5c3_Err
 		}
@@ -292,7 +248,7 @@ func topbar(pageTitle string) templ.Component {
 		if templ_7745c5c3_Err != nil {
 			return templ_7745c5c3_Err
 		}
-		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 17, "</button></header>")
+		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 16, "</button></header>")
 		if templ_7745c5c3_Err != nil {
 			return templ_7745c5c3_Err
 		}

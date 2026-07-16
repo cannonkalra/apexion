@@ -19,17 +19,12 @@ import (
 type Type string
 
 const (
-	TypeCrawlStarted       Type = "CrawlStarted"
-	TypeCrawlCompleted     Type = "CrawlCompleted"
-	TypeObjectDiscovered   Type = "ObjectDiscovered"
-	TypeDatasetDiscovered  Type = "DatasetDiscovered"
-	TypeSchemaChanged      Type = "SchemaChanged"
-	TypeNewPartition       Type = "NewPartition"
-	TypeInferenceStarted   Type = "InferenceStarted"
-	TypeInferenceCompleted Type = "InferenceCompleted"
-	TypeCatalogUpdated     Type = "CatalogUpdated"
-	TypeQualityEvaluated   Type = "QualityEvaluated"
-	TypeLineageUpdated     Type = "LineageUpdated"
+	TypeCrawlStarted      Type = "CrawlStarted"
+	TypeCrawlCompleted    Type = "CrawlCompleted"
+	TypeDatasetDiscovered Type = "DatasetDiscovered"
+	TypeSchemaChanged     Type = "SchemaChanged"
+	TypeNewPartition      Type = "NewPartition"
+	TypeCatalogUpdated    Type = "CatalogUpdated"
 )
 
 // Event is a single structured domain event.
@@ -193,14 +188,6 @@ type CrawlCompletedData struct {
 	Status         string `json:"status"`
 }
 
-type ObjectDiscoveredData struct {
-	ObjectID string `json:"object_id"`
-	Bucket   string `json:"bucket"`
-	Key      string `json:"key"`
-	Format   string `json:"format"`
-	Size     int64  `json:"size"`
-}
-
 type DatasetDiscoveredData struct {
 	DatasetID string `json:"dataset_id"`
 	Name      string `json:"name"`
@@ -223,14 +210,6 @@ type NewPartitionData struct {
 	PartitionID string            `json:"partition_id"`
 	Path        string            `json:"path"`
 	Values      map[string]string `json:"values"`
-}
-
-type InferenceCompletedData struct {
-	RunID        string  `json:"run_id"`
-	DatasetID    string  `json:"dataset_id"`
-	DatasetName  string  `json:"dataset_name"`
-	QualityScore float64 `json:"quality_score"`
-	PIIColumns   int     `json:"pii_columns"`
 }
 
 type CatalogUpdatedData struct {

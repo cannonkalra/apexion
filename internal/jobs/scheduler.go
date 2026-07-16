@@ -37,7 +37,7 @@ func NewScheduler(store *storage.Store, starter CrawlStarter, log zerolog.Logger
 
 // Start loads bucket schedules and starts the cron loop.
 func (s *Scheduler) Start(ctx context.Context) error {
-	if err := s.Reload(ctx); err != nil {
+	if err := s.reload(ctx); err != nil {
 		return err
 	}
 	s.cron.Start()
@@ -45,8 +45,8 @@ func (s *Scheduler) Start(ctx context.Context) error {
 	return nil
 }
 
-// Reload rebuilds cron entries from the current bucket schedules.
-func (s *Scheduler) Reload(ctx context.Context) error {
+// reload rebuilds cron entries from the current bucket schedules.
+func (s *Scheduler) reload(ctx context.Context) error {
 	for _, e := range s.cron.Entries() {
 		s.cron.Remove(e.ID)
 	}

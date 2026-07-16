@@ -2,12 +2,12 @@ package ui
 
 import (
 	"fmt"
-	"github.com/apexion/apexion/internal/preview"
+	"github.com/apexion/apexion/internal/duckdb"
 )
 
 // ResultTable renders a DuckDB query result (used by preview, dataset preview,
 // and the SQL scratchpad).
-templ ResultTable(res *preview.Result) {
+templ ResultTable(res *duckdb.Result) {
 	<div class="flex items-center justify-between text-xs text-slate-500 mb-2">
 		<span>
 			{ fmt.Sprintf("%d rows · %d columns", res.RowCount, len(res.Columns)) }

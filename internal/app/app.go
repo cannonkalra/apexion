@@ -9,7 +9,6 @@ import (
 
 	"github.com/rs/zerolog"
 
-	"github.com/apexion/apexion/internal/agents"
 	"github.com/apexion/apexion/internal/api"
 	"github.com/apexion/apexion/internal/catalog"
 	"github.com/apexion/apexion/internal/config"
@@ -18,11 +17,13 @@ import (
 	"github.com/apexion/apexion/internal/events"
 	"github.com/apexion/apexion/internal/explorer"
 	"github.com/apexion/apexion/internal/httpserver"
-	"github.com/apexion/apexion/internal/inference"
 	"github.com/apexion/apexion/internal/jobs"
-	"github.com/apexion/apexion/internal/lineage"
 	"github.com/apexion/apexion/internal/model"
-	"github.com/apexion/apexion/internal/preview"
+	// plugins blank-imports every capability compiled into this binary so it
+	// self-registers with package features before the graph is built. Build
+	// tags on that package decide which optional readers/resolvers are present.
+	"github.com/apexion/apexion/internal/duckdb"
+	_ "github.com/apexion/apexion/internal/plugins"
 	"github.com/apexion/apexion/internal/storage"
 	"github.com/apexion/apexion/internal/ui"
 	"github.com/apexion/apexion/pkg/logger"
@@ -37,17 +38,15 @@ type App struct {
 	Connections *connections.Manager
 	Crawler     *crawler.Crawler
 	Catalog     *catalog.Service
-	Lineage     *lineage.Service
 	Jobs        *jobs.Manager
 	Scheduler   *jobs.Scheduler
-	Agents      *agents.Registry
-	Preview     *preview.Engine
+	Preview     *duckdb.Engine
 	Explorer    *explorer.Service
 	Server      *httpserver.Server
 }
 
-// Build constructs the full application graph from configuration.
-func Build(ctx context.Context, cfg *config.Config) (*App, error) {
+// New constructs the full application graph from configuration.
+func New(ctx context.Context, cfg *config.Config) (*App, error) {
 	log := logger.New(cfg.Log.Level, cfg.Log.Pretty)
 
 	store, err := storage.Open(cfg.Storage.Path, cfg.Storage.MaxOpenConns, log)
@@ -64,7 +63,7 @@ func Build(ctx context.Context, cfg *config.Config) (*App, error) {
 	// seeds a default connection (from static config), tracks the active one,
 	// hands out the active S3 client, and reconfigures the preview engine on
 	// switch. Everything downstream depends on the active connection.
-	prev, err := preview.New(cfg.MinIO, log)
+	prev, err := duckdb.New(cfg.MinIO, log)
 	if err != nil {
 		return nil, err
 	}
@@ -77,43 +76,24 @@ func Build(ctx context.Context, cfg *config.Config) (*App, error) {
 	resolvers := crawler.DefaultResolvers()
 	cr := crawler.New(store, conns, registry, resolvers, bus, cfg.Crawler, log)
 
-	engine := inference.NewEngine()
 	jobMgr := jobs.NewManager(store, log, cfg.Crawler.Workers)
 
-	cat := catalog.New(store, conns, cr, engine, jobMgr, bus, cfg.Inference, log)
+	cat := catalog.New(store, conns, cr, jobMgr, bus, log)
 	cat.PersistEvents(bus)
-
-	lin := lineage.New(store, log)
-	lin.Subscribe(bus)
-
-	provider := buildProvider(cfg)
-	agentReg := agents.NewRegistry(provider, store, bus, log)
 
 	sched := jobs.NewScheduler(store, cat, log)
 
 	expl := explorer.New(conns)
 
-	apiH := api.New(cat, lin, agentReg, prev, expl, conns, log)
-	uiH := ui.New(cat, lin, agentReg, prev, expl, conns, cfg, log)
+	apiH := api.New(cat, prev, expl, conns, log)
+	uiH := ui.New(cat, prev, expl, conns, cfg, log)
 	srv := httpserver.New(cfg.Server, apiH, uiH, log)
 
 	return &App{
 		Cfg: cfg, Log: log, Store: store, Bus: bus, Connections: conns, Crawler: cr,
-		Catalog: cat, Lineage: lin, Jobs: jobMgr, Scheduler: sched,
-		Agents: agentReg, Preview: prev, Explorer: expl, Server: srv,
+		Catalog: cat, Jobs: jobMgr, Scheduler: sched,
+		Preview: prev, Explorer: expl, Server: srv,
 	}, nil
-}
-
-func buildProvider(cfg *config.Config) agents.Provider {
-	if !cfg.Agents.Enabled {
-		return agents.NewProvider(agents.Config{Provider: "noop"})
-	}
-	return agents.NewProvider(agents.Config{
-		Provider: cfg.Agents.Provider,
-		BaseURL:  cfg.Agents.LLM.BaseURL,
-		APIKey:   cfg.Agents.LLM.APIKey,
-		Model:    cfg.Agents.LLM.Model,
-	})
 }
 
 // Serve starts the scheduler and HTTP server and blocks until the context is

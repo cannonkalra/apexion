@@ -8,9 +8,9 @@ import (
 	"strconv"
 	"time"
 
+	"github.com/apexion/apexion/internal/duckdb"
 	"github.com/apexion/apexion/internal/explorer"
 	"github.com/apexion/apexion/internal/model"
-	"github.com/apexion/apexion/internal/preview"
 )
 
 // parentExplorerURL links back to the folder containing a key.
@@ -31,7 +31,7 @@ func parentExplorerURL(bucket, key string) string {
 
 // sqlURLForFile pre-fills the scratchpad with a SELECT over the file.
 func sqlURLForFile(vm PreviewVM) string {
-	from, err := preview.FromClause(vm.Bucket, vm.Key, vm.Format)
+	from, err := duckdb.FromClause(vm.Bucket, vm.Key, vm.Format)
 	if err != nil {
 		from = fmt.Sprintf("read_csv_auto('s3://%s/%s')", vm.Bucket, vm.Key)
 	}

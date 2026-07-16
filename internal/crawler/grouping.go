@@ -4,7 +4,7 @@ import (
 	"path"
 	"strings"
 
-	"github.com/apexion/apexion/internal/crawler/format"
+	"github.com/apexion/apexion/internal/format"
 	"github.com/apexion/apexion/internal/model"
 )
 

@@ -42,8 +42,8 @@ browse and preview data before (and after) cataloging it:
 - **SQL Scratchpad** (`/sql`) — a read-only DuckDB editor. Only `SELECT`, `WITH`, `DESCRIBE`,
   `SUMMARIZE`, `SHOW`, and `EXPLAIN` are permitted (destructive statements are rejected). Every
   dataset has an **Open SQL** button that pre-fills a query over its files.
-- **Jobs** (`/jobs`) — background crawl/inference jobs with live progress and a **Cancel** button.
-- **Dataset tabs** — Overview, Schema, Files, Partitions, Preview, History, Statistics.
+- **Jobs** (`/jobs`) — background crawl/inference/profile jobs with live progress and a **Cancel** button.
+- **Dataset tabs** — Overview, Schema, Column Insights, Files, Partitions, Preview, Statistics, History.
 - **Connections** (`/settings`) — connect multiple AWS / MinIO / S3 accounts, **test** and **activate**
   one, then browse it. Switching the active connection instantly re-points the explorer, crawler,
   and DuckDB preview engine (its S3 credentials + endpoint) at the new account — pick one from the
@@ -59,6 +59,32 @@ browse and preview data before (and after) cataloging it:
       *NoSuchBucket*. Apexion auto-switches those buckets to **path-style** addressing; you can also
       tick **Force path-style addressing** on the connection. DNS-compliant buckets keep using
       virtual-hosted style.
+
+### Automatic profiling & Column Insights
+
+Every discovered dataset is **profiled automatically** after a crawl (and on-demand via **Analyze
+Dataset**). The profiling engine (`internal/profiler`) runs entirely through the DuckDB query
+provider over `s3://…` — it never materializes the data in Go and never depends on the underlying
+store (S3, MinIO, local, …), so it works for any dataset DuckDB can read. Reads target the **exact
+cataloged object keys** for the dataset, so compressed files (`part.csv.gz`, `.json.zst`, …) and
+nested partition directories are handled without extension guessing.
+
+- **Whole-dataset statistics** — one DuckDB `SUMMARIZE` per dataset (a single scan) computes, for
+  every column: row/distinct/null counts, completeness & uniqueness, min/max, mean, **std dev**,
+  **variance**, and the **25/50/75 percentiles** (median). Text columns also get **min/max/avg
+  length**; categorical columns get an **entropy** estimate. Results are persisted in the DuckDB
+  catalog (`statistics`, `dataset_profiles`).
+- **Column Insights** tab — an interactive card per column (physical/logical/semantic type,
+  nullable, PK/PII badges, quick stats) with a **lazily-loaded distribution**: a histogram for
+  numeric columns, a top-values bar chart for everything else — rendered from the profile without
+  loading the full dataset into the browser.
+- **Data health score** — an overall 0–100 grade (A–D) from completeness/freshness, shown on the
+  dataset **Overview** alongside a full summary (storage/catalog provider, rows, columns, files,
+  size, partition keys, schema version, last crawl/profile/inference, freshness).
+- **Incrementally refreshable** — a profile is keyed by a data fingerprint (schema + file count +
+  size); a re-crawl **skips datasets whose data hasn't changed** rather than recomputing.
+- **Feeds the LLM** — inference consumes the persisted statistics (distinct counts, value ranges)
+  instead of only a raw sample, so the agent reasons over the whole dataset with fewer tokens.
 
 The AI inference now also produces a **business description**, **recommended partition columns**,
 **duplicate & missing-value analysis**, a **recommended Apache Doris schema**, and **Spark/Flink

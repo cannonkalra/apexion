@@ -4,8 +4,8 @@ import (
 	"sort"
 	"strings"
 
-	"github.com/apexion/apexion/internal/crawler/s3"
 	"github.com/apexion/apexion/internal/model"
+	"github.com/apexion/apexion/internal/objstore"
 )
 
 // aggregate accumulates per-dataset state during the object walk. Its memory is
@@ -69,7 +69,7 @@ func (a *aggregate) markTable(root string, f model.Format) {
 	d.tableFormat = f
 }
 
-func (a *aggregate) add(pi partitionInfo, f model.Format, om s3.ObjectMeta, changed bool) {
+func (a *aggregate) add(pi partitionInfo, f model.Format, om objstore.ObjectMeta, changed bool) {
 	d := a.get(pi.root)
 	d.formatVotes[f]++
 	d.fileCount++

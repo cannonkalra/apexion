@@ -12,13 +12,11 @@ import (
 
 // Config is the root configuration object.
 type Config struct {
-	Server    ServerConfig    `mapstructure:"server"`
-	Storage   StorageConfig   `mapstructure:"storage"`
-	MinIO     MinIOConfig     `mapstructure:"minio"`
-	Crawler   CrawlerConfig   `mapstructure:"crawler"`
-	Inference InferenceConfig `mapstructure:"inference"`
-	Log       LogConfig       `mapstructure:"log"`
-	Agents    AgentsConfig    `mapstructure:"agents"`
+	Server  ServerConfig  `mapstructure:"server"`
+	Storage StorageConfig `mapstructure:"storage"`
+	MinIO   MinIOConfig   `mapstructure:"minio"`
+	Crawler CrawlerConfig `mapstructure:"crawler"`
+	Log     LogConfig     `mapstructure:"log"`
 }
 
 // ServerConfig configures the HTTP server.
@@ -58,31 +56,10 @@ type CrawlerConfig struct {
 	Timeout         time.Duration `mapstructure:"timeout"`
 }
 
-// InferenceConfig tunes the inference engine.
-type InferenceConfig struct {
-	SampleRows      int  `mapstructure:"sample_rows"`
-	MaxSampleValues int  `mapstructure:"max_sample_values"`
-	DetectPII       bool `mapstructure:"detect_pii"`
-}
-
 // LogConfig configures logging.
 type LogConfig struct {
 	Level  string `mapstructure:"level"`
 	Pretty bool   `mapstructure:"pretty"`
-}
-
-// AgentsConfig configures the AI agent SDK and its LLM provider.
-type AgentsConfig struct {
-	Enabled  bool      `mapstructure:"enabled"`
-	Provider string    `mapstructure:"provider"` // noop|openai|anthropic|ollama
-	LLM      LLMConfig `mapstructure:"llm"`
-}
-
-// LLMConfig configures a pluggable LLM backend (cloud or local).
-type LLMConfig struct {
-	BaseURL string `mapstructure:"base_url"`
-	APIKey  string `mapstructure:"api_key"`
-	Model   string `mapstructure:"model"`
 }
 
 // Addr returns host:port for the server.
@@ -138,16 +115,6 @@ func setDefaults(v *viper.Viper) {
 	v.SetDefault("crawler.ignore_hidden", true)
 	v.SetDefault("crawler.timeout", "1h")
 
-	v.SetDefault("inference.sample_rows", 1000)
-	v.SetDefault("inference.max_sample_values", 10)
-	v.SetDefault("inference.detect_pii", true)
-
 	v.SetDefault("log.level", "info")
 	v.SetDefault("log.pretty", true)
-
-	v.SetDefault("agents.enabled", true)
-	v.SetDefault("agents.provider", "noop")
-	v.SetDefault("agents.llm.base_url", "")
-	v.SetDefault("agents.llm.api_key", "")
-	v.SetDefault("agents.llm.model", "")
 }

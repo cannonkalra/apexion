@@ -87,34 +87,6 @@ templ SettingsPage(vm SettingsVM) {
 				</dl>
 			</div>
 
-			<div class="card p-5">
-				<h2 class="text-base font-semibold text-white mb-4">AI Agents</h2>
-				<div class="mb-3 text-sm text-slate-400">
-					Provider: <span class="badge bg-accent-violet/15 text-accent-violet">{ vm.AgentProvider }</span>
-					if vm.AgentModel != "" {
-						<span class="badge bg-base-700 text-slate-300 ml-1">{ vm.AgentModel }</span>
-					}
-				</div>
-				<div class="space-y-2">
-					for _, a := range vm.Agents {
-						<div class="flex items-center justify-between px-3 py-2 rounded-lg bg-base-850 border border-base-800">
-							<div class="flex items-center gap-2">
-								@iconSpark()
-								<div>
-									<div class="text-sm text-slate-200">{ a.Name }</div>
-									<div class="text-xs text-slate-500">{ a.Kind } agent</div>
-								</div>
-							</div>
-							if a.Enabled {
-								<span class="badge bg-accent-emerald/15 text-accent-emerald">enabled</span>
-							} else {
-								<span class="badge bg-base-700 text-slate-400">disabled</span>
-							}
-						</div>
-					}
-				</div>
-			</div>
-
 			<div class="card p-5 lg:col-span-2">
 				<h2 class="text-base font-semibold text-white mb-4">Trigger a crawl</h2>
 				<form hx-post="/ui/settings/crawl" hx-target="#toast-slot" hx-swap="innerHTML" class="flex flex-wrap items-end gap-3">
