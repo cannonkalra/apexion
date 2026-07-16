@@ -9,8 +9,8 @@ templ ExplorerPage(vm ExplorerVM) {
 			// localStorage (key "explorer.sidebar.collapsed") and re-applied on
 			// load by the inline script below, so it survives navigation.
 			<div id="explorer-sidebar" class="card p-3 lg:col-span-1 h-fit" data-collapsible>
-				<div class="flex items-center justify-between px-1 mb-2">
-					<span class="text-xs uppercase tracking-wider text-slate-500">Explorer</span>
+				<div class="flex items-center justify-between px-1 mb-3">
+					<span class="eyebrow">Explorer</span>
 					<button
 						type="button"
 						data-sidebar-toggle
@@ -24,7 +24,7 @@ templ ExplorerPage(vm ExplorerVM) {
 				</div>
 				<div id="explorer-sidebar-body">
 					@connectionSwitcher(vm)
-					<div class="text-xs uppercase tracking-wider text-slate-500 px-2 mb-2 mt-3">Open a bucket</div>
+					<div class="eyebrow px-2 mb-2 mt-4">Open a bucket</div>
 					<form method="get" action="/explorer" class="px-1 mb-3">
 						<div class="flex gap-1.5">
 							<input
@@ -37,7 +37,7 @@ templ ExplorerPage(vm ExplorerVM) {
 						</div>
 					</form>
 					<div class="flex items-center justify-between px-2 mb-2">
-						<span class="text-xs uppercase tracking-wider text-slate-500">Buckets</span>
+						<span class="eyebrow">Buckets</span>
 						if !vm.ServerListOK {
 							<span class="badge bg-accent-amber/15 text-accent-amber" title="ListAllMyBuckets is not permitted for these credentials">restricted</span>
 						}
@@ -167,11 +167,11 @@ templ connectionSwitcher(vm ExplorerVM) {
 }
 
 templ breadcrumbs(bucket string, crumbs []explorer.Crumb) {
-	<div class="flex items-center gap-1.5 text-sm mb-3 flex-wrap">
-		<a href={ templ.SafeURL("/explorer?bucket=" + bucket) } class="text-brand-300 hover:underline font-medium">{ bucket }</a>
+	<div class="flex items-center gap-1.5 text-sm mb-4 flex-wrap">
+		<a href={ templ.SafeURL("/explorer?bucket=" + bucket) } class="text-brand-300 hover:underline font-medium break-all">{ bucket }</a>
 		for _, c := range crumbs {
 			<span class="text-slate-600">/</span>
-			<a href={ templ.SafeURL("/explorer?bucket=" + bucket + "&prefix=" + c.Path) } class="text-slate-300 hover:text-brand-300">{ c.Name }</a>
+			<a href={ templ.SafeURL("/explorer?bucket=" + bucket + "&prefix=" + c.Path) } class="text-slate-300 hover:text-brand-300 break-all">{ c.Name }</a>
 		}
 	</div>
 }
@@ -206,7 +206,7 @@ templ explorerToolbar(l *explorer.DirListing) {
 // explorerFilters is a GET form: filter the current folder by name prefix
 // (server-side) and choose the sort order.
 templ explorerFilters(l *explorer.DirListing) {
-	<form method="get" action="/explorer" class="flex flex-wrap items-center gap-2 mb-3">
+	<form method="get" action="/explorer" class="flex flex-wrap items-center gap-2 mb-4">
 		<input type="hidden" name="bucket" value={ l.Bucket }/>
 		<input type="hidden" name="prefix" value={ l.Prefix }/>
 		<div class="relative flex-1 min-w-[200px]">

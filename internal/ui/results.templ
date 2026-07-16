@@ -8,7 +8,7 @@ import (
 // ResultTable renders a DuckDB query result (used by preview, dataset preview,
 // and the SQL scratchpad).
 templ ResultTable(res *duckdb.Result) {
-	<div class="flex items-center justify-between text-xs text-slate-500 mb-2">
+	<div class="flex flex-wrap items-center justify-between gap-2 text-xs text-slate-500 mb-3">
 		<span>
 			{ fmt.Sprintf("%d rows · %d columns", res.RowCount, len(res.Columns)) }
 			if res.Truncated {
@@ -17,7 +17,7 @@ templ ResultTable(res *duckdb.Result) {
 		</span>
 		<span>{ res.Elapsed }</span>
 	</div>
-	<div class="overflow-auto rounded-lg border border-base-800 max-h-[65vh]">
+	<div class="overflow-x-auto overflow-y-auto rounded-lg border border-base-800 max-h-[65vh]">
 		<table class="w-full text-sm">
 			<thead class="sticky top-0 bg-base-850">
 				<tr class="border-b border-base-800">
@@ -46,7 +46,5 @@ templ ResultTable(res *duckdb.Result) {
 
 // QueryError renders a query error box.
 templ QueryError(msg string) {
-	<div class="rounded-lg border border-accent-rose/40 bg-accent-rose/5 p-3 text-sm text-accent-rose font-mono">
-		{ msg }
-	</div>
+	<div class="banner-error font-mono">{ msg }</div>
 }

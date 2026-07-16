@@ -4,124 +4,130 @@ import "github.com/apexion/apexion/internal/model"
 
 templ SettingsPage(vm SettingsVM) {
 	@Layout("settings", "Settings") {
-		<div class="card p-5 mb-4">
-			<div class="flex items-center justify-between mb-4">
-				<div>
-					<h2 class="text-base font-semibold text-white">Connections</h2>
-					<p class="text-sm text-slate-500">Connect multiple AWS / MinIO / S3 accounts. Activate one, then browse it in the Explorer.</p>
-				</div>
-			</div>
-			if len(vm.Connections) == 0 {
-				<p class="text-sm text-slate-500 mb-4">No connections yet. Add one below.</p>
-			} else {
-				<div class="space-y-2 mb-5">
-					for _, c := range vm.Connections {
-						@connectionRow(c, c.ID == vm.ActiveConnID)
-					}
-				</div>
-			}
-
-			<details class="rounded-lg border border-base-800 bg-base-850 p-4">
-				<summary class="text-sm font-medium text-slate-200 cursor-pointer flex items-center gap-2">@iconDatabase() Add a connection</summary>
-				<form hx-post="/ui/connections" hx-target="#toast-slot" hx-swap="innerHTML" class="mt-4 grid grid-cols-1 md:grid-cols-2 gap-3">
-					<div>
-						<label class="block text-xs text-slate-500 mb-1">Name</label>
-						<input name="name" required placeholder="Production AWS" class={ inputClass }/>
-					</div>
-					<div>
-						<label class="block text-xs text-slate-500 mb-1">Provider</label>
-						<select name="provider" class={ inputClass }>
-							<option value="minio">MinIO / S3-compatible</option>
-							<option value="aws">AWS S3</option>
-							<option value="s3">Other S3</option>
-						</select>
-					</div>
-					<div>
-						<label class="block text-xs text-slate-500 mb-1">Endpoint</label>
-						<input name="endpoint" placeholder="localhost:9000 or s3.amazonaws.com" class={ inputClass }/>
-					</div>
-					<div>
-						<label class="block text-xs text-slate-500 mb-1">Region</label>
-						<input name="region" value="us-east-1" class={ inputClass }/>
-					</div>
-					<div>
-						<label class="block text-xs text-slate-500 mb-1">Access key <span class="text-slate-600">(leave blank for AWS role)</span></label>
-						<input name="access_key" autocomplete="off" class={ inputClass }/>
-					</div>
-					<div>
-						<label class="block text-xs text-slate-500 mb-1">Secret key</label>
-						<input name="secret_key" type="password" autocomplete="new-password" class={ inputClass }/>
-					</div>
-					<label class="flex items-center gap-2 text-sm text-slate-300 md:col-span-2 rounded-lg border border-base-800 bg-base-900 px-3 py-2">
-						<input type="checkbox" name="use_role" class="rounded bg-base-950 border-base-700"/>
-						<span>
-							<span class="font-medium">AWS Mode — use IAM role / instance profile</span>
-							<span class="block text-xs text-slate-500">Uses the EC2/ECS/IRSA service role (and env vars / <span class="font-mono">~/.aws</span>) — no access keys needed. Forces HTTPS and auto-detects each bucket's region.</span>
-						</span>
-					</label>
-					<label class="flex items-center gap-2 text-sm text-slate-300">
-						<input type="checkbox" name="use_ssl" class="rounded bg-base-950 border-base-700"/>
-						Use SSL (auto-enabled for AWS)
-					</label>
-					<label class="flex items-center gap-2 text-sm text-slate-300">
-						<input type="checkbox" name="path_style" class="rounded bg-base-950 border-base-700"/>
-						<span>
-							Force path-style addressing
-							<span class="block text-xs text-slate-500">For legacy bucket names with uppercase/underscores/dots (auto-applied when detected).</span>
-						</span>
-					</label>
-					<div class="md:col-span-2 flex justify-end">
-						<button class="btn-primary" type="submit">@iconPlay() Add connection</button>
-					</div>
-				</form>
-			</details>
-		</div>
-
-		<div class="grid grid-cols-1 lg:grid-cols-2 gap-4">
-			<div class="card p-5">
-				<h2 class="text-base font-semibold text-white mb-4">Platform</h2>
-				<dl class="space-y-3 text-sm">
-					@settingRow("Catalog store", vm.StoragePath)
-					@settingRow("Crawler workers", itoa(vm.Workers))
-					@settingRow("Connections", itoa(len(vm.Connections)))
-				</dl>
-			</div>
-
-			<div class="card p-5 lg:col-span-2">
-				<h2 class="text-base font-semibold text-white mb-4">Trigger a crawl</h2>
-				<form hx-post="/ui/settings/crawl" hx-target="#toast-slot" hx-swap="innerHTML" class="flex flex-wrap items-end gap-3">
-					<div>
-						<label class="block text-xs text-slate-500 mb-1">Bucket name</label>
-						<input name="bucket" placeholder="e.g. warehouse" class="px-3 py-1.5 rounded-lg bg-base-950 border border-base-800 text-sm text-slate-200 focus:outline-none focus:ring-2 focus:ring-brand-500/40"/>
-					</div>
-					<div>
-						<label class="block text-xs text-slate-500 mb-1">Mode</label>
-						<select name="mode" class="px-3 py-1.5 rounded-lg bg-base-950 border border-base-800 text-sm text-slate-200 focus:outline-none focus:ring-2 focus:ring-brand-500/40">
-							<option value="full">Full</option>
-							<option value="incremental">Incremental</option>
-						</select>
-					</div>
-					<button class="btn-primary" type="submit">@iconPlay() Start crawl</button>
-				</form>
-
-				if len(vm.Buckets) > 0 {
-					<div class="mt-5">
-						<div class="text-xs uppercase tracking-wider text-slate-500 mb-2">Scheduled buckets</div>
-						<div class="space-y-1">
-							for _, b := range vm.Buckets {
-								<div class="flex items-center justify-between px-3 py-2 rounded-lg bg-base-850 border border-base-800 text-sm">
-									<span class="text-slate-200">{ b.Name }</span>
-									if b.Schedule != "" {
-										<span class="badge bg-brand-500/15 text-brand-300 font-mono">{ b.Schedule }</span>
-									} else {
-										<span class="text-slate-600 text-xs">manual</span>
-									}
-								</div>
+		<div class="max-w-5xl mx-auto space-y-6">
+			@Card() {
+				@CardHeader("Connections", "Connect multiple AWS / MinIO / S3 accounts. Activate one, then browse it in the Explorer.") {
+				}
+				@CardBody() {
+					if len(vm.Connections) == 0 {
+						<p class="text-sm text-slate-500 mb-4">No connections yet. Add one below.</p>
+					} else {
+						<div class="space-y-2 mb-5">
+							for _, c := range vm.Connections {
+								@connectionRow(c, c.ID == vm.ActiveConnID)
 							}
 						</div>
-					</div>
+					}
+					<details class="rounded-lg border border-base-800 bg-base-850 p-4">
+						<summary class="text-sm font-medium text-slate-200 cursor-pointer flex items-center gap-2">@iconDatabase() Add a connection</summary>
+						<form hx-post="/ui/connections" hx-target="#toast-slot" hx-swap="innerHTML" class="mt-4 grid grid-cols-1 md:grid-cols-2 gap-4">
+							<div>
+								<label class="form-label">Name</label>
+								<input name="name" required placeholder="Production AWS" class="input"/>
+							</div>
+							<div>
+								<label class="form-label">Provider</label>
+								<select name="provider" class="select">
+									<option value="minio">MinIO / S3-compatible</option>
+									<option value="aws">AWS S3</option>
+									<option value="s3">Other S3</option>
+								</select>
+							</div>
+							<div>
+								<label class="form-label">Endpoint</label>
+								<input name="endpoint" placeholder="localhost:9000 or s3.amazonaws.com" class="input"/>
+							</div>
+							<div>
+								<label class="form-label">Region</label>
+								<input name="region" value="us-east-1" class="input"/>
+							</div>
+							<div>
+								<label class="form-label">Access key <span class="text-slate-600 normal-case">(leave blank for AWS role)</span></label>
+								<input name="access_key" autocomplete="off" class="input"/>
+							</div>
+							<div>
+								<label class="form-label">Secret key</label>
+								<input name="secret_key" type="password" autocomplete="new-password" class="input"/>
+							</div>
+							<label class="flex items-center gap-2 text-sm text-slate-300 md:col-span-2 rounded-lg border border-base-800 bg-base-900 px-3 py-2">
+								<input type="checkbox" name="use_role" class="check"/>
+								<span>
+									<span class="font-medium">AWS Mode — use IAM role / instance profile</span>
+									<span class="block text-xs text-slate-500">Uses the EC2/ECS/IRSA service role (and env vars / <span class="font-mono">~/.aws</span>) — no access keys needed. Forces HTTPS and auto-detects each bucket's region.</span>
+								</span>
+							</label>
+							<label class="check-row md:col-span-2">
+								<input type="checkbox" name="use_ssl" class="check"/>
+								Use SSL (auto-enabled for AWS)
+							</label>
+							<label class="flex items-center gap-2 text-sm text-slate-300 md:col-span-2">
+								<input type="checkbox" name="path_style" class="check"/>
+								<span>
+									Force path-style addressing
+									<span class="block text-xs text-slate-500">For legacy bucket names with uppercase/underscores/dots (auto-applied when detected).</span>
+								</span>
+							</label>
+							@ActionBar() {
+								<button class="btn-primary" type="submit">@iconPlay() Add connection</button>
+							}
+						</form>
+					</details>
 				}
-			</div>
+			}
+
+			@Card() {
+				@CardHeader("Platform", "") {
+				}
+				@CardBody() {
+					<dl class="space-y-3 text-sm">
+						@settingRow("Catalog store", vm.StoragePath)
+						@settingRow("Crawler workers", itoa(vm.Workers))
+						@settingRow("Connections", itoa(len(vm.Connections)))
+					</dl>
+				}
+			}
+
+			@Card() {
+				@CardHeader("Trigger a crawl", "") {
+				}
+				<form hx-post="/ui/settings/crawl" hx-target="#toast-slot" hx-swap="innerHTML">
+					@CardBody() {
+						<div class="flex flex-wrap items-end gap-4">
+							<div>
+								<label class="form-label">Bucket name</label>
+								<input name="bucket" placeholder="e.g. warehouse" class="input"/>
+							</div>
+							<div>
+								<label class="form-label">Mode</label>
+								<select name="mode" class="select">
+									<option value="full">Full</option>
+									<option value="incremental">Incremental</option>
+								</select>
+							</div>
+						</div>
+						if len(vm.Buckets) > 0 {
+							<div class="mt-5">
+								<div class="eyebrow mb-2">Scheduled buckets</div>
+								<div class="space-y-1">
+									for _, b := range vm.Buckets {
+										<div class="flex items-center justify-between gap-3 px-3 py-2 rounded-lg bg-base-850 border border-base-800 text-sm">
+											<span class="text-slate-200 truncate min-w-0">{ b.Name }</span>
+											if b.Schedule != "" {
+												<span class="badge bg-brand-500/15 text-brand-300 font-mono shrink-0">{ b.Schedule }</span>
+											} else {
+												<span class="text-slate-600 text-xs shrink-0">manual</span>
+											}
+										</div>
+									}
+								</div>
+							</div>
+						}
+					}
+					@CardFooter() {
+						<button class="btn-primary" type="submit">@iconPlay() Start crawl</button>
+					}
+				</form>
+			}
 		</div>
 		<div id="toast-slot"></div>
 	}

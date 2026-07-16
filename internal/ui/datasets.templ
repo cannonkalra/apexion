@@ -7,49 +7,51 @@ import (
 
 templ DatasetsPage(vm DatasetsVM) {
 	@Layout("datasets", "Datasets") {
-		<form method="get" class="card p-4 mb-4 flex flex-wrap items-end gap-3">
-			<div>
-				<label class="block text-xs text-slate-500 mb-1">Search</label>
-				<input name="q" value={ vm.Filter.Search } placeholder="name or path…" class="px-3 py-1.5 rounded-lg bg-base-950 border border-base-800 text-sm text-slate-200 focus:outline-none focus:ring-2 focus:ring-brand-500/40"/>
-			</div>
-			<div>
-				<label class="block text-xs text-slate-500 mb-1">Bucket</label>
-				<select name="bucket_id" class="px-3 py-1.5 rounded-lg bg-base-950 border border-base-800 text-sm text-slate-200 focus:outline-none focus:ring-2 focus:ring-brand-500/40">
-					<option value="">All buckets</option>
-					for _, b := range vm.Buckets {
-						if b.ID == vm.Filter.BucketID {
-							<option value={ b.ID } selected>{ b.Name }</option>
-						} else {
-							<option value={ b.ID }>{ b.Name }</option>
-						}
-					}
-				</select>
-			</div>
-			<div>
-				<label class="block text-xs text-slate-500 mb-1">Format</label>
-				<select name="format" class="px-3 py-1.5 rounded-lg bg-base-950 border border-base-800 text-sm text-slate-200 focus:outline-none focus:ring-2 focus:ring-brand-500/40">
-					<option value="">All formats</option>
-					for _, f := range allFormats {
-						if string(f) == vm.Filter.Format {
-							<option value={ string(f) } selected>{ string(f) }</option>
-						} else {
-							<option value={ string(f) }>{ string(f) }</option>
-						}
-					}
-				</select>
-			</div>
-			<button class="btn-primary" type="submit">Filter</button>
-			<div class="flex-1"></div>
-			<span class="text-sm text-slate-500">{ fmt.Sprintf("%d datasets", len(vm.Datasets)) }</span>
+		@PageHeader("", fmt.Sprintf("%d datasets", len(vm.Datasets))) {
 			<a class="btn-primary" href="/wizard">@iconInbox() Crawl Dataset</a>
-		</form>
+		}
 
-		<div class="card overflow-hidden">
-			if len(vm.Datasets) == 0 {
-				@EmptyState("No datasets yet", "Use “Crawl Dataset” to discover a directory as a dataset.")
-			} else {
-				<div class="overflow-x-auto">
-					<table class="w-full">
+		<div class="space-y-6">
+			<form method="get" class="card p-4 flex flex-wrap items-end gap-4">
+				<div>
+					<label class="form-label">Search</label>
+					<input name="q" value={ vm.Filter.Search } placeholder="name or path…" class="input"/>
+				</div>
+				<div>
+					<label class="form-label">Bucket</label>
+					<select name="bucket_id" class="select">
+						<option value="">All buckets</option>
+						for _, b := range vm.Buckets {
+							if b.ID == vm.Filter.BucketID {
+								<option value={ b.ID } selected>{ b.Name }</option>
+							} else {
+								<option value={ b.ID }>{ b.Name }</option>
+							}
+						}
+					</select>
+				</div>
+				<div>
+					<label class="form-label">Format</label>
+					<select name="format" class="select">
+						<option value="">All formats</option>
+						for _, f := range allFormats {
+							if string(f) == vm.Filter.Format {
+								<option value={ string(f) } selected>{ string(f) }</option>
+							} else {
+								<option value={ string(f) }>{ string(f) }</option>
+							}
+						}
+					</select>
+				</div>
+				<button class="btn-primary" type="submit">Filter</button>
+			</form>
+
+			<div class="card overflow-hidden">
+				if len(vm.Datasets) == 0 {
+					@EmptyState("No datasets yet", "Use “Crawl Dataset” to discover a directory as a dataset.")
+				} else {
+					<div class="overflow-x-auto">
+						<table class="w-full">
 						<thead>
 							<tr class="border-b border-base-800">
 								<th class="th">Dataset</th>
@@ -71,6 +73,7 @@ templ DatasetsPage(vm DatasetsVM) {
 					</table>
 				</div>
 			}
+			</div>
 		</div>
 		<div id="toast-slot"></div>
 	}
@@ -80,7 +83,7 @@ templ datasetRow(d model.Dataset, catalogCount int) {
 	<tr id={ "dataset-" + d.ID } class="hover:bg-base-850/50">
 		<td class="table-cell">
 			<a href={ templ.SafeURL("/datasets/" + d.ID) } class="font-medium text-slate-100 hover:text-brand-300">{ d.Name }</a>
-			<div class="text-xs text-slate-500 truncate max-w-xs">{ truncate(d.BucketName+"/"+d.Path, 48) }</div>
+			<div class="text-xs text-slate-500 break-all max-w-xs">{ truncate(d.BucketName+"/"+d.Path, 48) }</div>
 		</td>
 		<td class="table-cell">@FormatPill(d.Format)</td>
 		<td class="table-cell text-slate-300">{ humanCount(d.RowCount) }</td>

@@ -10,15 +10,19 @@ package ui
 // take the variable part as children; a footer/action bar is composed by the
 // caller as the last child (see ActionBar / WizardShell usage).
 
-// PageHeader is the standard page title block: title, optional subtitle, and an
-// optional right-aligned actions slot (children). Sits at the top of a page,
-// above the content.
+// PageHeader is the standard page intro row: an optional subtitle and a
+// right-aligned actions slot (children). The page TITLE is owned by the topbar
+// (see Layout) — pass title="" to avoid duplicating it; a non-empty title is
+// only for standalone pages that don't render through the topbar. This keeps
+// every page's header consistent instead of showing the name twice.
 templ PageHeader(title, subtitle string) {
-	<div class="flex flex-wrap items-start justify-between gap-4 mb-6">
+	<div class="flex flex-wrap items-center justify-between gap-4 mb-6">
 		<div class="min-w-0">
-			<h1 class="page-title truncate">{ title }</h1>
+			if title != "" {
+				<h1 class="page-title truncate">{ title }</h1>
+			}
 			if subtitle != "" {
-				<p class="muted mt-1">{ subtitle }</p>
+				<p class={ "muted", templ.KV("mt-1", title != "") }>{ subtitle }</p>
 			}
 		</div>
 		<div class="flex items-center gap-2 shrink-0">

@@ -14,28 +14,28 @@ var datasetTabs = []struct{ Key, Label string }{
 
 templ DatasetDetailPage(d *catalog.DatasetDetail, tab string, status catalog.CatalogStatus, suggested string) {
 	@Layout("datasets", d.Dataset.Name) {
-		<div class="flex flex-wrap items-start justify-between gap-4 mb-5">
+		<div class="flex flex-wrap items-start justify-between gap-4 mb-6">
 			<div class="min-w-0">
 				<div class="flex items-center gap-3">
-					<h1 class="text-xl font-semibold text-white">{ d.Dataset.Name }</h1>
+					<h1 class="page-title truncate">{ d.Dataset.Name }</h1>
 					@FormatPill(d.Dataset.Format)
 				</div>
-				<p class="text-sm text-slate-500 mt-1 font-mono">{ d.Dataset.BucketName }/{ d.Dataset.Path }</p>
+				<p class="muted mt-1 font-mono break-all">{ d.Dataset.BucketName }/{ d.Dataset.Path }</p>
 				if d.Dataset.Description != "" {
 					<p class="text-sm text-slate-400 mt-2 max-w-2xl">{ d.Dataset.Description }</p>
 				}
 			</div>
-			<form hx-post="/ui/catalog" hx-target="#toast-slot" hx-swap="innerHTML" class="flex items-end gap-2">
+			<form hx-post="/ui/catalog" hx-target="#toast-slot" hx-swap="innerHTML" class="flex items-end gap-2 shrink-0">
 				<input type="hidden" name="dataset_id" value={ d.Dataset.ID }/>
 				<div>
-					<label class="block text-[11px] uppercase tracking-wider text-slate-500 mb-1">SQL table name</label>
-					<input name="name" placeholder="auto" class="px-3 py-1.5 rounded-lg bg-base-950 border border-base-800 text-sm text-slate-200 font-mono focus:outline-none focus:ring-2 focus:ring-brand-500/40"/>
+					<label class="form-label">SQL table name</label>
+					<input name="name" placeholder="auto" class="input font-mono"/>
 				</div>
 				<button class="btn-primary" type="submit">@iconTable() Register into Catalog</button>
 			</form>
 		</div>
 
-		<div class="grid grid-cols-2 md:grid-cols-4 xl:grid-cols-6 gap-3 mb-5">
+		<div class="grid grid-cols-2 md:grid-cols-4 xl:grid-cols-6 gap-3 mb-6">
 			@miniStat("Rows (est.)", humanCount(d.Dataset.RowCount))
 			@miniStat("Files", fmt.Sprintf("%d", d.Dataset.FileCount))
 			@miniStat("Size", humanBytes(d.Dataset.TotalSize))
@@ -44,7 +44,7 @@ templ DatasetDetailPage(d *catalog.DatasetDetail, tab string, status catalog.Cat
 			@miniStat("Compression", string(d.Dataset.Compression))
 		</div>
 
-		<div class="flex items-center gap-1 border-b border-base-800 mb-5 overflow-x-auto">
+		<div class="flex items-center gap-1 border-b border-base-800 mb-6 overflow-x-auto">
 			for _, t := range datasetTabs {
 				@datasetTab(d.Dataset.ID, t.Key, t.Label, tab == t.Key)
 			}
@@ -62,7 +62,7 @@ templ DatasetDetailPage(d *catalog.DatasetDetail, tab string, status catalog.Cat
 		case "catalog":
 			@catalogPanel(d, status, suggested)
 		default:
-			<div class="space-y-4">
+			<div class="space-y-6">
 				@datasetSummaryCard(d)
 				@schemaCard(d)
 				@sampleCard(d)
@@ -80,69 +80,76 @@ templ datasetTab(id, key, label string, active bool) {
 }
 
 templ filesPanel(d *catalog.DatasetDetail) {
-	<div class="card p-5">
-		<h2 class="text-base font-semibold text-white mb-4">Files ({ fmt.Sprintf("%d", d.Dataset.FileCount) })</h2>
-		if len(d.Objects) == 0 {
-			<p class="text-sm text-slate-500">No files linked to this dataset.</p>
-		} else {
-			<div class="card overflow-hidden divide-y divide-base-800">
-				for _, o := range d.Objects {
-					<a href={ templ.SafeURL(previewURLForObject(o)) } class="flex items-center gap-3 px-4 py-2.5 hover:bg-base-850/60">
-						<span class="text-slate-500">@iconFile()</span>
-						<span class="text-sm text-slate-200 flex-1 truncate font-mono">{ o.Key }</span>
-						@FormatPill(o.Format)
-						<span class="text-xs text-slate-500 w-20 text-right">{ humanBytes(o.Size) }</span>
-						<span class="text-xs text-slate-600 w-24 text-right hidden sm:block">{ timeAgo(o.Modified) }</span>
-					</a>
+	@Card() {
+		@CardHeader("Files ("+fmt.Sprintf("%d", d.Dataset.FileCount)+")", "") {
+		}
+		@CardBody() {
+			if len(d.Objects) == 0 {
+				<p class="text-sm text-slate-500">No files linked to this dataset.</p>
+			} else {
+				<div class="card overflow-hidden divide-y divide-base-800">
+					for _, o := range d.Objects {
+						<a href={ templ.SafeURL(previewURLForObject(o)) } class="flex items-center gap-3 px-4 py-2.5 hover:bg-base-850/60">
+							<span class="text-slate-500">@iconFile()</span>
+							<span class="text-sm text-slate-200 flex-1 truncate font-mono">{ o.Key }</span>
+							@FormatPill(o.Format)
+							<span class="text-xs text-slate-500 w-20 text-right">{ humanBytes(o.Size) }</span>
+							<span class="text-xs text-slate-600 w-24 text-right hidden sm:block">{ timeAgo(o.Modified) }</span>
+						</a>
+					}
+				</div>
+				if int64(len(d.Objects)) < d.Dataset.FileCount {
+					<p class="text-xs text-slate-500 mt-2">Showing first { fmt.Sprintf("%d", len(d.Objects)) } of { fmt.Sprintf("%d", d.Dataset.FileCount) } files.</p>
 				}
-			</div>
-			if int64(len(d.Objects)) < d.Dataset.FileCount {
-				<p class="text-xs text-slate-500 mt-2">Showing first { fmt.Sprintf("%d", len(d.Objects)) } of { fmt.Sprintf("%d", d.Dataset.FileCount) } files.</p>
 			}
 		}
-	</div>
+	}
 }
 
 // catalogPanel shows a dataset's catalog status and a register form. A dataset
 // may back several tables, so registering is always available.
 templ catalogPanel(d *catalog.DatasetDetail, status catalog.CatalogStatus, suggested string) {
-	<div class="space-y-4">
-		<div class="card p-5">
-			<div class="flex items-center justify-between mb-4">
-				<h2 class="text-base font-semibold text-white">Catalog status</h2>
+	<div class="space-y-6">
+		@Card() {
+			@CardHeader("Catalog status", "") {
 				if status.Registered {
 					<span class="badge bg-accent-emerald/15 text-accent-emerald">Registered</span>
 				} else {
 					<span class="badge bg-base-700 text-slate-400">Not registered</span>
 				}
-			</div>
-			if len(status.Entries) == 0 {
-				<p class="text-sm text-slate-500">This dataset is not exposed as a SQL table yet.</p>
-			} else {
-				<div class="card overflow-hidden divide-y divide-base-800">
-					for _, e := range status.Entries {
-						<div class="flex items-center gap-3 px-4 py-2.5">
-							@iconTable()
-							<a href={ templ.SafeURL("/query?table=" + e.Name) } class="text-sm font-mono text-slate-100 flex-1 hover:text-brand-300">{ e.Name }</a>
-							<span class="text-xs text-slate-500">{ e.SchemaStrategy }</span>
-							<a class="btn-ghost text-xs" href={ templ.SafeURL("/query?table=" + e.Name) }>@iconTerminal() Query</a>
-						</div>
-					}
-				</div>
 			}
-		</div>
-		<div class="card p-5">
-			<h2 class="text-base font-semibold text-white mb-4">Register as SQL table</h2>
-			<form hx-post="/ui/catalog" hx-target="#toast-slot" hx-swap="innerHTML" class="flex flex-wrap items-end gap-3">
-				<input type="hidden" name="dataset_id" value={ d.Dataset.ID }/>
-				<div>
-					<label class="block text-xs uppercase tracking-wider text-slate-500 mb-1">Table name</label>
-					<input name="name" value={ suggested } pattern="[A-Za-z_][A-Za-z0-9_]*" class={ inputClass + " font-mono" }/>
-				</div>
-				<button class="btn-primary" type="submit">@iconTable() Register</button>
-			</form>
-			<p class="text-[11px] text-slate-600 mt-2">Registering creates a DuckDB view over the files — no data is copied. A dataset can back multiple tables (different names/globs).</p>
-		</div>
+			@CardBody() {
+				if len(status.Entries) == 0 {
+					<p class="text-sm text-slate-500">This dataset is not exposed as a SQL table yet.</p>
+				} else {
+					<div class="card overflow-hidden divide-y divide-base-800">
+						for _, e := range status.Entries {
+							<div class="flex items-center gap-3 px-4 py-2.5">
+								@iconTable()
+								<a href={ templ.SafeURL("/query?table=" + e.Name) } class="text-sm font-mono text-slate-100 flex-1 break-all hover:text-brand-300">{ e.Name }</a>
+								<span class="text-xs text-slate-500 shrink-0">{ e.SchemaStrategy }</span>
+								<a class="btn-ghost text-xs shrink-0" href={ templ.SafeURL("/query?table=" + e.Name) }>@iconTerminal() Query</a>
+							</div>
+						}
+					</div>
+				}
+			}
+		}
+		@Card() {
+			@CardHeader("Register as SQL table", "") {
+			}
+			@CardBody() {
+				<form hx-post="/ui/catalog" hx-target="#toast-slot" hx-swap="innerHTML" class="flex flex-wrap items-end gap-3">
+					<input type="hidden" name="dataset_id" value={ d.Dataset.ID }/>
+					<div>
+						<label class="form-label">Table name</label>
+						<input name="name" value={ suggested } pattern="[A-Za-z_][A-Za-z0-9_]*" class="input font-mono"/>
+					</div>
+					<button class="btn-primary" type="submit">@iconTable() Register</button>
+				</form>
+				<p class="text-[11px] text-slate-600 mt-2">Registering creates a DuckDB view over the files — no data is copied. A dataset can back multiple tables (different names/globs).</p>
+			}
+		}
 	</div>
 }
 
@@ -155,34 +162,42 @@ templ partitionsPanel(d *catalog.DatasetDetail) {
 }
 
 templ previewPanel(d *catalog.DatasetDetail) {
-	<div class="card p-5">
-		<div class="mb-4">
-			<h2 class="text-base font-semibold text-white">DuckDB preview</h2>
-			<p class="text-xs text-slate-500 font-mono">SELECT * FROM read_{ string(d.Dataset.Format) }('s3://{ d.Dataset.BucketName }/{ d.Dataset.Path }/…')</p>
+	@Card() {
+		<div class="card-header">
+			<h2 class="section-title">DuckDB preview</h2>
+			<p class="muted mt-1 font-mono break-all">SELECT * FROM read_{ string(d.Dataset.Format) }('s3://{ d.Dataset.BucketName }/{ d.Dataset.Path }/…')</p>
 		</div>
-		<div hx-get={ "/ui/datasets/" + d.Dataset.ID + "/preview" } hx-trigger="load" hx-swap="innerHTML">
-			<div class="p-8 text-center text-sm text-slate-500">Querying object storage…</div>
-		</div>
-	</div>
+		@CardBody() {
+			<div hx-get={ "/ui/datasets/" + d.Dataset.ID + "/preview" } hx-trigger="load" hx-swap="innerHTML">
+				<div class="p-8 text-center text-sm text-slate-500">Querying object storage…</div>
+			</div>
+		}
+	}
 }
 
 // datasetSummaryCard is the top-of-overview summary.
 templ datasetSummaryCard(d *catalog.DatasetDetail) {
-	<div class="card p-5">
-		<h2 class="text-base font-semibold text-white mb-4">Summary</h2>
-		<dl class="grid grid-cols-2 md:grid-cols-3 gap-x-6 gap-y-3 text-sm">
-			@summaryItem("Storage provider", "Object storage (S3)")
-			@summaryItem("Catalog provider", "Embedded DuckDB")
-			@summaryItem("Format", string(d.Dataset.Format))
-			@summaryItem("Compression", string(d.Dataset.Compression))
-			@summaryItem("Estimated rows", humanCount(d.Dataset.RowCount))
-			@summaryItem("Columns", fmt.Sprintf("%d", columnCount(d)))
-			@summaryItem("Files", fmt.Sprintf("%d", d.Dataset.FileCount))
-			@summaryItem("Total size", humanBytes(d.Dataset.TotalSize))
-			@summaryItem("Partition keys", partitionKeysLabel(d))
-			@summaryItem("Schema version", schemaVersionLabel(d))
-		</dl>
-	</div>
+	@Card() {
+		@CardHeader("Summary", "") {
+		}
+		@CardBody() {
+			<dl class="grid grid-cols-2 md:grid-cols-3 gap-x-6 gap-y-3 text-sm">
+				@summaryItem("Storage provider", "Object storage (S3)")
+				@summaryItem("Catalog provider", "Embedded DuckDB")
+				@summaryItem("Format", string(d.Dataset.Format))
+				@summaryItem("Compression", string(d.Dataset.Compression))
+				@summaryItem("Estimated rows", humanCount(d.Dataset.RowCount))
+				@summaryItem("Columns", fmt.Sprintf("%d", columnCount(d)))
+				@summaryItem("Files", fmt.Sprintf("%d", d.Dataset.FileCount))
+				@summaryItem("Total size", humanBytes(d.Dataset.TotalSize))
+				@summaryItem("Partition keys", partitionKeysLabel(d))
+				@summaryItem("Partition depth", fmt.Sprintf("%d", d.Dataset.PartitionDepth))
+				@summaryItem("Discovery", discoveryLabel(d.Dataset.DiscoveryStrategy))
+				@summaryItem("Dataset root", datasetRootLabel(d))
+				@summaryItem("Schema version", schemaVersionLabel(d))
+			</dl>
+		}
+	}
 }
 
 templ summaryItem(label, value string) {
@@ -200,14 +215,17 @@ templ miniStat(label, value string) {
 }
 
 templ schemaCard(d *catalog.DatasetDetail) {
-	<div class="card p-5">
-		@SectionHeader("Schema", schemaSubtitle(d))
-		if d.Schema == nil || len(d.Schema.Columns) == 0 {
-			<p class="text-sm text-slate-500">No schema inferred yet.</p>
-		} else {
-			@schemaTable(d.Schema)
+	@Card() {
+		@CardHeader("Schema", schemaSubtitle(d)) {
 		}
-	</div>
+		@CardBody() {
+			if d.Schema == nil || len(d.Schema.Columns) == 0 {
+				<p class="text-sm text-slate-500">No schema inferred yet.</p>
+			} else {
+				@schemaTable(d.Schema)
+			}
+		}
+	}
 }
 
 templ schemaTable(schema *model.Schema) {
@@ -236,7 +254,7 @@ templ schemaTable(schema *model.Schema) {
 						<td class="table-cell text-slate-400">{ yesNo(c.Nullable) }</td>
 						<td class="table-cell text-slate-300">{ statDistinct(c) }</td>
 						<td class="table-cell text-slate-300">{ statComplete(c) }</td>
-						<td class="table-cell text-slate-500 font-mono text-xs">{ statSamples(c) }</td>
+						<td class="table-cell text-slate-500 font-mono text-xs break-all">{ statSamples(c) }</td>
 					</tr>
 				}
 			</tbody>
@@ -245,57 +263,63 @@ templ schemaTable(schema *model.Schema) {
 }
 
 templ sampleCard(d *catalog.DatasetDetail) {
-	<div class="card p-5">
-		<h2 class="text-base font-semibold text-white mb-4">Data sample</h2>
-		if len(d.SampleRows) == 0 {
-			<p class="text-sm text-slate-500">No sample captured (table formats and empty files have no inline sample).</p>
-		} else {
-			<div class="overflow-x-auto rounded-lg border border-base-800">
+	@Card() {
+		@CardHeader("Data sample", "") {
+		}
+		@CardBody() {
+			if len(d.SampleRows) == 0 {
+				<p class="text-sm text-slate-500">No sample captured (table formats and empty files have no inline sample).</p>
+			} else {
+				<div class="overflow-x-auto rounded-lg border border-base-800">
+					<table class="w-full">
+						<thead>
+							<tr class="border-b border-base-800 bg-base-850">
+								for _, col := range d.SampleColumns {
+									<th class="th whitespace-nowrap">{ col }</th>
+								}
+							</tr>
+						</thead>
+						<tbody class="divide-y divide-base-800">
+							for _, row := range sampleHead(d.SampleRows, 12) {
+								<tr class="hover:bg-base-850/50">
+									for _, col := range d.SampleColumns {
+										<td class="table-cell font-mono text-xs text-slate-300 whitespace-nowrap max-w-xs truncate">{ truncate(row[col], 40) }</td>
+									}
+								</tr>
+							}
+						</tbody>
+					</table>
+				</div>
+			}
+		}
+	}
+}
+
+templ partitionsCard(d *catalog.DatasetDetail) {
+	@Card() {
+		@CardHeader("Partitions ("+fmt.Sprintf("%d", len(d.Partitions))+")", "") {
+		}
+		@CardBody() {
+			<div class="overflow-x-auto">
 				<table class="w-full">
 					<thead>
-						<tr class="border-b border-base-800 bg-base-850">
-							for _, col := range d.SampleColumns {
-								<th class="th whitespace-nowrap">{ col }</th>
-							}
+						<tr class="border-b border-base-800">
+							<th class="th">Partition</th>
+							<th class="th">Files</th>
+							<th class="th">Size</th>
 						</tr>
 					</thead>
 					<tbody class="divide-y divide-base-800">
-						for _, row := range sampleHead(d.SampleRows, 12) {
+						for _, p := range partitionHead(d.Partitions, 20) {
 							<tr class="hover:bg-base-850/50">
-								for _, col := range d.SampleColumns {
-									<td class="table-cell font-mono text-xs text-slate-300 whitespace-nowrap max-w-xs truncate">{ truncate(row[col], 40) }</td>
-								}
+								<td class="table-cell font-mono text-xs text-slate-300 break-all">{ p.Path }</td>
+								<td class="table-cell text-slate-400">{ fmt.Sprintf("%d", p.FileCount) }</td>
+								<td class="table-cell text-slate-400">{ humanBytes(p.Size) }</td>
 							</tr>
 						}
 					</tbody>
 				</table>
 			</div>
 		}
-	</div>
-}
-
-templ partitionsCard(d *catalog.DatasetDetail) {
-	<div class="card p-5">
-		<h2 class="text-base font-semibold text-white mb-4">Partitions ({ fmt.Sprintf("%d", len(d.Partitions)) })</h2>
-		<div class="overflow-x-auto">
-			<table class="w-full">
-				<thead>
-					<tr class="border-b border-base-800">
-						<th class="th">Partition</th>
-						<th class="th">Files</th>
-						<th class="th">Size</th>
-					</tr>
-				</thead>
-				<tbody class="divide-y divide-base-800">
-					for _, p := range partitionHead(d.Partitions, 20) {
-						<tr class="hover:bg-base-850/50">
-							<td class="table-cell font-mono text-xs text-slate-300">{ p.Path }</td>
-							<td class="table-cell text-slate-400">{ fmt.Sprintf("%d", p.FileCount) }</td>
-							<td class="table-cell text-slate-400">{ humanBytes(p.Size) }</td>
-						</tr>
-					}
-				</tbody>
-			</table>
-		</div>
-	</div>
+	}
 }

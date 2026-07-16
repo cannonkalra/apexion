@@ -43,7 +43,7 @@ func ExplorerPage(vm ExplorerVM) templ.Component {
 				}()
 			}
 			ctx = templ.InitializeContext(ctx)
-			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 1, "<div class=\"grid grid-cols-1 lg:grid-cols-4 gap-4\"><div id=\"explorer-sidebar\" class=\"card p-3 lg:col-span-1 h-fit\" data-collapsible><div class=\"flex items-center justify-between px-1 mb-2\"><span class=\"text-xs uppercase tracking-wider text-slate-500\">Explorer</span> <button type=\"button\" data-sidebar-toggle aria-controls=\"explorer-sidebar-body\" aria-expanded=\"true\" title=\"Collapse sidebar\" class=\"grid place-items-center w-6 h-6 rounded text-slate-500 hover:bg-base-800 hover:text-slate-200\"><span data-sidebar-caret>«</span></button></div><div id=\"explorer-sidebar-body\">")
+			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 1, "<div class=\"grid grid-cols-1 lg:grid-cols-4 gap-4\"><div id=\"explorer-sidebar\" class=\"card p-3 lg:col-span-1 h-fit\" data-collapsible><div class=\"flex items-center justify-between px-1 mb-3\"><span class=\"eyebrow\">Explorer</span> <button type=\"button\" data-sidebar-toggle aria-controls=\"explorer-sidebar-body\" aria-expanded=\"true\" title=\"Collapse sidebar\" class=\"grid place-items-center w-6 h-6 rounded text-slate-500 hover:bg-base-800 hover:text-slate-200\"><span data-sidebar-caret>«</span></button></div><div id=\"explorer-sidebar-body\">")
 			if templ_7745c5c3_Err != nil {
 				return templ_7745c5c3_Err
 			}
@@ -51,7 +51,7 @@ func ExplorerPage(vm ExplorerVM) templ.Component {
 			if templ_7745c5c3_Err != nil {
 				return templ_7745c5c3_Err
 			}
-			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 2, "<div class=\"text-xs uppercase tracking-wider text-slate-500 px-2 mb-2 mt-3\">Open a bucket</div><form method=\"get\" action=\"/explorer\" class=\"px-1 mb-3\"><div class=\"flex gap-1.5\"><input name=\"bucket\" value=\"")
+			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 2, "<div class=\"eyebrow px-2 mb-2 mt-4\">Open a bucket</div><form method=\"get\" action=\"/explorer\" class=\"px-1 mb-3\"><div class=\"flex gap-1.5\"><input name=\"bucket\" value=\"")
 			if templ_7745c5c3_Err != nil {
 				return templ_7745c5c3_Err
 			}
@@ -64,7 +64,7 @@ func ExplorerPage(vm ExplorerVM) templ.Component {
 			if templ_7745c5c3_Err != nil {
 				return templ_7745c5c3_Err
 			}
-			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 3, "\" placeholder=\"bucket name…\" class=\"flex-1 min-w-0 px-2.5 py-1.5 rounded-lg bg-base-950 border border-base-800 text-sm text-slate-200 placeholder-slate-500 focus:outline-none focus:ring-2 focus:ring-brand-500/40\"> <button type=\"submit\" class=\"btn-primary !px-2.5\" title=\"Open\">→</button></div></form><div class=\"flex items-center justify-between px-2 mb-2\"><span class=\"text-xs uppercase tracking-wider text-slate-500\">Buckets</span> ")
+			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 3, "\" placeholder=\"bucket name…\" class=\"flex-1 min-w-0 px-2.5 py-1.5 rounded-lg bg-base-950 border border-base-800 text-sm text-slate-200 placeholder-slate-500 focus:outline-none focus:ring-2 focus:ring-brand-500/40\"> <button type=\"submit\" class=\"btn-primary !px-2.5\" title=\"Open\">→</button></div></form><div class=\"flex items-center justify-between px-2 mb-2\"><span class=\"eyebrow\">Buckets</span> ")
 			if templ_7745c5c3_Err != nil {
 				return templ_7745c5c3_Err
 			}
@@ -417,7 +417,7 @@ func breadcrumbs(bucket string, crumbs []explorer.Crumb) templ.Component {
 			templ_7745c5c3_Var16 = templ.NopComponent
 		}
 		ctx = templ.ClearChildren(ctx)
-		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 34, "<div class=\"flex items-center gap-1.5 text-sm mb-3 flex-wrap\"><a href=\"")
+		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 34, "<div class=\"flex items-center gap-1.5 text-sm mb-4 flex-wrap\"><a href=\"")
 		if templ_7745c5c3_Err != nil {
 			return templ_7745c5c3_Err
 		}
@@ -430,14 +430,14 @@ func breadcrumbs(bucket string, crumbs []explorer.Crumb) templ.Component {
 		if templ_7745c5c3_Err != nil {
 			return templ_7745c5c3_Err
 		}
-		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 35, "\" class=\"text-brand-300 hover:underline font-medium\">")
+		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 35, "\" class=\"text-brand-300 hover:underline font-medium break-all\">")
 		if templ_7745c5c3_Err != nil {
 			return templ_7745c5c3_Err
 		}
 		var templ_7745c5c3_Var18 string
 		templ_7745c5c3_Var18, templ_7745c5c3_Err = templ.JoinStringErrs(bucket)
 		if templ_7745c5c3_Err != nil {
-			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/ui/explorer.templ`, Line: 171, Col: 117}
+			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/ui/explorer.templ`, Line: 171, Col: 127}
 		}
 		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var18))
 		if templ_7745c5c3_Err != nil {
@@ -461,14 +461,14 @@ func breadcrumbs(bucket string, crumbs []explorer.Crumb) templ.Component {
 			if templ_7745c5c3_Err != nil {
 				return templ_7745c5c3_Err
 			}
-			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 38, "\" class=\"text-slate-300 hover:text-brand-300\">")
+			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 38, "\" class=\"text-slate-300 hover:text-brand-300 break-all\">")
 			if templ_7745c5c3_Err != nil {
 				return templ_7745c5c3_Err
 			}
 			var templ_7745c5c3_Var20 string
 			templ_7745c5c3_Var20, templ_7745c5c3_Err = templ.JoinStringErrs(c.Name)
 			if templ_7745c5c3_Err != nil {
-				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/ui/explorer.templ`, Line: 174, Col: 133}
+				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/ui/explorer.templ`, Line: 174, Col: 143}
 			}
 			_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var20))
 			if templ_7745c5c3_Err != nil {
@@ -596,7 +596,7 @@ func explorerFilters(l *explorer.DirListing) templ.Component {
 			templ_7745c5c3_Var25 = templ.NopComponent
 		}
 		ctx = templ.ClearChildren(ctx)
-		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 47, "<form method=\"get\" action=\"/explorer\" class=\"flex flex-wrap items-center gap-2 mb-3\"><input type=\"hidden\" name=\"bucket\" value=\"")
+		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 47, "<form method=\"get\" action=\"/explorer\" class=\"flex flex-wrap items-center gap-2 mb-4\"><input type=\"hidden\" name=\"bucket\" value=\"")
 		if templ_7745c5c3_Err != nil {
 			return templ_7745c5c3_Err
 		}
