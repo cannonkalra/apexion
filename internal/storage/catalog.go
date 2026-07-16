@@ -53,6 +53,46 @@ func (s *Store) GetCatalogEntry(ctx context.Context, id string) (*model.CatalogE
 	return scanCatalogEntry(s.db.QueryRowContext(ctx, catalogSelect+` WHERE id = ?`, id))
 }
 
+// ListCatalogEntriesByDataset returns the catalog entries backed by a dataset.
+// A dataset may back several tables (different globs/strategies/names).
+func (s *Store) ListCatalogEntriesByDataset(ctx context.Context, datasetID string) ([]model.CatalogEntry, error) {
+	rows, err := s.db.QueryContext(ctx, catalogSelect+` WHERE dataset_id = ? ORDER BY name`, datasetID)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var out []model.CatalogEntry
+	for rows.Next() {
+		e, err := scanCatalogEntry(rows)
+		if err != nil {
+			return nil, err
+		}
+		out = append(out, *e)
+	}
+	return out, rows.Err()
+}
+
+// DatasetRegistrationCounts returns, for each dataset id, how many catalog
+// entries reference it — used to render catalog status on the datasets list
+// without an N+1 query.
+func (s *Store) DatasetRegistrationCounts(ctx context.Context) (map[string]int, error) {
+	rows, err := s.db.QueryContext(ctx, `SELECT dataset_id, COUNT(*) FROM catalog_entries GROUP BY dataset_id`)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	out := map[string]int{}
+	for rows.Next() {
+		var id string
+		var n int
+		if err := rows.Scan(&id, &n); err != nil {
+			return nil, err
+		}
+		out[id] = n
+	}
+	return out, rows.Err()
+}
+
 // GetCatalogEntryByName returns a catalog entry by table name (nil if absent).
 func (s *Store) GetCatalogEntryByName(ctx context.Context, name string) (*model.CatalogEntry, error) {
 	return scanCatalogEntry(s.db.QueryRowContext(ctx, catalogSelect+` WHERE name = ?`, name))

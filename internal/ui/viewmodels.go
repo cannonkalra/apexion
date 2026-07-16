@@ -1,11 +1,24 @@
 package ui
 
 import (
+	"github.com/apexion/apexion/internal/catalog"
 	"github.com/apexion/apexion/internal/duckdb"
 	"github.com/apexion/apexion/internal/explorer"
 	"github.com/apexion/apexion/internal/model"
 	"github.com/apexion/apexion/internal/storage"
 )
+
+// WizardVM drives the unified Crawl → Analyze → Review → Register wizard.
+type WizardVM struct {
+	Bucket    string
+	Prefix    string
+	JobID     string
+	Job       *model.Job
+	Detail    *catalog.DatasetDetail
+	Suggested string // suggested SQL table name
+	Entry     *model.CatalogEntry
+	Error     string
+}
 
 // ExplorerVM powers the VS Code-style bucket/folder/file browser.
 type ExplorerVM struct {
@@ -35,9 +48,10 @@ type PreviewVM struct {
 
 // DatasetsVM is the datasets listing view model.
 type DatasetsVM struct {
-	Datasets []model.Dataset
-	Buckets  []model.Bucket
-	Filter   storage.DatasetFilter
+	Datasets   []model.Dataset
+	Buckets    []model.Bucket
+	Filter     storage.DatasetFilter
+	Registered map[string]int // dataset id → number of catalog tables
 }
 
 // CatalogVM powers the catalog (logical SQL tables) page.

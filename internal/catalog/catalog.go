@@ -11,6 +11,7 @@ import (
 
 	"github.com/apexion/apexion/internal/duckdb"
 	"github.com/apexion/apexion/internal/model"
+	"github.com/apexion/apexion/internal/storage"
 )
 
 // ErrTableNameTaken is returned when a catalog table name is already registered.
@@ -19,10 +20,27 @@ var ErrTableNameTaken = errors.New("catalog table name already in use")
 // ErrDatasetNotFound is returned when a dataset id does not resolve.
 var ErrDatasetNotFound = errors.New("dataset not found")
 
-// RegisterDataset registers a discovered dataset as a logical SQL table and
-// exposes it as a DuckDB view over the underlying files (no data is copied). If
-// name is empty, a SQL-safe name is derived from the dataset.
+// RegisterOptions carries the user's choices from the registration step.
+type RegisterOptions struct {
+	Name           string // SQL table name; empty → derived from the dataset
+	Description    string
+	SchemaStrategy string // union|strict|latest; empty → union
+}
+
+// RegisterDataset registers a discovered dataset as a logical SQL table with
+// default options. See RegisterDatasetWith for the full form.
 func (s *Service) RegisterDataset(ctx context.Context, datasetID, name string) (*model.CatalogEntry, error) {
+	return s.RegisterDatasetWith(ctx, datasetID, RegisterOptions{Name: name})
+}
+
+// RegisterDatasetWith registers a discovered dataset as a logical SQL table and
+// exposes it as a DuckDB view over the underlying files (no data is copied).
+//
+// It is transactional in effect: the catalog row is persisted first (the
+// UNIQUE(name) index is the atomic gate), then the DuckDB view is created; if
+// the view fails, the row is rolled back so no orphaned entry or broken view
+// remains. A dataset may back several tables (different names/strategies).
+func (s *Service) RegisterDatasetWith(ctx context.Context, datasetID string, opt RegisterOptions) (*model.CatalogEntry, error) {
 	ds, err := s.store.GetDataset(ctx, datasetID)
 	if err != nil {
 		return nil, err
@@ -30,14 +48,19 @@ func (s *Service) RegisterDataset(ctx context.Context, datasetID, name string) (
 	if ds == nil {
 		return nil, ErrDatasetNotFound
 	}
+	name := opt.Name
 	if name == "" {
 		name = SanitizeTableName(ds.Name)
 	}
 	if !duckdb.ValidIdentifier(name) {
-		return nil, fmt.Errorf("invalid table name %q (use letters, digits, underscore)", name)
+		return nil, fmt.Errorf("invalid table name %q (use letters, digits, underscore; may not start with a digit)", name)
 	}
 	if existing, _ := s.store.GetCatalogEntryByName(ctx, name); existing != nil {
 		return nil, ErrTableNameTaken
+	}
+	strategy := opt.SchemaStrategy
+	if strategy == "" {
+		strategy = model.SchemaUnion
 	}
 
 	now := time.Now().UTC()
@@ -51,8 +74,9 @@ func (s *Service) RegisterDataset(ctx context.Context, datasetID, name string) (
 		URI:            fmt.Sprintf("s3://%s/%s", ds.BucketName, strings.TrimRight(ds.Path, "/")),
 		Enabled:        true,
 		RefreshMode:    model.RefreshManual,
-		SchemaStrategy: model.SchemaUnion,
+		SchemaStrategy: strategy,
 		PartitionCols:  ds.PartitionKeys,
+		Description:    opt.Description,
 		CreatedAt:      now,
 		UpdatedAt:      now,
 	}
@@ -77,6 +101,59 @@ func (s *Service) RegisterDataset(ctx context.Context, datasetID, name string) (
 // ListCatalog returns every catalog entry.
 func (s *Service) ListCatalog(ctx context.Context) ([]model.CatalogEntry, error) {
 	return s.store.ListCatalogEntries(ctx)
+}
+
+// CatalogStatus summarizes a dataset's presence in the catalog.
+type CatalogStatus struct {
+	Registered bool                 `json:"registered"`
+	Entries    []model.CatalogEntry `json:"entries"`
+}
+
+// DatasetCatalogStatus reports whether a dataset backs any catalog tables.
+func (s *Service) DatasetCatalogStatus(ctx context.Context, datasetID string) (CatalogStatus, error) {
+	entries, err := s.store.ListCatalogEntriesByDataset(ctx, datasetID)
+	return CatalogStatus{Registered: len(entries) > 0, Entries: entries}, err
+}
+
+// RegistrationCounts maps dataset id → number of catalog tables backed by it.
+func (s *Service) RegistrationCounts(ctx context.Context) (map[string]int, error) {
+	return s.store.DatasetRegistrationCounts(ctx)
+}
+
+// FindDatasetByLocation resolves the dataset a prefix-crawl produced: an exact
+// path match first, else the first dataset discovered under the prefix. Returns
+// nil if the crawl produced no dataset there.
+func (s *Service) FindDatasetByLocation(ctx context.Context, bucketName, prefix string) (*model.Dataset, error) {
+	b, err := s.store.GetBucketByName(ctx, bucketName)
+	if err != nil || b == nil {
+		return nil, err
+	}
+	trimmed := strings.Trim(prefix, "/")
+	if ds, _ := s.store.GetDatasetByPath(ctx, b.ID, trimmed); ds != nil {
+		return ds, nil
+	}
+	list, err := s.store.ListDatasets(ctx, storage.DatasetFilter{BucketID: b.ID, Search: trimmed, Limit: 1})
+	if err != nil || len(list) == 0 {
+		return nil, err
+	}
+	return &list[0], nil
+}
+
+// SuggestTableName returns a valid, unused SQL table name derived from base
+// (e.g. "events-2026" → "events_2026"), appending _2, _3, … if the name is
+// already registered.
+func (s *Service) SuggestTableName(ctx context.Context, base string) string {
+	name := SanitizeTableName(base)
+	candidate := name
+	// Bounded: after a sane number of collisions, return the last candidate and
+	// let registration surface ErrTableNameTaken rather than loop forever.
+	for i := 2; i < 1000; i++ {
+		if existing, _ := s.store.GetCatalogEntryByName(ctx, candidate); existing == nil {
+			return candidate
+		}
+		candidate = fmt.Sprintf("%s_%d", name, i)
+	}
+	return candidate
 }
 
 // GetCatalog returns a catalog entry by id (nil if absent).

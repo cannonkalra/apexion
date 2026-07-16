@@ -41,11 +41,12 @@ templ DatasetsPage(vm DatasetsVM) {
 			<button class="btn-primary" type="submit">Filter</button>
 			<div class="flex-1"></div>
 			<span class="text-sm text-slate-500">{ fmt.Sprintf("%d datasets", len(vm.Datasets)) }</span>
+			<a class="btn-primary" href="/wizard">@iconInbox() Crawl Dataset</a>
 		</form>
 
 		<div class="card overflow-hidden">
 			if len(vm.Datasets) == 0 {
-				@EmptyState("No datasets match", "Adjust filters or crawl a bucket.")
+				@EmptyState("No datasets yet", "Use “Crawl Dataset” to discover a directory as a dataset.")
 			} else {
 				<div class="overflow-x-auto">
 					<table class="w-full">
@@ -57,13 +58,14 @@ templ DatasetsPage(vm DatasetsVM) {
 								<th class="th">Files</th>
 								<th class="th">Size</th>
 								<th class="th">Partitions</th>
+								<th class="th">Catalog</th>
 								<th class="th">Last Scan</th>
 								<th class="th text-right">Actions</th>
 							</tr>
 						</thead>
 						<tbody class="divide-y divide-base-800">
 							for _, d := range vm.Datasets {
-								@datasetRow(d)
+								@datasetRow(d, vm.Registered[d.ID])
 							}
 						</tbody>
 					</table>
@@ -74,29 +76,42 @@ templ DatasetsPage(vm DatasetsVM) {
 	}
 }
 
-templ datasetRow(d model.Dataset) {
-	<tr class="hover:bg-base-850/50">
+templ datasetRow(d model.Dataset, catalogCount int) {
+	<tr id={ "dataset-" + d.ID } class="hover:bg-base-850/50">
 		<td class="table-cell">
 			<a href={ templ.SafeURL("/datasets/" + d.ID) } class="font-medium text-slate-100 hover:text-brand-300">{ d.Name }</a>
-			<div class="text-xs text-slate-500 truncate max-w-xs">{ truncate(d.Path, 48) }</div>
+			<div class="text-xs text-slate-500 truncate max-w-xs">{ truncate(d.BucketName+"/"+d.Path, 48) }</div>
 		</td>
 		<td class="table-cell">@FormatPill(d.Format)</td>
 		<td class="table-cell text-slate-300">{ humanCount(d.RowCount) }</td>
 		<td class="table-cell text-slate-300">{ fmt.Sprintf("%d", d.FileCount) }</td>
 		<td class="table-cell text-slate-400">{ humanBytes(d.TotalSize) }</td>
 		<td class="table-cell text-slate-400 font-mono text-xs">{ partitionKeyList(d.PartitionKeys) }</td>
+		<td class="table-cell">
+			if catalogCount > 0 {
+				<a href="/catalog" class="badge bg-accent-emerald/15 text-accent-emerald">Registered
+					if catalogCount > 1 {
+						({ fmt.Sprintf("%d", catalogCount) })
+					}
+				</a>
+			} else {
+				<span class="badge bg-base-700 text-slate-400">Not registered</span>
+			}
+		</td>
 		<td class="table-cell text-slate-500">{ timeAgoPtr(d.LastScanAt) }</td>
 		<td class="table-cell">
 			<div class="flex items-center justify-end gap-1">
-				<a href={ templ.SafeURL("/datasets/" + d.ID) } class="btn-ghost !px-2 !py-1" title="View">@iconEye()</a>
-				<button class="btn-ghost !px-2 !py-1" title="Infer" hx-post={ "/ui/datasets/" + d.ID + "/infer" } hx-target="#toast-slot" hx-swap="innerHTML">@iconSpark()</button>
-				<button class="btn-ghost !px-2 !py-1" title="Rescan" hx-post={ "/ui/buckets/" + d.BucketName + "/crawl" } hx-target="#toast-slot" hx-swap="innerHTML">@iconRefresh()</button>
+				<a href={ templ.SafeURL("/datasets/" + d.ID) } class="btn-ghost !px-2 !py-1" title="Open">@iconEye()</a>
+				if catalogCount == 0 {
+					<button class="btn-ghost !px-2 !py-1" title="Register as table" hx-post={ "/ui/datasets/" + d.ID + "/register" } hx-target="#toast-slot" hx-swap="innerHTML">@iconTable()</button>
+				}
+				<button class="btn-ghost !px-2 !py-1" title="Refresh (re-crawl)" hx-post={ "/ui/datasets/" + d.ID + "/refresh" } hx-target="#toast-slot" hx-swap="innerHTML">@iconRefresh()</button>
 				<button
 					class="btn-danger !px-2 !py-1"
 					title="Delete"
 					hx-delete={ "/ui/datasets/" + d.ID }
-					hx-confirm="Delete this dataset from the catalog?"
-					hx-target="closest tr"
+					hx-confirm="Delete this dataset?"
+					hx-target={ "#dataset-" + d.ID }
 					hx-swap="outerHTML swap:200ms"
 				>@iconTrash()</button>
 			</div>

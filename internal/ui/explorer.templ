@@ -131,13 +131,16 @@ templ explorerToolbar(l *explorer.DirListing) {
 				<span class="w-1.5 h-1.5 rounded-full bg-brand-400 animate-pulse"></span> Calculating folder stats…
 			</span>
 		</div>
-		<button
-			class="btn-primary"
-			hx-post="/ui/directories/crawl"
-			hx-vals={ crawlVals(l.Bucket, l.Prefix) }
-			hx-target="#toast-slot"
-			hx-swap="innerHTML"
-		>@iconPlay() Crawl Directory</button>
+		<div class="flex items-center gap-2">
+			<button
+				class="btn-ghost"
+				hx-post="/ui/directories/crawl"
+				hx-vals={ crawlVals(l.Bucket, l.Prefix) }
+				hx-target="#toast-slot"
+				hx-swap="innerHTML"
+			>@iconPlay() Quick crawl</button>
+			<a class="btn-primary" href={ templ.SafeURL("/wizard?bucket=" + l.Bucket + "&prefix=" + l.Prefix) }>@iconInbox() Crawl Dataset</a>
+		</div>
 	</div>
 }
 

@@ -67,6 +67,34 @@ func TestCatalogEntryCRUD(t *testing.T) {
 	}
 }
 
+func TestCatalogByDatasetAndCounts(t *testing.T) {
+	ctx := context.Background()
+	s := memStore(t)
+	// One dataset backing two tables, plus another dataset with one.
+	for _, e := range []*model.CatalogEntry{
+		{ID: "a", Name: "logs", DatasetID: "d1", Format: model.FormatParquet, RefreshMode: "manual", SchemaStrategy: "union"},
+		{ID: "b", Name: "logs_recent", DatasetID: "d1", Format: model.FormatParquet, RefreshMode: "manual", SchemaStrategy: "union"},
+		{ID: "c", Name: "events", DatasetID: "d2", Format: model.FormatCSV, RefreshMode: "manual", SchemaStrategy: "union"},
+	} {
+		if err := s.UpsertCatalogEntry(ctx, e); err != nil {
+			t.Fatalf("upsert %s: %v", e.ID, err)
+		}
+	}
+
+	byD1, err := s.ListCatalogEntriesByDataset(ctx, "d1")
+	if err != nil || len(byD1) != 2 {
+		t.Fatalf("by dataset d1: %v len=%d", err, len(byD1))
+	}
+
+	counts, err := s.DatasetRegistrationCounts(ctx)
+	if err != nil {
+		t.Fatalf("counts: %v", err)
+	}
+	if counts["d1"] != 2 || counts["d2"] != 1 || counts["d3"] != 0 {
+		t.Errorf("unexpected counts: %v", counts)
+	}
+}
+
 func TestCatalogEntryMissingIsNil(t *testing.T) {
 	got, err := memStore(t).GetCatalogEntry(context.Background(), "nope")
 	if err != nil {

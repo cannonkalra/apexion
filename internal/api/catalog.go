@@ -50,6 +50,30 @@ func (a *API) registerCatalog(w http.ResponseWriter, r *http.Request) {
 	}
 }
 
+// registerDataset registers a dataset (by id) as a catalog table — the
+// workflow-oriented entry point (the crawl wizard's final step calls this).
+func (a *API) registerDataset(w http.ResponseWriter, r *http.Request) {
+	var body struct {
+		Name           string `json:"name"`
+		Description    string `json:"description"`
+		SchemaStrategy string `json:"schema_strategy"`
+	}
+	_ = json.NewDecoder(r.Body).Decode(&body) // all fields optional
+	entry, err := a.catalog.RegisterDatasetWith(r.Context(), chi.URLParam(r, "id"), catalog.RegisterOptions{
+		Name: body.Name, Description: body.Description, SchemaStrategy: body.SchemaStrategy,
+	})
+	switch {
+	case errors.Is(err, catalog.ErrDatasetNotFound):
+		writeErr(w, http.StatusNotFound, err.Error())
+	case errors.Is(err, catalog.ErrTableNameTaken):
+		writeErr(w, http.StatusConflict, err.Error())
+	case err != nil:
+		writeErr(w, http.StatusBadRequest, err.Error())
+	default:
+		writeJSON(w, http.StatusCreated, entry)
+	}
+}
+
 // refreshCatalog rebuilds a table's view and re-crawls its dataset.
 func (a *API) refreshCatalog(w http.ResponseWriter, r *http.Request) {
 	if err := a.catalog.RefreshCatalog(r.Context(), chi.URLParam(r, "id")); err != nil {

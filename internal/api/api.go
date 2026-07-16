@@ -49,6 +49,7 @@ func (a *API) Routes() http.Handler {
 	r.Get("/datasets", a.listDatasets)
 	r.Post("/datasets/crawl", a.crawlDirectory)
 	r.Get("/datasets/{id}", a.getDataset)
+	r.Post("/datasets/{id}/register", a.registerDataset)
 	r.Post("/datasets/{id}/refresh", a.refreshDataset)
 	r.Delete("/datasets/{id}", a.deleteDataset)
 

@@ -56,7 +56,7 @@ func New(cat *catalog.Service, prev *duckdb.Engine, expl *explorer.Service,
 func (h *Handler) Routes() http.Handler {
 	r := chi.NewRouter()
 	r.Get("/", func(w http.ResponseWriter, r *http.Request) {
-		http.Redirect(w, r, "/explorer", http.StatusFound)
+		http.Redirect(w, r, "/datasets", http.StatusFound)
 	})
 	r.Get("/explorer", h.explorerPage)
 	r.Get("/datasets", h.datasets)
@@ -64,12 +64,20 @@ func (h *Handler) Routes() http.Handler {
 	r.Get("/preview", h.filePreview)
 	r.Get("/catalog", h.catalogPage)
 	r.Get("/query", h.queryPage)
+	r.Get("/wizard", h.wizardPage)
 	r.Get("/settings", h.settings)
 
 	r.Route("/ui", func(r chi.Router) {
 		r.Get("/partials/explorer-summary", h.partialExplorerSummary)
 		r.Get("/datasets/{id}/preview", h.partialDatasetPreview)
+		r.Post("/datasets/{id}/register", h.actionRegisterDataset)
+		r.Post("/datasets/{id}/refresh", h.actionRefreshDataset)
 		r.Post("/directories/crawl", h.actionCrawlDirectory)
+		r.Post("/wizard/crawl", h.wizardCrawl)
+		r.Get("/wizard/progress", h.wizardProgress)
+		r.Post("/wizard/register-form", h.wizardRegisterForm)
+		r.Post("/wizard/register", h.wizardRegister)
+		r.Post("/wizard/skip", h.wizardSkip)
 		r.Delete("/datasets/{id}", h.actionDeleteDataset)
 		r.Post("/catalog", h.actionRegisterCatalog)
 		r.Post("/catalog/{id}/refresh", h.actionRefreshCatalog)
@@ -196,7 +204,8 @@ func (h *Handler) datasets(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	bs, _ := h.store.ListBuckets(ctx)
-	h.render(w, r, DatasetsPage(DatasetsVM{Datasets: ds, Buckets: bs, Filter: f}))
+	counts, _ := h.catalog.RegistrationCounts(ctx)
+	h.render(w, r, DatasetsPage(DatasetsVM{Datasets: ds, Buckets: bs, Filter: f, Registered: counts}))
 }
 
 func (h *Handler) datasetDetail(w http.ResponseWriter, r *http.Request) {
@@ -213,7 +222,9 @@ func (h *Handler) datasetDetail(w http.ResponseWriter, r *http.Request) {
 	if tab == "" {
 		tab = "overview"
 	}
-	h.render(w, r, DatasetDetailPage(d, tab))
+	status, _ := h.catalog.DatasetCatalogStatus(r.Context(), d.Dataset.ID)
+	suggested := h.catalog.SuggestTableName(r.Context(), d.Dataset.Name)
+	h.render(w, r, DatasetDetailPage(d, tab, status, suggested))
 }
 
 func (h *Handler) settings(w http.ResponseWriter, r *http.Request) {

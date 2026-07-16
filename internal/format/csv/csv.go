@@ -3,7 +3,7 @@
 package csv
 
 import (
-	"bufio"
+	"bytes"
 	"context"
 	"encoding/csv"
 	"fmt"
@@ -29,6 +29,59 @@ func NewTSV() *Reader { return &Reader{format: model.FormatTSV, delimiter: '\t'}
 
 func (r *Reader) Format() model.Format { return r.format }
 
+// sniffDelimiter guesses the field delimiter of a CSV-ish sample. It tries
+// non-comma delimiters first, so a file whose fields contain commas but are
+// really pipe/tab/semicolon-delimited (a common feed layout) is not mis-split
+// into many columns. It returns 0 when only comma fits (the default) or the
+// sample is too small to tell.
+func sniffDelimiter(buf []byte) rune {
+	lines := sampleLines(buf, 40)
+	if len(lines) < 2 {
+		return 0
+	}
+	for _, d := range []rune{'|', '\t', ';'} {
+		if consistentFields(lines, byte(d)) >= 2 {
+			return d
+		}
+	}
+	return 0
+}
+
+// consistentFields returns the field count (occurrences of delim + 1) if a
+// clear majority of lines agree on it and it is >= 2, else 0.
+func consistentFields(lines []string, delim byte) int {
+	counts := map[int]int{}
+	for _, ln := range lines {
+		counts[strings.Count(ln, string(delim))+1]++
+	}
+	best, bestN := 0, 0
+	for fields, n := range counts {
+		if n > bestN {
+			best, bestN = fields, n
+		}
+	}
+	if best >= 2 && bestN*100 >= len(lines)*80 {
+		return best
+	}
+	return 0
+}
+
+// sampleLines returns up to n non-empty lines from a byte sample (CR stripped).
+func sampleLines(buf []byte, n int) []string {
+	var out []string
+	for _, ln := range strings.Split(string(buf), "\n") {
+		ln = strings.TrimRight(ln, "\r")
+		if strings.TrimSpace(ln) == "" {
+			continue
+		}
+		out = append(out, ln)
+		if len(out) >= n {
+			break
+		}
+	}
+	return out
+}
+
 // ReadSchema samples the file, detects the header, and infers per-column types.
 func (r *Reader) ReadSchema(ctx context.Context, src format.Source, opts format.Options) (*format.Result, error) {
 	rc, err := src.Open(ctx)
@@ -43,12 +96,26 @@ func (r *Reader) ReadSchema(ctx context.Context, src format.Source, opts format.
 		return nil, fmt.Errorf("decompress: %w", err)
 	}
 
-	delim := r.delimiter
-	if opts.Delimiter != 0 && r.format == model.FormatCSV {
-		delim = opts.Delimiter
+	// Buffer the bounded sample so we can sniff the delimiter before parsing.
+	buf, err := io.ReadAll(dr)
+	if err != nil {
+		return nil, fmt.Errorf("read sample: %w", err)
 	}
 
-	cr := csv.NewReader(bufio.NewReader(dr))
+	delim := r.delimiter
+	switch {
+	case opts.Delimiter != 0 && r.format == model.FormatCSV:
+		delim = opts.Delimiter // explicit override
+	case r.format == model.FormatCSV:
+		// A ".csv" file is often really pipe/tab/semicolon-delimited (e.g. an
+		// eyeota IDFA feed: "device|1100,1066,..."). Sniff the real delimiter so
+		// we don't split one logical field into many spurious columns.
+		if d := sniffDelimiter(buf); d != 0 {
+			delim = d
+		}
+	}
+
+	cr := csv.NewReader(bytes.NewReader(buf))
 	cr.Comma = delim
 	cr.FieldsPerRecord = -1 // tolerate ragged rows
 	cr.LazyQuotes = true

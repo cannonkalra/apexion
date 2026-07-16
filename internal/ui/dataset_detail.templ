@@ -9,9 +9,10 @@ import (
 var datasetTabs = []struct{ Key, Label string }{
 	{"overview", "Overview"}, {"schema", "Schema"},
 	{"files", "Files"}, {"partitions", "Partitions"}, {"preview", "Preview"},
+	{"catalog", "Catalog"},
 }
 
-templ DatasetDetailPage(d *catalog.DatasetDetail, tab string) {
+templ DatasetDetailPage(d *catalog.DatasetDetail, tab string, status catalog.CatalogStatus, suggested string) {
 	@Layout("datasets", d.Dataset.Name) {
 		<div class="flex flex-wrap items-start justify-between gap-4 mb-5">
 			<div class="min-w-0">
@@ -58,6 +59,8 @@ templ DatasetDetailPage(d *catalog.DatasetDetail, tab string) {
 			@partitionsPanel(d)
 		case "preview":
 			@previewPanel(d)
+		case "catalog":
+			@catalogPanel(d, status, suggested)
 		default:
 			<div class="space-y-4">
 				@datasetSummaryCard(d)
@@ -97,6 +100,49 @@ templ filesPanel(d *catalog.DatasetDetail) {
 				<p class="text-xs text-slate-500 mt-2">Showing first { fmt.Sprintf("%d", len(d.Objects)) } of { fmt.Sprintf("%d", d.Dataset.FileCount) } files.</p>
 			}
 		}
+	</div>
+}
+
+// catalogPanel shows a dataset's catalog status and a register form. A dataset
+// may back several tables, so registering is always available.
+templ catalogPanel(d *catalog.DatasetDetail, status catalog.CatalogStatus, suggested string) {
+	<div class="space-y-4">
+		<div class="card p-5">
+			<div class="flex items-center justify-between mb-4">
+				<h2 class="text-base font-semibold text-white">Catalog status</h2>
+				if status.Registered {
+					<span class="badge bg-accent-emerald/15 text-accent-emerald">Registered</span>
+				} else {
+					<span class="badge bg-base-700 text-slate-400">Not registered</span>
+				}
+			</div>
+			if len(status.Entries) == 0 {
+				<p class="text-sm text-slate-500">This dataset is not exposed as a SQL table yet.</p>
+			} else {
+				<div class="card overflow-hidden divide-y divide-base-800">
+					for _, e := range status.Entries {
+						<div class="flex items-center gap-3 px-4 py-2.5">
+							@iconTable()
+							<a href={ templ.SafeURL("/query?table=" + e.Name) } class="text-sm font-mono text-slate-100 flex-1 hover:text-brand-300">{ e.Name }</a>
+							<span class="text-xs text-slate-500">{ e.SchemaStrategy }</span>
+							<a class="btn-ghost text-xs" href={ templ.SafeURL("/query?table=" + e.Name) }>@iconTerminal() Query</a>
+						</div>
+					}
+				</div>
+			}
+		</div>
+		<div class="card p-5">
+			<h2 class="text-base font-semibold text-white mb-4">Register as SQL table</h2>
+			<form hx-post="/ui/catalog" hx-target="#toast-slot" hx-swap="innerHTML" class="flex flex-wrap items-end gap-3">
+				<input type="hidden" name="dataset_id" value={ d.Dataset.ID }/>
+				<div>
+					<label class="block text-xs uppercase tracking-wider text-slate-500 mb-1">Table name</label>
+					<input name="name" value={ suggested } pattern="[A-Za-z_][A-Za-z0-9_]*" class={ inputClass + " font-mono" }/>
+				</div>
+				<button class="btn-primary" type="submit">@iconTable() Register</button>
+			</form>
+			<p class="text-[11px] text-slate-600 mt-2">Registering creates a DuckDB view over the files — no data is copied. A dataset can back multiple tables (different names/globs).</p>
+		</div>
 	</div>
 }
 

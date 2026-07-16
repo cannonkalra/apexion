@@ -4,6 +4,8 @@ import (
 	"net/http"
 
 	"github.com/go-chi/chi/v5"
+
+	"github.com/apexion/apexion/internal/model"
 )
 
 // catalogPage lists the registered logical SQL tables.
@@ -42,6 +44,31 @@ func (h *Handler) actionRegisterCatalog(w http.ResponseWriter, r *http.Request) 
 	}
 	w.Header().Set("HX-Redirect", "/query?table="+entry.Name)
 	h.render(w, r, Toast("Registered table "+entry.Name, "success"))
+}
+
+// actionRegisterDataset registers a dataset as a table with a derived name — the
+// one-click "Register" from the Datasets list / dataset detail.
+func (h *Handler) actionRegisterDataset(w http.ResponseWriter, r *http.Request) {
+	id := chi.URLParam(r, "id")
+	entry, err := h.catalog.RegisterDataset(r.Context(), id, r.FormValue("name"))
+	if err != nil {
+		h.render(w, r, Toast("Register failed: "+err.Error(), "error"))
+		return
+	}
+	w.Header().Set("HX-Redirect", "/query?table="+entry.Name)
+	h.render(w, r, Toast("Registered table "+entry.Name, "success"))
+}
+
+// actionRefreshDataset triggers an incremental re-crawl of a dataset's directory
+// (and refreshes any views over it via their own refresh).
+func (h *Handler) actionRefreshDataset(w http.ResponseWriter, r *http.Request) {
+	ds, err := h.store.GetDataset(r.Context(), chi.URLParam(r, "id"))
+	if err != nil || ds == nil {
+		h.render(w, r, Toast("Dataset not found", "error"))
+		return
+	}
+	h.catalog.StartCrawlPrefix(ds.BucketName, ds.Path, model.CrawlIncremental, model.ScheduleManual)
+	h.render(w, r, Toast("Refresh started for "+ds.Name, "success"))
 }
 
 // actionRunQuery executes a read-only SQL query and returns the result table.
