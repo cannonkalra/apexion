@@ -178,11 +178,42 @@ type Dataset struct {
 	TotalSize     int64       `json:"total_size"`
 	RowCount      int64       `json:"row_count"` // estimated
 	PartitionKeys []string    `json:"partition_keys"`
-	SchemaID      string      `json:"schema_id"`
-	Description   string      `json:"description"`
-	CreatedAt     time.Time   `json:"created_at"`
-	UpdatedAt     time.Time   `json:"updated_at"`
-	LastScanAt    *time.Time  `json:"last_scan_at,omitempty"`
+	// PartitionDepth is the number of partition directory levels below the root.
+	// DiscoveryStrategy is how the layout was classified (hive|positional|legacy).
+	PartitionDepth    int        `json:"partition_depth"`
+	DiscoveryStrategy string     `json:"discovery_strategy"`
+	SchemaID          string     `json:"schema_id"`
+	Description       string     `json:"description"`
+	CreatedAt         time.Time  `json:"created_at"`
+	UpdatedAt         time.Time  `json:"updated_at"`
+	LastScanAt        *time.Time `json:"last_scan_at,omitempty"`
+}
+
+// ReadOptions are the DuckDB reader options applied when a dataset's files are
+// read (view creation, preview, SQL prefill). Zero value is NOT the default —
+// use DefaultReadOptions().
+type ReadOptions struct {
+	Filename     bool   `json:"filename"`      // expose a `filename` column
+	UnionByName  bool   `json:"union_by_name"` // union files by column name
+	Header       string `json:"header"`        // "auto" (default) | "present" | "none"
+	SampleSize   int    `json:"sample_size"`   // 0 => engine default (1000); -1 => scan all rows
+	IgnoreErrors bool   `json:"ignore_errors"` // skip unparseable rows
+}
+
+// DefaultReadOptions returns the safe on-by-default reader options: expose the
+// filename column, union files by column name, and let DuckDB auto-detect the
+// header (never a blanket header=false, which would corrupt real-header CSVs).
+func DefaultReadOptions() ReadOptions {
+	return ReadOptions{Filename: true, UnionByName: true, Header: "auto", SampleSize: 0}
+}
+
+// Normalized fills empty fields with their default (an empty Header means
+// "auto"), so a persisted zero-ish struct behaves predictably.
+func (o ReadOptions) Normalized() ReadOptions {
+	if o.Header == "" {
+		o.Header = "auto"
+	}
+	return o
 }
 
 // Schema is a versioned set of columns for a dataset.

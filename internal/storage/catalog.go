@@ -8,24 +8,24 @@ import (
 )
 
 const catalogSelect = `SELECT id, name, dataset_id, bucket_name, root_path, format,
-	uri, glob_pattern, enabled, refresh_mode, schema_strategy, partition_cols, description,
+	uri, glob_pattern, enabled, refresh_mode, schema_strategy, partition_cols, read_options, description,
 	created_at, updated_at, last_refresh_at FROM catalog_entries`
 
 // UpsertCatalogEntry inserts or updates a catalog entry (by id).
 func (s *Store) UpsertCatalogEntry(ctx context.Context, e *model.CatalogEntry) error {
 	_, err := s.db.ExecContext(ctx, `
 		INSERT INTO catalog_entries (id, name, dataset_id, bucket_name, root_path, format,
-			uri, glob_pattern, enabled, refresh_mode, schema_strategy, partition_cols, description,
+			uri, glob_pattern, enabled, refresh_mode, schema_strategy, partition_cols, read_options, description,
 			created_at, updated_at, last_refresh_at)
-		VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)
+		VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)
 		ON CONFLICT (id) DO UPDATE SET
 			name=excluded.name, bucket_name=excluded.bucket_name, root_path=excluded.root_path,
 			format=excluded.format, uri=excluded.uri, glob_pattern=excluded.glob_pattern, enabled=excluded.enabled,
 			refresh_mode=excluded.refresh_mode, schema_strategy=excluded.schema_strategy,
-			partition_cols=excluded.partition_cols, description=excluded.description,
+			partition_cols=excluded.partition_cols, read_options=excluded.read_options, description=excluded.description,
 			updated_at=excluded.updated_at, last_refresh_at=excluded.last_refresh_at`,
 		e.ID, e.Name, e.DatasetID, e.BucketName, e.RootPath, string(e.Format),
-		e.URI, e.Glob, e.Enabled, e.RefreshMode, e.SchemaStrategy, toJSON(e.PartitionCols),
+		e.URI, e.Glob, e.Enabled, e.RefreshMode, e.SchemaStrategy, toJSON(e.PartitionCols), toJSON(e.ReadOptions),
 		e.Description, e.CreatedAt, e.UpdatedAt, e.LastRefreshAt)
 	return err
 }
@@ -106,10 +106,10 @@ func (s *Store) DeleteCatalogEntry(ctx context.Context, id string) error {
 
 func scanCatalogEntry(r rowScanner) (*model.CatalogEntry, error) {
 	var e model.CatalogEntry
-	var format, partitionCols string
+	var format, partitionCols, readOptions string
 	var lastRefresh sql.NullTime
 	if err := r.Scan(&e.ID, &e.Name, &e.DatasetID, &e.BucketName, &e.RootPath, &format,
-		&e.URI, &e.Glob, &e.Enabled, &e.RefreshMode, &e.SchemaStrategy, &partitionCols,
+		&e.URI, &e.Glob, &e.Enabled, &e.RefreshMode, &e.SchemaStrategy, &partitionCols, &readOptions,
 		&e.Description, &e.CreatedAt, &e.UpdatedAt, &lastRefresh); err != nil {
 		if isNoRows(err) {
 			return nil, nil
@@ -119,5 +119,13 @@ func scanCatalogEntry(r rowScanner) (*model.CatalogEntry, error) {
 	e.Format = model.Format(format)
 	e.LastRefreshAt = scanTime(lastRefresh)
 	fromJSON(partitionCols, &e.PartitionCols)
+	// Rows written before this column existed store "" — fall back to the safe
+	// defaults; otherwise decode and normalize (empty Header -> "auto").
+	if readOptions == "" {
+		e.ReadOptions = model.DefaultReadOptions()
+	} else {
+		fromJSON(readOptions, &e.ReadOptions)
+		e.ReadOptions = e.ReadOptions.Normalized()
+	}
 	return &e, nil
 }

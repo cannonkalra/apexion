@@ -19,20 +19,21 @@ const (
 // A CatalogEntry is not a Dataset: the Dataset is discovered metadata, the
 // CatalogEntry is the user's decision to expose that dataset as SQL.
 type CatalogEntry struct {
-	ID             string     `json:"id"`
-	Name           string     `json:"name"` // the SQL table name (unique)
-	DatasetID      string     `json:"dataset_id"`
-	BucketName     string     `json:"bucket_name"`
-	RootPath       string     `json:"root_path"`
-	Format         Format     `json:"format"`
-	URI            string     `json:"uri"`
-	Glob           string     `json:"glob"`
-	Enabled        bool       `json:"enabled"`
-	RefreshMode    string     `json:"refresh_mode"`
-	SchemaStrategy string     `json:"schema_strategy"`
-	PartitionCols  []string   `json:"partition_cols"`
-	Description    string     `json:"description"`
-	CreatedAt      time.Time  `json:"created_at"`
-	UpdatedAt      time.Time  `json:"updated_at"`
-	LastRefreshAt  *time.Time `json:"last_refresh_at,omitempty"`
+	ID             string      `json:"id"`
+	Name           string      `json:"name"` // the SQL table name (unique)
+	DatasetID      string      `json:"dataset_id"`
+	BucketName     string      `json:"bucket_name"`
+	RootPath       string      `json:"root_path"`
+	Format         Format      `json:"format"`
+	URI            string      `json:"uri"`
+	Glob           string      `json:"glob"`
+	Enabled        bool        `json:"enabled"`
+	RefreshMode    string      `json:"refresh_mode"`
+	SchemaStrategy string      `json:"schema_strategy"`
+	PartitionCols  []string    `json:"partition_cols"`
+	ReadOptions    ReadOptions `json:"read_options"` // DuckDB reader options for the view
+	Description    string      `json:"description"`
+	CreatedAt      time.Time   `json:"created_at"`
+	UpdatedAt      time.Time   `json:"updated_at"`
+	LastRefreshAt  *time.Time  `json:"last_refresh_at,omitempty"`
 }

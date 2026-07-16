@@ -218,7 +218,11 @@ func (e *Engine) PreviewFile(ctx context.Context, bucket, key string, format mod
 	if !e.ready {
 		return nil, fmt.Errorf("S3 preview unavailable: %s", e.readErr)
 	}
-	from, err := FromClause(bucket, key, format)
+	// Single-file preview uses the safe defaults, but with Filename off: a
+	// spurious `filename` column on one file is noise.
+	opts := model.DefaultReadOptions()
+	opts.Filename = false
+	from, err := FromClause(bucket, key, format, opts)
 	if err != nil {
 		return nil, err
 	}
@@ -226,11 +230,15 @@ func (e *Engine) PreviewFile(ctx context.Context, bucket, key string, format mod
 }
 
 // PreviewDataset previews a dataset by globbing its data files.
-func (e *Engine) PreviewDataset(ctx context.Context, bucket, prefix string, format model.Format, limit int) (*Result, error) {
+func (e *Engine) PreviewDataset(ctx context.Context, bucket, prefix string, format model.Format, sampleKey string, limit int) (*Result, error) {
 	if !e.ready {
 		return nil, fmt.Errorf("S3 preview unavailable: %s", e.readErr)
 	}
-	from, err := globClause(bucket, prefix, format)
+	// A multi-file dataset preview uses the safe defaults, minus the filename
+	// column (which the previous glob reader also omitted).
+	opts := model.DefaultReadOptions()
+	opts.Filename = false
+	from, err := globClause(bucket, prefix, format, sampleKey, opts)
 	if err != nil {
 		return nil, err
 	}

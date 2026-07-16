@@ -31,7 +31,7 @@ func TestDataExtension(t *testing.T) {
 func TestGlobClauseNoBraces(t *testing.T) {
 	// DuckDB's S3 glob does not support brace expansion; the plain glob must not
 	// contain one.
-	from, _ := globClause("b", "p", model.FormatCSV)
+	from, _ := globClause("b", "p", model.FormatCSV, "", model.DefaultReadOptions())
 	if strings.ContainsAny(from, "{}") {
 		t.Errorf("plain glob must not use brace expansion: %s", from)
 	}
@@ -40,8 +40,17 @@ func TestGlobClauseNoBraces(t *testing.T) {
 	}
 }
 
+// TestGlobClauseCompression verifies a compressed sample key yields a glob that
+// matches the real extension (.csv.gz), so gzipped datasets are not missed.
+func TestGlobClauseCompression(t *testing.T) {
+	from, _ := globClause("eyeota-data-feed", "2023-10-11", model.FormatCSV, "2023-10-11/US/IDFA/part-0.csv.gz", model.DefaultReadOptions())
+	if !strings.Contains(from, "**/*.csv.gz") {
+		t.Errorf("compressed glob should match .csv.gz: %s", from)
+	}
+}
+
 func TestFromClause(t *testing.T) {
-	from, err := FromClause("bucket", "dir/part-0.parquet", model.FormatParquet)
+	from, err := FromClause("bucket", "dir/part-0.parquet", model.FormatParquet, model.DefaultReadOptions())
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -51,7 +60,7 @@ func TestFromClause(t *testing.T) {
 	if !strings.Contains(from, "s3://bucket/dir/part-0.parquet") {
 		t.Errorf("missing object path: %s", from)
 	}
-	if _, err := FromClause("b", "x", model.FormatORC); err == nil {
+	if _, err := FromClause("b", "x", model.FormatORC, model.DefaultReadOptions()); err == nil {
 		t.Error("expected unsupported-format error for ORC")
 	}
 }

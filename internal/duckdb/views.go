@@ -19,14 +19,14 @@ func ValidIdentifier(name string) bool { return identRe.MatchString(name) }
 // files directly from object storage. No data is copied or ingested; directory
 // partition keys (e.g. year=2026/month=07) surface as columns via
 // hive_partitioning. Calling it again with the same name refreshes the view.
-func (e *Engine) CreateView(ctx context.Context, name, bucket, prefix string, format model.Format) error {
+func (e *Engine) CreateView(ctx context.Context, name, bucket, prefix string, format model.Format, sampleKey string, opts model.ReadOptions) error {
 	if !ValidIdentifier(name) {
 		return fmt.Errorf("invalid table name %q", name)
 	}
 	if !e.ready {
 		return fmt.Errorf("query engine unavailable: %s", e.readErr)
 	}
-	from, err := globClause(bucket, prefix, format)
+	from, err := globClause(bucket, prefix, format, sampleKey, opts)
 	if err != nil {
 		return err
 	}
@@ -36,6 +36,62 @@ func (e *Engine) CreateView(ctx context.Context, name, bucket, prefix string, fo
 	}
 	e.log.Info().Str("table", name).Msg("catalog view created")
 	return nil
+}
+
+// CreateViewPartitioned registers a view that additionally exposes bare-directory
+// levels as virtual partition columns (partNames, in order). DuckDB cannot
+// hive-infer non-key=value paths, so the columns are derived from the source
+// path with split_part — plain string splitting, not regex — reading the
+// original objects directly (no copy). With no partNames it is exactly
+// CreateView.
+func (e *Engine) CreateViewPartitioned(ctx context.Context, name, bucket, prefix string, format model.Format, sampleKey string, partNames []string, opts model.ReadOptions) error {
+	if len(partNames) == 0 {
+		return e.CreateView(ctx, name, bucket, prefix, format, sampleKey, opts)
+	}
+	if !ValidIdentifier(name) {
+		return fmt.Errorf("invalid table name %q", name)
+	}
+	if !e.ready {
+		return fmt.Errorf("query engine unavailable: %s", e.readErr)
+	}
+	stmt, err := partitionViewSQL(name, bucket, prefix, format, sampleKey, partNames, opts)
+	if err != nil {
+		return err
+	}
+	if _, err := e.db.ExecContext(ctx, stmt); err != nil {
+		return cleanErr(err)
+	}
+	e.log.Info().Str("table", name).Int("partitions", len(partNames)).Msg("catalog view created (virtual partitions)")
+	return nil
+}
+
+// partitionViewSQL builds the CREATE VIEW statement that derives virtual
+// partition columns from the object path with split_part (string splitting, not
+// regex). It is pure so the SQL can be unit-tested without a live engine.
+func partitionViewSQL(name, bucket, prefix string, format model.Format, sampleKey string, partNames []string, opts model.ReadOptions) (string, error) {
+	reader, err := partitionGlobReader(bucket, prefix, format, sampleKey, opts)
+	if err != nil {
+		return "", err
+	}
+	// Byte length of the constant path prefix that precedes the partition dirs,
+	// e.g. "s3://bucket/root/". DuckDB substr/split_part are 1-indexed.
+	prefixLen := len(fmt.Sprintf("s3://%s/%s/", bucket, strings.Trim(prefix, "/")))
+	cols := make([]string, 0, len(partNames))
+	for i, pn := range partNames {
+		if !ValidIdentifier(pn) {
+			return "", fmt.Errorf("invalid partition column %q", pn)
+		}
+		cols = append(cols, fmt.Sprintf(`split_part(substr(filename, %d), '/', %d) AS "%s"`, prefixLen+1, i+1, pn))
+	}
+	// The reader always exposes `filename` (partitionGlobReader forces it) so the
+	// derived columns can split it. If the user asked to see the filename column,
+	// keep it in the output; otherwise drop it with EXCLUDE.
+	projection := "* EXCLUDE (filename)"
+	if opts.Filename {
+		projection = "*"
+	}
+	return fmt.Sprintf(`CREATE OR REPLACE VIEW "%s" AS SELECT %s, %s FROM %s`,
+		name, projection, strings.Join(cols, ", "), reader), nil
 }
 
 // DropView removes a catalog table's view.

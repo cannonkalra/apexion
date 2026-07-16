@@ -9,6 +9,7 @@ import (
 
 	"github.com/google/uuid"
 
+	"github.com/apexion/apexion/internal/catalog/discovery"
 	"github.com/apexion/apexion/internal/duckdb"
 	"github.com/apexion/apexion/internal/model"
 	"github.com/apexion/apexion/internal/storage"
@@ -25,12 +26,16 @@ type RegisterOptions struct {
 	Name           string // SQL table name; empty → derived from the dataset
 	Description    string
 	SchemaStrategy string // union|strict|latest; empty → union
+	// ReadOptions are the DuckDB reader options for the view. A caller building a
+	// RegisterOptions from a form must pass a fully-formed value; the old
+	// RegisterDataset helper supplies model.DefaultReadOptions().
+	ReadOptions model.ReadOptions
 }
 
 // RegisterDataset registers a discovered dataset as a logical SQL table with
 // default options. See RegisterDatasetWith for the full form.
 func (s *Service) RegisterDataset(ctx context.Context, datasetID, name string) (*model.CatalogEntry, error) {
-	return s.RegisterDatasetWith(ctx, datasetID, RegisterOptions{Name: name})
+	return s.RegisterDatasetWith(ctx, datasetID, RegisterOptions{Name: name, ReadOptions: model.DefaultReadOptions()})
 }
 
 // RegisterDatasetWith registers a discovered dataset as a logical SQL table and
@@ -75,7 +80,8 @@ func (s *Service) RegisterDatasetWith(ctx context.Context, datasetID string, opt
 		Enabled:        true,
 		RefreshMode:    model.RefreshManual,
 		SchemaStrategy: strategy,
-		PartitionCols:  ds.PartitionKeys,
+		PartitionCols:  s.partitionColumnsFor(ctx, ds),
+		ReadOptions:    opt.ReadOptions.Normalized(),
 		Description:    opt.Description,
 		CreatedAt:      now,
 		UpdatedAt:      now,
@@ -90,12 +96,63 @@ func (s *Service) RegisterDatasetWith(ctx context.Context, datasetID string, opt
 		}
 		return nil, err
 	}
-	if err := s.duckdb.CreateView(ctx, name, ds.BucketName, ds.Path, ds.Format); err != nil {
+	if err := s.rebuildView(ctx, entry); err != nil {
 		_ = s.store.DeleteCatalogEntry(ctx, entry.ID)
 		return nil, fmt.Errorf("create view: %w", err)
 	}
 	s.log.Info().Str("table", name).Str("dataset", ds.Name).Msg("dataset registered into catalog")
 	return entry, nil
+}
+
+// partitionColumnsFor determines a dataset's partition column names: the real
+// Hive keys if the layout is key=value, otherwise generated virtual names
+// (pt0, pt1, …) — one per bare directory level between the dataset root and its
+// files. Returns nil when the dataset has no partition directories.
+func (s *Service) partitionColumnsFor(ctx context.Context, ds *model.Dataset) []string {
+	if len(ds.PartitionKeys) > 0 {
+		return ds.PartitionKeys // real Hive partitions
+	}
+	objs, err := s.store.ListObjects(ctx, ds.BucketID, ds.ID, 1)
+	if err != nil || len(objs) == 0 {
+		return nil
+	}
+	root := strings.Trim(ds.Path, "/")
+	rel := strings.TrimPrefix(strings.TrimPrefix(objs[0].Key, root), "/")
+	vp := s.vpath.Build(rel, 1<<30)
+	if len(vp.Partitions) == 0 {
+		return nil
+	}
+	names := make([]string, len(vp.Partitions))
+	for i, p := range vp.Partitions {
+		names[i] = p.Name
+	}
+	return names
+}
+
+// rebuildView (re)creates a catalog entry's DuckDB view. Real Hive datasets use
+// DuckDB's native hive_partitioning; bare-directory (positional) datasets derive
+// virtual partition columns via split_part. Reading always comes from the
+// original objects — no data is copied. The strategy is read from the dataset's
+// stored discovery metadata (no path reparsing here).
+func (s *Service) rebuildView(ctx context.Context, entry *model.CatalogEntry) error {
+	strategy := discovery.StrategyPositional
+	var sampleKey string
+	if ds, _ := s.store.GetDataset(ctx, entry.DatasetID); ds != nil {
+		// Fall back to Hive detection for datasets crawled before discovery
+		// metadata existed (PartitionKeys look like key=value).
+		if ds.DiscoveryStrategy != "" {
+			strategy = ds.DiscoveryStrategy
+		} else if len(ds.PartitionKeys) > 0 {
+			strategy = discovery.StrategyHive
+		}
+		// A representative object key lets the reader match the dataset's real
+		// file extension, including compression (e.g. .csv.gz).
+		sampleKey = s.store.SampleObjectKey(ctx, ds)
+	}
+	if strategy == discovery.StrategyHive {
+		return s.duckdb.CreateView(ctx, entry.Name, entry.BucketName, entry.RootPath, entry.Format, sampleKey, entry.ReadOptions)
+	}
+	return s.duckdb.CreateViewPartitioned(ctx, entry.Name, entry.BucketName, entry.RootPath, entry.Format, sampleKey, entry.PartitionCols, entry.ReadOptions)
 }
 
 // ListCatalog returns every catalog entry.
@@ -185,7 +242,7 @@ func (s *Service) RefreshCatalog(ctx context.Context, id string) error {
 	if err != nil || entry == nil {
 		return err
 	}
-	if err := s.duckdb.CreateView(ctx, entry.Name, entry.BucketName, entry.RootPath, entry.Format); err != nil {
+	if err := s.rebuildView(ctx, entry); err != nil {
 		return err
 	}
 	now := time.Now().UTC()
@@ -212,7 +269,7 @@ func (s *Service) RecreateViews(ctx context.Context) {
 		if !e.Enabled {
 			continue
 		}
-		if err := s.duckdb.CreateView(ctx, e.Name, e.BucketName, e.RootPath, e.Format); err != nil {
+		if err := s.rebuildView(ctx, &e); err != nil {
 			s.log.Warn().Err(err).Str("table", e.Name).Msg("recreate view failed")
 			continue
 		}

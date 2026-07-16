@@ -36,7 +36,7 @@ templ WizardStep1(vm WizardVM) {
 		<h2 class="text-lg font-semibold text-white mb-1">Select source</h2>
 		<p class="text-sm text-slate-500 mb-5">Choose the storage directory to crawl into a dataset.</p>
 		if vm.Error != "" {
-			<div class="mb-4 text-sm text-accent-rose">{ vm.Error }</div>
+			<div class="mb-4 rounded-lg border border-accent-rose/40 bg-accent-rose/5 p-3 text-sm text-accent-rose font-mono">{ vm.Error }</div>
 		}
 		<form hx-post="/ui/wizard/crawl" hx-target="#wizard-body" hx-swap="innerHTML" class="space-y-4">
 			<div class="grid grid-cols-1 md:grid-cols-2 gap-4">
@@ -137,7 +137,7 @@ templ WizardStep4(vm WizardVM) {
 		<h2 class="text-lg font-semibold text-white mb-1">Register as SQL table</h2>
 		<p class="text-sm text-slate-500 mb-5">Exposes { vm.Detail.Dataset.Name } as a DuckDB view — no data is copied.</p>
 		if vm.Error != "" {
-			<div class="mb-4 text-sm text-accent-rose">{ vm.Error }</div>
+			<div class="mb-4 rounded-lg border border-accent-rose/40 bg-accent-rose/5 p-3 text-sm text-accent-rose font-mono">{ vm.Error }</div>
 		}
 		<form hx-post="/ui/wizard/register" hx-target="#wizard-body" hx-swap="innerHTML" class="space-y-4">
 			<input type="hidden" name="dataset_id" value={ vm.Detail.Dataset.ID }/>
@@ -160,11 +160,38 @@ templ WizardStep4(vm WizardVM) {
 				<label class="block text-xs uppercase tracking-wider text-slate-500 mb-1">Description (optional)</label>
 				<input name="description" placeholder="What this table contains" class={ inputClass }/>
 			</div>
+			<div class="rounded-lg border border-base-800 p-4 space-y-3">
+				<div class="text-xs uppercase tracking-wider text-slate-500">Read options</div>
+				<div class="grid grid-cols-1 md:grid-cols-2 gap-3 text-sm text-slate-300">
+					<label class="flex items-center gap-2"><input type="checkbox" name="opt_filename" checked class="rounded bg-base-950 border-base-700"/> Add filename column</label>
+					<label class="flex items-center gap-2"><input type="checkbox" name="opt_union" checked class="rounded bg-base-950 border-base-700"/> Union by column name</label>
+				</div>
+				<div class="grid grid-cols-1 md:grid-cols-2 gap-3">
+					<div>
+						<label class="block text-xs uppercase tracking-wider text-slate-500 mb-1">Header (CSV)</label>
+						<select name="opt_header" class={ inputClass }>
+							<option value="auto">Auto-detect (default)</option>
+							<option value="present">Has header row</option>
+							<option value="none">No header row</option>
+						</select>
+					</div>
+					<div>
+						<label class="block text-xs uppercase tracking-wider text-slate-500 mb-1">Sample size (CSV)</label>
+						<input name="opt_sample_size" placeholder="1000" pattern="-?[0-9]+" class={ inputClass + " font-mono" }/>
+						<p class="text-[11px] text-slate-600 mt-1">Rows scanned for type inference. Empty = default; -1 = scan all.</p>
+					</div>
+				</div>
+				<label class="flex items-center gap-2 text-sm text-slate-300"><input type="checkbox" name="opt_ignore_errors" class="rounded bg-base-950 border-base-700"/> Ignore malformed rows</label>
+			</div>
 			<div class="flex items-center justify-end gap-2 pt-2">
-				<form hx-post="/ui/wizard/skip" hx-target="#wizard-body" hx-swap="innerHTML">
-					<input type="hidden" name="dataset_id" value={ vm.Detail.Dataset.ID }/>
-					<button class="btn-ghost" type="submit">Skip</button>
-				</form>
+				<button
+					type="button"
+					class="btn-ghost"
+					hx-post="/ui/wizard/skip"
+					hx-vals={ wizardSkipVals(vm.Detail.Dataset.ID) }
+					hx-target="#wizard-body"
+					hx-swap="innerHTML"
+				>Skip</button>
 				<button class="btn-primary" type="submit">@iconTable() Register</button>
 			</div>
 		</form>

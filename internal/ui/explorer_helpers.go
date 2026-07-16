@@ -29,11 +29,15 @@ func parentExplorerURL(bucket, key string) string {
 	return "/explorer?" + v.Encode()
 }
 
-// sqlURLForFile pre-fills the scratchpad with a SELECT over the file.
+// sqlURLForFile pre-fills the scratchpad with a SELECT over the file. It uses
+// the default read options minus the filename column (a single file needs no
+// filename column) so the scratchpad reflects how the file is actually read.
 func sqlURLForFile(vm PreviewVM) string {
-	from, err := duckdb.FromClause(vm.Bucket, vm.Key, vm.Format)
+	opts := model.DefaultReadOptions()
+	opts.Filename = false
+	from, err := duckdb.FromClause(vm.Bucket, vm.Key, vm.Format, opts)
 	if err != nil {
-		from = fmt.Sprintf("read_csv_auto('s3://%s/%s')", vm.Bucket, vm.Key)
+		from = fmt.Sprintf("read_csv_auto('s3://%s/%s', union_by_name=true)", vm.Bucket, vm.Key)
 	}
 	q := fmt.Sprintf("SELECT * FROM %s LIMIT 100", from)
 	v := url.Values{}

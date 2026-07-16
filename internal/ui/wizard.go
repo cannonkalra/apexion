@@ -1,8 +1,10 @@
 package ui
 
 import (
+	"encoding/json"
 	"net/http"
 	"net/url"
+	"strconv"
 
 	"github.com/apexion/apexion/internal/catalog"
 	"github.com/apexion/apexion/internal/model"
@@ -13,6 +15,14 @@ import (
 func wizardProgressURL(vm WizardVM) string {
 	q := url.Values{"job": {vm.JobID}, "bucket": {vm.Bucket}, "prefix": {vm.Prefix}}
 	return "/ui/wizard/progress?" + q.Encode()
+}
+
+// wizardSkipVals builds the hx-vals JSON for the Skip action's htmx POST. Using
+// a standalone button (not a nested <form>) keeps the register form valid HTML —
+// nested forms are reparented by browsers, breaking layout and submission.
+func wizardSkipVals(datasetID string) string {
+	b, _ := json.Marshal(map[string]string{"dataset_id": datasetID})
+	return string(b)
 }
 
 // wizardPage renders the full-page Crawl → Analyze → Review → Register wizard,
@@ -99,6 +109,7 @@ func (h *Handler) wizardRegister(w http.ResponseWriter, r *http.Request) {
 		Name:           r.FormValue("name"),
 		Description:    r.FormValue("description"),
 		SchemaStrategy: r.FormValue("schema_strategy"),
+		ReadOptions:    readOptionsFromForm(r),
 	})
 	if err != nil {
 		h.render(w, r, WizardStep4(WizardVM{
@@ -107,6 +118,30 @@ func (h *Handler) wizardRegister(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	h.render(w, r, WizardStep5(WizardVM{Detail: detail, Entry: entry}))
+}
+
+// readOptionsFromForm parses the "Read options" fieldset of the registration
+// form into model.ReadOptions. An unchecked HTML checkbox sends no value, so a
+// plain =="on" test yields false when unchecked and true when checked. An empty
+// sample size means the engine default; header defaults to "auto".
+func readOptionsFromForm(r *http.Request) model.ReadOptions {
+	header := r.FormValue("opt_header")
+	if header == "" {
+		header = "auto"
+	}
+	sampleSize := 0
+	if v := r.FormValue("opt_sample_size"); v != "" {
+		if n, err := strconv.Atoi(v); err == nil {
+			sampleSize = n
+		}
+	}
+	return model.ReadOptions{
+		Filename:     r.FormValue("opt_filename") == "on",
+		UnionByName:  r.FormValue("opt_union") == "on",
+		Header:       header,
+		SampleSize:   sampleSize,
+		IgnoreErrors: r.FormValue("opt_ignore_errors") == "on",
+	}
 }
 
 // wizardSkip (step 3 → 5) finishes without registering.
