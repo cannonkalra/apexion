@@ -52,7 +52,9 @@ templ sidebar(active string) {
 		</div>
 		<nav class="flex-1 overflow-y-auto p-3 space-y-1">
 			@navLink("/explorer", "Explorer", active == "explorer", iconFolder())
-			@navLink("/datasets", "Datasets", active == "datasets", iconTable())
+			@navLink("/datasets", "Datasets", active == "datasets", iconInbox())
+			@navLink("/catalog", "Catalog", active == "catalog", iconTable())
+			@navLink("/query", "Query", active == "query", iconTerminal())
 			<div class="pt-3 mt-3 border-t border-base-800"></div>
 			@navLink("/settings", "Settings", active == "settings", iconGear())
 		</nav>

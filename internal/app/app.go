@@ -78,8 +78,10 @@ func New(ctx context.Context, cfg *config.Config) (*App, error) {
 
 	jobMgr := jobs.NewManager(store, log, cfg.Crawler.Workers)
 
-	cat := catalog.New(store, conns, cr, jobMgr, bus, log)
+	cat := catalog.New(store, conns, cr, jobMgr, bus, prev, log)
 	cat.PersistEvents(bus)
+	// Recreate registered catalog views in the (in-memory) query engine.
+	cat.RecreateViews(ctx)
 
 	sched := jobs.NewScheduler(store, cat, log)
 

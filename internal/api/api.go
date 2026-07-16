@@ -47,8 +47,17 @@ func (a *API) Routes() http.Handler {
 	r.Post("/buckets/{name}/crawl", a.crawlBucket)
 
 	r.Get("/datasets", a.listDatasets)
+	r.Post("/datasets/crawl", a.crawlDirectory)
 	r.Get("/datasets/{id}", a.getDataset)
+	r.Post("/datasets/{id}/refresh", a.refreshDataset)
 	r.Delete("/datasets/{id}", a.deleteDataset)
+
+	r.Get("/catalog", a.listCatalog)
+	r.Post("/catalog", a.registerCatalog)
+	r.Get("/catalog/{id}", a.getCatalog)
+	r.Post("/catalog/{id}/refresh", a.refreshCatalog)
+	r.Delete("/catalog/{id}", a.deleteCatalog)
+	r.Post("/query", a.runQuery)
 
 	r.Get("/schema", a.getSchema)
 	r.Get("/columns", a.getColumns)

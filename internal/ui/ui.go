@@ -62,6 +62,8 @@ func (h *Handler) Routes() http.Handler {
 	r.Get("/datasets", h.datasets)
 	r.Get("/datasets/{id}", h.datasetDetail)
 	r.Get("/preview", h.filePreview)
+	r.Get("/catalog", h.catalogPage)
+	r.Get("/query", h.queryPage)
 	r.Get("/settings", h.settings)
 
 	r.Route("/ui", func(r chi.Router) {
@@ -69,6 +71,10 @@ func (h *Handler) Routes() http.Handler {
 		r.Get("/datasets/{id}/preview", h.partialDatasetPreview)
 		r.Post("/directories/crawl", h.actionCrawlDirectory)
 		r.Delete("/datasets/{id}", h.actionDeleteDataset)
+		r.Post("/catalog", h.actionRegisterCatalog)
+		r.Post("/catalog/{id}/refresh", h.actionRefreshCatalog)
+		r.Delete("/catalog/{id}", h.actionDeleteCatalog)
+		r.Post("/query", h.actionRunQuery)
 		r.Post("/settings/crawl", h.actionSettingsCrawl)
 		r.Post("/connections", h.actionCreateConnection)
 		r.Post("/connections/{id}/activate", h.actionActivateConnection)

@@ -40,6 +40,19 @@ type DatasetsVM struct {
 	Filter   storage.DatasetFilter
 }
 
+// CatalogVM powers the catalog (logical SQL tables) page.
+type CatalogVM struct {
+	Entries []model.CatalogEntry
+}
+
+// QueryVM powers the SQL query console over catalog tables.
+type QueryVM struct {
+	Tables     []model.CatalogEntry
+	Selected   string
+	InitialSQL string
+	Ready      bool
+}
+
 // SettingsVM powers the settings page.
 type SettingsVM struct {
 	Connections  []model.Connection

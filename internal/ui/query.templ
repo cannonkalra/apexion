@@ -1,0 +1,58 @@
+package ui
+
+// QueryPage is a simple SQL console over the catalog tables. It runs read-only
+// queries through DuckDB, which reads directly from object storage.
+templ QueryPage(vm QueryVM) {
+	@Layout("query", "Query") {
+		<div class="mb-5">
+			<h1 class="text-xl font-semibold text-white">Query</h1>
+			<p class="text-sm text-slate-500 mt-1">Run read-only SQL over your catalog tables. DuckDB reads storage directly — nothing is imported.</p>
+		</div>
+		if !vm.Ready {
+			<div class="card p-4 mb-4 border-l-4 border-accent-amber text-sm text-slate-300">
+				The query engine is not ready (the httpfs/S3 extension failed to load). Queries will error until it recovers.
+			</div>
+		}
+		<div class="grid grid-cols-1 lg:grid-cols-4 gap-4">
+			<div class="lg:col-span-1 card p-4 h-fit">
+				<h2 class="text-xs uppercase tracking-wider text-slate-500 mb-3">Tables</h2>
+				if len(vm.Tables) == 0 {
+					<p class="text-sm text-slate-500">No tables registered yet. Register a dataset from the Datasets page.</p>
+				} else {
+					<div class="space-y-1">
+						for _, t := range vm.Tables {
+							<a
+								href={ templ.SafeURL("/query?table=" + t.Name) }
+								class={ "flex items-center gap-2 px-2 py-1.5 rounded-md text-sm hover:bg-base-800", templ.KV("bg-base-800 text-white", t.Name == vm.Selected), templ.KV("text-slate-300", t.Name != vm.Selected) }
+							>
+								@iconTable()
+								<span class="font-mono truncate">{ t.Name }</span>
+							</a>
+						}
+					</div>
+				}
+			</div>
+			<div class="lg:col-span-3 space-y-4">
+				<form hx-post="/ui/query" hx-target="#query-results" hx-swap="innerHTML" class="card p-4">
+					<textarea
+						name="sql"
+						rows="6"
+						spellcheck="false"
+						placeholder="SELECT * FROM my_table LIMIT 100"
+						class="w-full px-3 py-2 rounded-lg bg-base-950 border border-base-800 text-sm text-slate-200 font-mono focus:outline-none focus:ring-2 focus:ring-brand-500/40"
+					>{ vm.InitialSQL }</textarea>
+					<div class="flex items-center justify-between mt-3">
+						<label class="text-xs text-slate-500">Row limit
+							<input name="limit" type="number" value="200" min="1" max="10000" class="ml-2 w-24 px-2 py-1 rounded bg-base-950 border border-base-800 text-slate-200"/>
+						</label>
+						<button class="btn-primary" type="submit">@iconTerminal() Run query</button>
+					</div>
+				</form>
+				<div id="query-results">
+					<div class="card p-8 text-center text-sm text-slate-500">Results will appear here.</div>
+				</div>
+			</div>
+		</div>
+		<div id="toast-slot"></div>
+	}
+}

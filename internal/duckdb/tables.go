@@ -31,7 +31,7 @@ func globWith(bucket, prefix, pattern string, format model.Format) (string, erro
 	if prefix == "" {
 		uri = fmt.Sprintf("s3://%s/%s", bucket, pattern)
 	}
-	return readerExpr("'"+esc(uri)+"'", format)
+	return readerExprHive("'"+esc(uri)+"'", format, true)
 }
 
 // defaultPattern is the plain (uncompressed) recursive glob for a format.
@@ -98,15 +98,27 @@ func defaultExt(format model.Format) string {
 // readerExpr maps a format to its DuckDB read function around an already-built
 // path expression (a quoted URI, a glob, or a list literal).
 func readerExpr(pathExpr string, format model.Format) (string, error) {
+	return readerExprHive(pathExpr, format, false)
+}
+
+// readerExprHive builds the DuckDB reader for a path expression. When hive is
+// true, hive_partitioning=true is enabled so directory partition keys (e.g.
+// year=2026/month=07) surface as SQL columns — used for glob/view readers, not
+// single-file previews.
+func readerExprHive(pathExpr string, format model.Format, hive bool) (string, error) {
+	hp := ""
+	if hive {
+		hp = ", hive_partitioning=true"
+	}
 	switch format {
 	case model.FormatParquet:
-		return fmt.Sprintf("read_parquet(%s, union_by_name=true)", pathExpr), nil
+		return fmt.Sprintf("read_parquet(%s, union_by_name=true%s)", pathExpr, hp), nil
 	case model.FormatCSV:
-		return fmt.Sprintf("read_csv_auto(%s, sample_size=1000, union_by_name=true)", pathExpr), nil
+		return fmt.Sprintf("read_csv_auto(%s, sample_size=1000, union_by_name=true%s)", pathExpr, hp), nil
 	case model.FormatTSV:
-		return fmt.Sprintf("read_csv_auto(%s, delim='\\t', sample_size=1000, union_by_name=true)", pathExpr), nil
+		return fmt.Sprintf("read_csv_auto(%s, delim='\\t', sample_size=1000, union_by_name=true%s)", pathExpr, hp), nil
 	case model.FormatJSON, model.FormatJSONL:
-		return fmt.Sprintf("read_json_auto(%s)", pathExpr), nil
+		return fmt.Sprintf("read_json_auto(%s%s)", pathExpr, hp), nil
 	case model.FormatIceberg:
 		return fmt.Sprintf("iceberg_scan(%s)", pathExpr), nil
 	case model.FormatDelta:

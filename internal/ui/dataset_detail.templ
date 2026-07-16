@@ -24,6 +24,14 @@ templ DatasetDetailPage(d *catalog.DatasetDetail, tab string) {
 					<p class="text-sm text-slate-400 mt-2 max-w-2xl">{ d.Dataset.Description }</p>
 				}
 			</div>
+			<form hx-post="/ui/catalog" hx-target="#toast-slot" hx-swap="innerHTML" class="flex items-end gap-2">
+				<input type="hidden" name="dataset_id" value={ d.Dataset.ID }/>
+				<div>
+					<label class="block text-[11px] uppercase tracking-wider text-slate-500 mb-1">SQL table name</label>
+					<input name="name" placeholder="auto" class="px-3 py-1.5 rounded-lg bg-base-950 border border-base-800 text-sm text-slate-200 font-mono focus:outline-none focus:ring-2 focus:ring-brand-500/40"/>
+				</div>
+				<button class="btn-primary" type="submit">@iconTable() Register into Catalog</button>
+			</form>
 		</div>
 
 		<div class="grid grid-cols-2 md:grid-cols-4 xl:grid-cols-6 gap-3 mb-5">

@@ -17,3 +17,5 @@ seed
 # Note: generated *_templ.go and assets/css/app.css ARE committed so the
 # project builds without the templ/tailwind toolchains.
 tmp/
+dist/*
+docs/

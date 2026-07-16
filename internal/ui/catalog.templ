@@ -1,0 +1,78 @@
+package ui
+
+import "github.com/apexion/apexion/internal/model"
+
+// CatalogPage lists the registered logical SQL tables. Each maps to a DuckDB
+// view that reads directly from object storage.
+templ CatalogPage(vm CatalogVM) {
+	@Layout("catalog", "Catalog") {
+		<div class="flex items-center justify-between mb-5">
+			<div>
+				<h1 class="text-xl font-semibold text-white">Catalog</h1>
+				<p class="text-sm text-slate-500 mt-1">Logical SQL tables — each reads its dataset's files directly from storage. No data is copied.</p>
+			</div>
+			<a class="btn-ghost" href="/datasets">@iconTable() Register a dataset</a>
+		</div>
+		if len(vm.Entries) == 0 {
+			@EmptyState("No tables yet", "Register a dataset from the Datasets page to expose it as a SQL table.")
+		} else {
+			<div class="card overflow-hidden">
+				<table class="w-full">
+					<thead>
+						<tr class="border-b border-base-800 bg-base-850">
+							<th class="th">Table</th>
+							<th class="th">Format</th>
+							<th class="th">Partition columns</th>
+							<th class="th">Refresh</th>
+							<th class="th">Last refresh</th>
+							<th class="th text-right">Actions</th>
+						</tr>
+					</thead>
+					<tbody class="divide-y divide-base-800">
+						for _, e := range vm.Entries {
+							@catalogRow(e)
+						}
+					</tbody>
+				</table>
+			</div>
+		}
+		<div id="toast-slot"></div>
+	}
+}
+
+templ catalogRow(e model.CatalogEntry) {
+	<tr id={ "catalog-" + e.ID } class="hover:bg-base-850/50">
+		<td class="table-cell">
+			<div class="font-medium text-white font-mono">{ e.Name }</div>
+			<div class="text-xs text-slate-500 font-mono truncate max-w-xs">{ e.URI }</div>
+		</td>
+		<td class="table-cell">@FormatPill(e.Format)</td>
+		<td class="table-cell text-xs text-slate-400 font-mono">
+			if len(e.PartitionCols) == 0 {
+				<span class="text-slate-600">—</span>
+			} else {
+				{ join(e.PartitionCols, ", ") }
+			}
+		</td>
+		<td class="table-cell text-slate-400">{ e.RefreshMode }</td>
+		<td class="table-cell text-slate-500 text-xs">{ timeAgoPtr(e.LastRefreshAt) }</td>
+		<td class="table-cell">
+			<div class="flex items-center justify-end gap-2">
+				<a class="btn-ghost text-xs" href={ templ.SafeURL("/query?table=" + e.Name) }>@iconTerminal() Query</a>
+				<button
+					class="btn-ghost text-xs"
+					hx-post={ "/ui/catalog/" + e.ID + "/refresh" }
+					hx-target="#toast-slot"
+					hx-swap="innerHTML"
+				>@iconRefresh() Refresh</button>
+				<button
+					class="btn-ghost text-xs text-accent-rose"
+					hx-delete={ "/ui/catalog/" + e.ID }
+					hx-target={ "#catalog-" + e.ID }
+					hx-swap="outerHTML"
+					hx-confirm={ "Drop table " + e.Name + "?" }
+				>@iconTrash()</button>
+			</div>
+		</td>
+	</tr>
+}

@@ -1,10 +1,12 @@
-// Package catalog owns dataset registration and is the orchestration hub for
-// the crawl domain. It coordinates the crawler, background jobs, and the event
-// bus, and exposes composite read models (DatasetDetail) to the API and UI.
+// Package catalog owns dataset registration and the logical SQL table registry.
+// It coordinates the crawler, background jobs, and the event bus; exposes
+// composite read models (DatasetDetail) to the API and UI; and owns catalog
+// entries — the name→dataset mappings that DuckDB exposes as views.
 //
-// Depends on: crawler, jobs, events, storage, objstore, model.
+// Depends on: crawler, jobs, events, storage, objstore, duckdb, model.
 // Deliberately does NOT: import ui/api/http; talk to a storage SDK (it goes
-// through objstore.Provider); or run DuckDB queries (that is package duckdb).
+// through objstore.Provider); or write SQL itself — it hands table definitions
+// to package duckdb, which owns all query/view SQL.
 package catalog
 
 import (
@@ -16,6 +18,7 @@ import (
 	"github.com/rs/zerolog"
 
 	"github.com/apexion/apexion/internal/crawler"
+	"github.com/apexion/apexion/internal/duckdb"
 	"github.com/apexion/apexion/internal/events"
 	"github.com/apexion/apexion/internal/jobs"
 	"github.com/apexion/apexion/internal/model"
@@ -30,15 +33,16 @@ type Service struct {
 	crawler  *crawler.Crawler
 	jobs     *jobs.Manager
 	bus      *events.Bus
+	duckdb   *duckdb.Engine
 	log      zerolog.Logger
 }
 
 // New constructs the catalog service.
 func New(store *storage.Store, provider objstore.Provider, cr *crawler.Crawler,
-	jm *jobs.Manager, bus *events.Bus, log zerolog.Logger) *Service {
+	jm *jobs.Manager, bus *events.Bus, ddb *duckdb.Engine, log zerolog.Logger) *Service {
 	return &Service{
 		store: store, provider: provider, crawler: cr,
-		jobs: jm, bus: bus, log: log.With().Str("component", "catalog").Logger(),
+		jobs: jm, bus: bus, duckdb: ddb, log: log.With().Str("component", "catalog").Logger(),
 	}
 }
 
