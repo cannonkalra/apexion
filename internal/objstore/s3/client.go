@@ -222,8 +222,19 @@ func (c *Client) ListBucketsPage(ctx context.Context, cursor string, limit int) 
 	if err != nil {
 		return nil, "", false, err
 	}
-	sort.Strings(all)
-	for _, name := range all {
+	names, nextCursor, hasMore = pageBuckets(all, cursor, limit)
+	return names, nextCursor, hasMore, nil
+}
+
+// pageBuckets is the pure, synthetic bucket-paging slice: sort names, drop those
+// <= cursor, take up to limit, and report whether more remain. Factored out so
+// it is unit-testable without a live server (ListBucketsPage supplies the names
+// from the SDK). It sorts a copy so the caller's slice is left untouched.
+func pageBuckets(all []string, cursor string, limit int) (names []string, nextCursor string, hasMore bool) {
+	sorted := make([]string, len(all))
+	copy(sorted, all)
+	sort.Strings(sorted)
+	for _, name := range sorted {
 		if name <= cursor {
 			continue
 		}
@@ -236,7 +247,7 @@ func (c *Client) ListBucketsPage(ctx context.Context, cursor string, limit int) 
 	if len(names) > 0 {
 		nextCursor = names[len(names)-1]
 	}
-	return names, nextCursor, hasMore, nil
+	return names, nextCursor, hasMore
 }
 
 // listPrefix lists objects directly under a prefix (used by table resolvers).
