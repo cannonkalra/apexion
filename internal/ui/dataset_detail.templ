@@ -13,7 +13,7 @@ var datasetTabs = []struct{ Key, Label string }{
 }
 
 templ DatasetDetailPage(d *catalog.DatasetDetail, tab string, status catalog.CatalogStatus, suggested string) {
-	@Layout("datasets", d.Dataset.Name) {
+	@Layout("datasets", "Dataset") {
 		<div class="flex flex-wrap items-start justify-between gap-4 mb-6">
 			<div class="min-w-0">
 				<div class="flex items-center gap-3">

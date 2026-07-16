@@ -71,11 +71,16 @@ type DirListing struct {
 	HasMore    bool   // more children exist beyond this page
 }
 
-// DefaultPageSize bounds how many immediate children a listing returns.
-const DefaultPageSize = 500
+// DefaultPageSize bounds how many immediate children a listing returns per page.
+// Deliberately small so large folders paginate (Load More) instead of dumping
+// everything at once; the UI offers larger page sizes via PageSizeOptions.
+const DefaultPageSize = 100
 
-// DefaultBucketPageSize bounds how many buckets a bucket listing returns.
-const DefaultBucketPageSize = 250
+// DefaultBucketPageSize bounds how many buckets a bucket listing returns per page.
+const DefaultBucketPageSize = 50
+
+// PageSizeOptions are the per-page choices the explorer UI offers for a listing.
+var PageSizeOptions = []int{50, 100, 250, 500}
 
 // Sort options for a listing.
 const (

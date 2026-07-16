@@ -140,6 +140,26 @@
   .banner-info  { @apply banner border-brand-500/40 bg-brand-500/5 text-slate-300; }
 
   /*
+   * Collapsible primary sidebar. The nav collapses to an icon-only rail; the
+   * `data-nav="collapsed"` attribute on <html> (set pre-paint from localStorage)
+   * drives both the sidebar width and the content offset so there is no layout
+   * flash. Only affects md+ where the sidebar is visible.
+   */
+  .app-sidebar { width: 16rem; transition: width 0.15s ease; }
+  @media (min-width: 768px) {
+    .app-main { padding-left: 16rem; transition: padding-left 0.15s ease; }
+  }
+  [data-nav="collapsed"] .app-sidebar { width: 4rem; }
+  [data-nav="collapsed"] .app-sidebar .nav-label,
+  [data-nav="collapsed"] .app-sidebar .brand-text,
+  [data-nav="collapsed"] .app-sidebar .sidebar-foot { display: none; }
+  [data-nav="collapsed"] .app-sidebar .brand-row { @apply px-0 justify-center; }
+  [data-nav="collapsed"] .app-sidebar .nav-link { @apply justify-center px-0; }
+  @media (min-width: 768px) {
+    [data-nav="collapsed"] .app-main { padding-left: 4rem; }
+  }
+
+  /*
    * Re-assert white foreground on filled BRAND/ACCENT controls under light mode.
    * The base-layer `[data-theme="light"] .text-white` rule (which greys out
    * emphasis headings so they stay legible on light surfaces) also matches these

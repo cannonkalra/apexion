@@ -20,6 +20,9 @@ templ Layout(active string, pageTitle string) {
 						if (localStorage.getItem('apexion.theme') === 'light') {
 							document.documentElement.dataset.theme = 'light';
 						}
+						if (localStorage.getItem('apexion.nav') === 'collapsed') {
+							document.documentElement.dataset.nav = 'collapsed';
+						}
 					} catch (e) {}
 				})();
 				// Sync the toggle icons to the restored theme once the DOM is ready.
@@ -34,7 +37,7 @@ templ Layout(active string, pageTitle string) {
 		<body class="min-h-screen">
 			<div class="flex min-h-screen">
 				@sidebar(active)
-				<div class="flex-1 flex flex-col min-w-0 md:pl-64">
+				<div class="flex-1 flex flex-col min-w-0 app-main">
 					@topbar(pageTitle)
 					<main class="flex-1 px-6 py-6 max-w-[1600px] w-full mx-auto">
 						{ children... }
@@ -45,6 +48,12 @@ templ Layout(active string, pageTitle string) {
 				</div>
 			</div>
 			<script>
+				function toggleNav() {
+					const root = document.documentElement;
+					const collapsed = root.dataset.nav !== 'collapsed';
+					root.dataset.nav = collapsed ? 'collapsed' : '';
+					try { localStorage.setItem('apexion.nav', collapsed ? 'collapsed' : 'expanded'); } catch (e) {}
+				}
 				function toggleTheme() {
 					const root = document.documentElement;
 					const light = root.dataset.theme !== 'light';
@@ -60,12 +69,12 @@ templ Layout(active string, pageTitle string) {
 }
 
 templ sidebar(active string) {
-	<aside class="fixed inset-y-0 left-0 z-30 hidden w-64 flex-col border-r border-base-800 bg-base-900 md:flex">
-		<div class="flex items-center gap-2.5 px-5 h-16 border-b border-base-800">
-			<div class="grid place-items-center w-9 h-9 rounded-lg bg-brand-600 text-white font-bold">A</div>
-			<div>
-				<div class="font-semibold text-white leading-tight">Apexion</div>
-				<div class="text-[11px] text-slate-500 leading-tight">Data Discovery</div>
+	<aside class="app-sidebar fixed inset-y-0 left-0 z-30 hidden flex-col border-r border-base-800 bg-base-900 md:flex">
+		<div class="brand-row flex items-center gap-2.5 px-5 h-16 border-b border-base-800">
+			<div class="grid place-items-center w-9 h-9 rounded-lg bg-brand-600 text-white font-bold shrink-0">A</div>
+			<div class="brand-text min-w-0">
+				<div class="font-semibold text-white leading-tight truncate">Apexion</div>
+				<div class="text-[11px] text-slate-500 leading-tight truncate">Data Discovery</div>
 			</div>
 		</div>
 		<nav class="flex-1 overflow-y-auto p-3 space-y-1">
@@ -76,7 +85,7 @@ templ sidebar(active string) {
 			<div class="pt-3 mt-3 border-t border-base-800"></div>
 			@navLink("/settings", "Settings", active == "settings", iconGear())
 		</nav>
-		<div class="p-3 text-[11px] text-slate-600 border-t border-base-800">
+		<div class="sidebar-foot p-3 text-[11px] text-slate-600 border-t border-base-800">
 			Apexion · Explorer
 		</div>
 	</aside>
@@ -86,15 +95,19 @@ templ navLink(href, label string, isActive bool, icon templ.Component) {
 	<a
 		href={ templ.SafeURL(href) }
 		class={ "nav-link", templ.KV("nav-link-active", isActive) }
+		title={ label }
 	>
 		@icon
-		<span>{ label }</span>
+		<span class="nav-label">{ label }</span>
 	</a>
 }
 
 templ topbar(pageTitle string) {
-	<header class="sticky top-0 z-20 flex items-center gap-4 h-16 px-6 border-b border-base-800 bg-base-950/80 backdrop-blur">
-		<h1 class="text-lg font-semibold text-white">{ pageTitle }</h1>
+	<header class="sticky top-0 z-20 flex items-center gap-3 h-16 px-6 border-b border-base-800 bg-base-950/80 backdrop-blur">
+		<button onclick="toggleNav()" class="btn-ghost !px-2 hidden md:inline-flex" title="Toggle sidebar" aria-label="Toggle sidebar">
+			@iconSidebar()
+		</button>
+		<h1 class="text-lg font-semibold text-white truncate">{ pageTitle }</h1>
 		<div class="flex-1"></div>
 		<button onclick="toggleTheme()" class="btn-ghost" title="Toggle theme" aria-label="Toggle light/dark theme">
 			<!-- Shown in dark mode (click → light). -->

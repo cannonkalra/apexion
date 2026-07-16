@@ -153,6 +153,23 @@ type sortOption struct {
 	Selected bool
 }
 
+// pageSizeOptions returns the per-page dropdown options with the current size
+// selected, so the user controls how many items each explorer page loads.
+func pageSizeOptions(current int) []sortOption {
+	if current <= 0 {
+		current = explorer.DefaultPageSize
+	}
+	opts := make([]sortOption, 0, len(explorer.PageSizeOptions))
+	for _, n := range explorer.PageSizeOptions {
+		opts = append(opts, sortOption{
+			Value:    strconv.Itoa(n),
+			Label:    strconv.Itoa(n) + " / page",
+			Selected: n == current,
+		})
+	}
+	return opts
+}
+
 // sortOptions returns the sort dropdown options with the current one selected.
 func sortOptions(current string) []sortOption {
 	if current == "" {
