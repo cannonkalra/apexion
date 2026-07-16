@@ -114,6 +114,14 @@ func (s *store) ListDirectory(ctx context.Context, bucket, prefix string, limit 
 	return s.clientFor(bucket).ListDirectory(ctx, bucket, prefix, limit)
 }
 
+func (s *store) ListPage(ctx context.Context, bucket, prefix, cursor string, limit int) (objstore.PageResult, error) {
+	return s.clientFor(bucket).ListPage(ctx, bucket, prefix, cursor, limit)
+}
+
+func (s *store) ListBucketsPage(ctx context.Context, cursor string, limit int) (names []string, nextCursor string, hasMore bool, err error) {
+	return s.client(s.cfg.PathStyle).ListBucketsPage(ctx, cursor, limit)
+}
+
 func (s *store) NewSource(bucket, key string, size int64) format.Source {
 	return s.clientFor(bucket).NewSource(bucket, key, size)
 }

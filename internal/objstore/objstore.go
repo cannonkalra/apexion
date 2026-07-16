@@ -50,6 +50,29 @@ type dirLister interface {
 	ListDirectory(ctx context.Context, bucket, prefix string, limit int) (folders []string, files []ObjectMeta, truncated bool, err error)
 }
 
+// PageResult is one bounded, cursor-resumable page of a directory-style
+// (delimiter) listing: immediate sub-folders and files under a prefix.
+type PageResult struct {
+	Folders    []string     // common prefixes, each incl. trailing slash
+	Files      []ObjectMeta // immediate files (non-recursive)
+	NextCursor string       // opaque; feed back to resume. "" when !HasMore
+	HasMore    bool         // more children exist beyond this page
+}
+
+// pager lists immediate children of a prefix one bounded page at a time,
+// resuming from an opaque cursor. cursor=="" starts at the beginning.
+// limit<=0 means provider default. The cursor is provider-defined and opaque
+// to callers; only pass back a NextCursor this same provider returned.
+type pager interface {
+	ListPage(ctx context.Context, bucket, prefix, cursor string, limit int) (PageResult, error)
+}
+
+// bucketPager lists buckets one bounded page at a time (synthetic paging is
+// allowed where the SDK returns all buckets at once).
+type bucketPager interface {
+	ListBucketsPage(ctx context.Context, cursor string, limit int) (names []string, nextCursor string, hasMore bool, err error)
+}
+
 // objectOpener adapts individual objects to the format layer's IO abstractions,
 // so readers and table-format resolvers stay storage-agnostic.
 type objectOpener interface {
@@ -74,6 +97,8 @@ type ObjectStore interface {
 	bucketLister
 	walker
 	dirLister
+	pager
+	bucketPager
 	objectOpener
 	describer
 }

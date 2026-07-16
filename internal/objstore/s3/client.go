@@ -10,6 +10,7 @@ import (
 	"fmt"
 	"io"
 	"net/http"
+	"sort"
 	"strings"
 	"time"
 
@@ -19,6 +20,11 @@ import (
 	"github.com/apexion/apexion/internal/format"
 	"github.com/apexion/apexion/internal/objstore"
 )
+
+// defaultPageSize bounds a page when the caller passes limit<=0. It mirrors the
+// explorer's DefaultPageSize (500); it is duplicated here because the objstore
+// layer cannot import explorer (explorer depends on objstore, not vice versa).
+const defaultPageSize = 500
 
 // Client is a thin wrapper over the MinIO SDK. It implements
 // objstore.ObjectStore.
@@ -151,6 +157,86 @@ func (c *Client) ListDirectory(ctx context.Context, bucket, prefix string, limit
 		}
 	}
 	return folders, files, truncated, nil
+}
+
+// ListPage lists one bounded, cursor-resumable page of a prefix's immediate
+// children (sub-folders and files, non-recursive), like ListDirectory but with
+// an opaque resume cursor. It resumes from cursor via minio's StartAfter, so
+// paging never re-enumerates earlier entries. Once limit entries are collected
+// it sets HasMore, records the last streamed key as NextCursor and cancels the
+// underlying LIST — so a folder with millions of children returns immediately
+// instead of enumerating them all. When the stream ends first, HasMore is false
+// and NextCursor is "". limit<=0 uses defaultPageSize.
+func (c *Client) ListPage(ctx context.Context, bucket, prefix, cursor string, limit int) (objstore.PageResult, error) {
+	if limit <= 0 {
+		limit = defaultPageSize
+	}
+
+	lctx, cancel := context.WithCancel(ctx)
+	defer cancel()
+
+	var res objstore.PageResult
+	opts := minio.ListObjectsOptions{Prefix: prefix, StartAfter: cursor, Recursive: false}
+	for obj := range c.mc.ListObjects(lctx, bucket, opts) {
+		if obj.Err != nil {
+			if lctx.Err() != nil {
+				break // we cancelled after reaching the limit
+			}
+			return objstore.PageResult{}, obj.Err
+		}
+		if strings.HasSuffix(obj.Key, "/") {
+			if obj.Key == prefix {
+				continue // skip the prefix key itself
+			}
+			res.Folders = append(res.Folders, obj.Key)
+		} else {
+			res.Files = append(res.Files, objstore.ObjectMeta{
+				Key:          obj.Key,
+				ETag:         obj.ETag,
+				Size:         obj.Size,
+				LastModified: obj.LastModified,
+				StorageClass: obj.StorageClass,
+				VersionID:    obj.VersionID,
+			})
+		}
+		if len(res.Folders)+len(res.Files) >= limit {
+			res.HasMore = true
+			res.NextCursor = obj.Key // resume after the last streamed key
+			cancel()                 // stop the SDK's background pagination goroutine
+			break
+		}
+	}
+	return res, nil
+}
+
+// ListBucketsPage returns one bounded, cursor-resumable page of bucket names.
+// S3 has no native bucket pagination — ListBuckets always returns every bucket
+// — so paging here is synthetic: fetch all names, sort them, drop names <=
+// cursor, and take limit. NextCursor is the last name returned and HasMore is
+// true when names remain beyond it. limit<=0 uses defaultPageSize.
+func (c *Client) ListBucketsPage(ctx context.Context, cursor string, limit int) (names []string, nextCursor string, hasMore bool, err error) {
+	if limit <= 0 {
+		limit = defaultPageSize
+	}
+	all, err := c.ListBuckets(ctx)
+	if err != nil {
+		return nil, "", false, err
+	}
+	sort.Strings(all)
+	for _, name := range all {
+		if name <= cursor {
+			continue
+		}
+		if len(names) >= limit {
+			hasMore = true
+			break
+		}
+		names = append(names, name)
+	}
+	if len(names) > 0 {
+		nextCursor = names[len(names)-1]
+	}
+	return names, nextCursor, hasMore, nil
 }
 
 // listPrefix lists objects directly under a prefix (used by table resolvers).
