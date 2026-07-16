@@ -165,10 +165,11 @@ templ previewPanel(d *catalog.DatasetDetail) {
 	@Card() {
 		<div class="card-header">
 			<h2 class="section-title">DuckDB preview</h2>
-			<p class="muted mt-1 font-mono break-all">SELECT * FROM read_{ string(d.Dataset.Format) }('s3://{ d.Dataset.BucketName }/{ d.Dataset.Path }/…')</p>
+			<p class="muted mt-1 font-mono">queried directly from object storage — no download</p>
 		</div>
 		@CardBody() {
-			<div hx-get={ "/ui/datasets/" + d.Dataset.ID + "/preview" } hx-trigger="load" hx-swap="innerHTML">
+			@PreviewOptions(datasetPreviewOptsVM(d.Dataset.ID, d.Dataset.Format))
+			<div id="dataset-preview-result" hx-get={ "/ui/datasets/" + d.Dataset.ID + "/preview" } hx-trigger="load" hx-swap="innerHTML">
 				<div class="p-8 text-center text-sm text-slate-500">Querying object storage…</div>
 			</div>
 		}

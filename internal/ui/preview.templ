@@ -1,5 +1,7 @@
 package ui
 
+import "github.com/apexion/apexion/internal/duckdb"
+
 templ FilePreviewPage(vm PreviewVM) {
 	@Layout("explorer", "File preview") {
 		<div class="flex flex-wrap items-start justify-between gap-4 mb-6">
@@ -43,14 +45,68 @@ templ FilePreviewPage(vm PreviewVM) {
 					if !vm.Ready {
 						<p class="text-xs text-slate-500 mt-2">The DuckDB <span class="font-mono">httpfs</span> extension could not be loaded (needs network on first use). Preview will work once it is installed.</p>
 					}
-				} else if vm.Result != nil {
-					@ResultTable(vm.Result)
 				} else {
-					@EmptyState("No preview available", "This file could not be previewed.")
+					@PreviewOptions(filePreviewOptsVM(vm))
+					<div id="file-preview-result">
+						if vm.Result != nil {
+							@PreviewResult(vm.Result)
+						} else {
+							@EmptyState("No preview available", "This file could not be previewed.")
+						}
+					</div>
 				}
 			}
 		}
 	}
+}
+
+// PreviewOptions is the live reader-options bar shown above a data preview. Any
+// change re-GETs the preview endpoint with the toggles and swaps the result in
+// place — so the generated SQL and the sample rows update instantly. It renders
+// only the options the format actually honours (nothing for Iceberg/Delta).
+templ PreviewOptions(vm PreviewOptsVM) {
+	if hasPreviewOpts(vm.Format) {
+		<form
+			hx-get={ vm.Endpoint }
+			hx-target={ "#" + vm.Target }
+			hx-swap="innerHTML"
+			hx-trigger="change"
+			class="flex flex-wrap items-center gap-x-5 gap-y-2 mb-4 pb-4 border-b border-base-800 text-sm"
+		>
+			<input type="hidden" name="applied" value="1"/>
+			for _, kv := range vm.Hidden {
+				<input type="hidden" name={ kv[0] } value={ kv[1] }/>
+			}
+			<span class="eyebrow">Reader options</span>
+			if optHeader(vm.Format) {
+				<label class="flex items-center gap-2 text-slate-300">Header
+					<select name="header" class="select !w-auto !py-1">
+						@optionSel("auto", "Auto", vm.Opts.Header)
+						@optionSel("present", "On", vm.Opts.Header)
+						@optionSel("none", "Off", vm.Opts.Header)
+					</select>
+				</label>
+			}
+			if optUnion(vm.Format) {
+				@optCheckbox("union_by_name", "Union by name", vm.Opts.UnionByName)
+			}
+			if optIgnore(vm.Format) {
+				@optCheckbox("ignore_errors", "Ignore errors", vm.Opts.IgnoreErrors)
+			}
+		</form>
+	}
+}
+
+// PreviewResult shows the exact generated SQL (Result.SQL) above the sample rows,
+// so the preview surfaces double as a live SQL builder.
+templ PreviewResult(res *duckdb.Result) {
+	if res.SQL != "" {
+		<div class="mb-3">
+			<div class="eyebrow mb-1">Generated SQL</div>
+			<pre class="text-xs font-mono text-slate-400 bg-base-950/50 border border-base-800 rounded-lg px-3 py-2 overflow-x-auto whitespace-pre-wrap break-all">{ res.SQL }</pre>
+		</div>
+	}
+	@ResultTable(res)
 }
 
 // partitionPanel shows how the object's parent directories map to virtual Hive

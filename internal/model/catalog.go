@@ -32,8 +32,12 @@ type CatalogEntry struct {
 	SchemaStrategy string      `json:"schema_strategy"`
 	PartitionCols  []string    `json:"partition_cols"`
 	ReadOptions    ReadOptions `json:"read_options"` // DuckDB reader options for the view
-	Description    string      `json:"description"`
-	CreatedAt      time.Time   `json:"created_at"`
-	UpdatedAt      time.Time   `json:"updated_at"`
-	LastRefreshAt  *time.Time  `json:"last_refresh_at,omitempty"`
+	// SelectSQL, when set, is the explicit SELECT the view is built from (used by
+	// tables saved from an ad-hoc multi-file selection over a file list). Empty
+	// for dataset-backed entries, which rebuild from bucket/prefix/format.
+	SelectSQL     string     `json:"select_sql"`
+	Description   string     `json:"description"`
+	CreatedAt     time.Time  `json:"created_at"`
+	UpdatedAt     time.Time  `json:"updated_at"`
+	LastRefreshAt *time.Time `json:"last_refresh_at,omitempty"`
 }

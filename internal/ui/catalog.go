@@ -18,10 +18,27 @@ func (h *Handler) catalogPage(w http.ResponseWriter, r *http.Request) {
 	h.render(w, r, CatalogPage(CatalogVM{Entries: entries}))
 }
 
-// queryPage renders the SQL query console over the catalog tables.
+// queryPage renders the SQL query console over the catalog tables. With ?sel=
+// it prefills a multi-file selection as a virtual table (options drawer + schema
+// preview); with ?table= it prefills a single catalog table.
 func (h *Handler) queryPage(w http.ResponseWriter, r *http.Request) {
 	entries, _ := h.catalog.ListCatalog(r.Context())
 	vm := QueryVM{Tables: entries, Ready: h.preview.Ready()}
+	if token := r.URL.Query().Get("sel"); token != "" {
+		snap, ok := h.selection.Progress(token)
+		switch {
+		case !ok:
+			vm.Sel, vm.SelExpired = token, true
+		case snap.Complete && snap.Summary != nil:
+			vm = querySelVM(token, snap.Summary, h.preview.Ready())
+			vm.Tables = entries
+		default:
+			// Still discovering — show the editor shell; the user can retry.
+			vm.Sel, vm.SelExpired = token, true
+		}
+		h.render(w, r, QueryPage(vm))
+		return
+	}
 	if t := r.URL.Query().Get("table"); t != "" {
 		vm.InitialSQL = "SELECT * FROM " + t + " LIMIT 100"
 		vm.Selected = t

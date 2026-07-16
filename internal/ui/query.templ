@@ -1,5 +1,7 @@
 package ui
 
+import "github.com/apexion/apexion/internal/selection"
+
 // QueryPage is a simple SQL console over the catalog tables. It runs read-only
 // queries through DuckDB, which reads directly from object storage.
 templ QueryPage(vm QueryVM) {
@@ -34,28 +36,150 @@ templ QueryPage(vm QueryVM) {
 				}
 			</div>
 			<div class="lg:col-span-3 space-y-6">
-				<form hx-post="/ui/query" hx-target="#query-results" hx-swap="innerHTML" class="card p-4 space-y-3">
-					<div class="overflow-x-auto">
-						<textarea
-							name="sql"
-							rows="6"
-							spellcheck="false"
-							placeholder="SELECT * FROM my_table LIMIT 100"
-							class="textarea font-mono"
-						>{ vm.InitialSQL }</textarea>
-					</div>
-					@Toolbar() {
-						<label class="text-xs text-slate-500">Row limit
-							<input name="limit" type="number" value="200" min="1" max="10000" class="ml-2 w-24 px-2 py-1 rounded bg-base-950 border border-base-800 text-slate-200"/>
-						</label>
-						<button class="btn-primary ml-auto" type="submit">@iconTerminal() Run query</button>
-					}
-				</form>
+				if vm.Sel != "" {
+					@SqlOptionsDrawer(vm)
+				}
+				@SqlEditorAndSchema(vm)
 				<div id="query-results">
 					<div class="card p-8 text-center text-sm text-slate-500">Results will appear here.</div>
 				</div>
 			</div>
 		</div>
 		<div id="toast-slot"></div>
+	}
+}
+
+// SqlEditorAndSchema is the run form (textarea prefilled with the generated SQL)
+// plus, for a selection, the detected merged schema and any extra virtual tables
+// for mixed formats. The options drawer swaps THIS node (outerHTML) when reader
+// options change, so the regenerated SQL replaces the textarea in place.
+templ SqlEditorAndSchema(vm QueryVM) {
+	<div id="sql-editor-and-schema" class="space-y-4">
+		if vm.SelExpired {
+			@ErrorBanner("This selection expired — reselect the files in the Explorer.")
+		}
+		<form hx-post="/ui/query" hx-target="#query-results" hx-swap="innerHTML" class="card p-4 space-y-3">
+			<div class="overflow-x-auto">
+				<textarea
+					name="sql"
+					rows="8"
+					spellcheck="false"
+					placeholder="SELECT * FROM my_table LIMIT 100"
+					class="textarea font-mono"
+				>{ vm.InitialSQL }</textarea>
+			</div>
+			@Toolbar() {
+				<label class="text-xs text-slate-500">Row limit
+					<input name="limit" type="number" value="200" min="1" max="10000" class="ml-2 w-24 px-2 py-1 rounded bg-base-950 border border-base-800 text-slate-200"/>
+				</label>
+				<button class="btn-primary ml-auto" type="submit">@iconTerminal() Run query</button>
+			}
+		</form>
+		if vm.SelSummary != nil {
+			@schemaPreview(vm.SelSummary)
+			if vm.SelSummary.MixedFormat {
+				@mixedTables(vm.SelSummary)
+			}
+		}
+	</div>
+}
+
+// schemaPreview shows the detected combined schema (collapsible).
+templ schemaPreview(s *selection.CompatSummary) {
+	<details class="card p-4" open>
+		<summary class="cursor-pointer text-sm text-slate-300 select-none flex items-center gap-2">
+			<span class="eyebrow">Detected schema</span>
+			<span class="text-xs text-slate-500">{ itoa(len(s.Merged)) } columns</span>
+		</summary>
+		<div class="mt-3 grid grid-cols-1 sm:grid-cols-2 gap-x-6 gap-y-1">
+			for _, c := range s.Merged {
+				<div class="flex items-center justify-between gap-3 py-1 border-b border-base-850">
+					<span class="font-mono text-sm text-slate-200 truncate">{ c.Name }</span>
+					<span class="flex items-center gap-1.5 shrink-0">
+						<span class="font-mono text-xs text-slate-400">{ c.Type.String() }</span>
+						if c.Widened {
+							<span class="badge bg-accent-amber/15 text-accent-amber" title="Widened to accommodate differing types across files">⚠</span>
+						}
+					</span>
+				</div>
+			}
+		</div>
+	</details>
+}
+
+// mixedTables lists the extra virtual tables generated for a mixed-format
+// selection (each format becomes its own read_* table).
+templ mixedTables(s *selection.CompatSummary) {
+	<div class="card p-4">
+		<div class="eyebrow mb-2">Separate virtual tables (mixed formats)</div>
+		<p class="text-xs text-slate-500 mb-3">Formats can't be combined into one reader. Each format below is a standalone table — copy its SQL into the editor to query it.</p>
+		<div class="space-y-2">
+			for _, t := range s.Tables {
+				<details class="rounded-lg border border-base-800 bg-base-950/40">
+					<summary class="cursor-pointer px-3 py-2 text-sm text-slate-300 flex items-center gap-2 select-none">
+						@FormatPill(t.Format)
+						<span class="font-mono">{ t.Name }</span>
+						<span class="text-xs text-slate-600">{ itoa(len(t.Files)) } files</span>
+					</summary>
+					<pre class="px-3 py-2 text-xs font-mono text-slate-400 overflow-x-auto whitespace-pre-wrap break-all">{ t.SQL }</pre>
+				</details>
+			}
+		</div>
+	</div>
+}
+
+// SqlOptionsDrawer exposes DuckDB reader options as live toggles. A change on any
+// control submits the whole form to /ui/selection/regenerate, which re-renders
+// #sql-editor-and-schema with freshly generated SQL — no manual editing.
+templ SqlOptionsDrawer(vm QueryVM) {
+	<form
+		id="sql-opts"
+		hx-post="/ui/selection/regenerate"
+		hx-target="#sql-editor-and-schema"
+		hx-swap="outerHTML"
+		hx-trigger="change"
+		class="card p-4"
+	>
+		<input type="hidden" name="token" value={ vm.Sel }/>
+		<div class="flex items-center justify-between mb-3">
+			<span class="eyebrow">Reader options</span>
+			<span class="text-[11px] text-slate-600">SQL regenerates automatically</span>
+		</div>
+		<div class="flex flex-wrap items-center gap-x-5 gap-y-3 text-sm">
+			<label class="flex items-center gap-2 text-slate-300">
+				Header
+				<select name="header" class="select !w-auto !py-1">
+					@optionSel("auto", "Auto detect", vm.SelOpts.Header)
+					@optionSel("present", "Has header", vm.SelOpts.Header)
+					@optionSel("none", "No header", vm.SelOpts.Header)
+				</select>
+			</label>
+			@optCheckbox("union_by_name", "Union by name", vm.SelOpts.UnionByName)
+			@optCheckbox("ignore_errors", "Ignore errors", vm.SelOpts.IgnoreErrors)
+			@optCheckbox("filename", "Filename column", vm.SelOpts.Filename)
+			<label class="flex items-center gap-2 text-slate-300">
+				Sample rows
+				<input name="sample_size" type="number" min="0" max="1000000" value={ itoa(vm.SelOpts.SampleSize) } class="w-24 px-2 py-1 rounded bg-base-950 border border-base-800 text-slate-200"/>
+			</label>
+		</div>
+	</form>
+}
+
+templ optCheckbox(name, label string, checked bool) {
+	<label class="flex items-center gap-2 cursor-pointer select-none">
+		if checked {
+			<input type="checkbox" name={ name } checked class="w-4 h-4 rounded accent-brand-500 cursor-pointer"/>
+		} else {
+			<input type="checkbox" name={ name } class="w-4 h-4 rounded accent-brand-500 cursor-pointer"/>
+		}
+		{ label }
+	</label>
+}
+
+templ optionSel(value, label, current string) {
+	if value == current {
+		<option value={ value } selected>{ label }</option>
+	} else {
+		<option value={ value }>{ label }</option>
 	}
 }

@@ -6,6 +6,7 @@ import (
 	"github.com/apexion/apexion/internal/duckdb"
 	"github.com/apexion/apexion/internal/explorer"
 	"github.com/apexion/apexion/internal/model"
+	"github.com/apexion/apexion/internal/selection"
 	"github.com/apexion/apexion/internal/storage"
 )
 
@@ -55,6 +56,18 @@ type PreviewVM struct {
 	Ready       bool
 	Partitions  []virtualpath.Partition // virtual Hive partitions inferred from the path
 	VirtualPath string                  // pt0=…/pt1=…/file
+	Opts        model.ReadOptions       // reader options the preview was run with
+}
+
+// PreviewOptsVM drives a live reader-options bar shown above a data preview. On
+// change it re-GETs Endpoint (with the toggles + any Hidden identity fields) and
+// swaps the regenerated SQL + result table into #Target.
+type PreviewOptsVM struct {
+	Endpoint string
+	Target   string
+	Format   model.Format
+	Opts     model.ReadOptions
+	Hidden   [][2]string
 }
 
 // DatasetsVM is the datasets listing view model.
@@ -76,6 +89,13 @@ type QueryVM struct {
 	Selected   string
 	InitialSQL string
 	Ready      bool
+
+	// Selection-backed editor (multi-file smart preview). Sel is the selection
+	// token; when set, the editor shows the options drawer + schema preview.
+	Sel        string
+	SelSummary *selection.CompatSummary
+	SelOpts    model.ReadOptions
+	SelExpired bool
 }
 
 // SettingsVM powers the settings page.

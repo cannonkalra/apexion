@@ -1,0 +1,242 @@
+package ui
+
+import (
+	"github.com/apexion/apexion/internal/duckdb"
+	"github.com/apexion/apexion/internal/selection"
+)
+
+// SelectionBarEmpty is the collapsed state: an empty slot so the next selection
+// can swap a bar back in.
+templ SelectionBarEmpty() {
+	<div id="selection-bar"></div>
+}
+
+// SelectionBar is the fixed footer shown while files are selected. It reports the
+// count + total size and hosts the live progress region, which polls until
+// schema discovery completes and then becomes the compatibility summary.
+templ SelectionBar(token string, snap selection.ProgressSnapshot) {
+	<div id="selection-bar">
+		<div data-sel-token={ token } class="fixed bottom-0 inset-x-0 z-40 border-t border-base-800 bg-base-900/95 backdrop-blur supports-[backdrop-filter]:bg-base-900/80 shadow-2xl">
+			<div class="max-w-screen-2xl mx-auto px-5 py-3.5 flex flex-wrap items-center gap-x-5 gap-y-3">
+				<div class="flex items-center gap-2 shrink-0">
+					<span class="grid place-items-center w-7 h-7 rounded-lg bg-brand-500/15 text-brand-300">@iconFile()</span>
+					<div class="leading-tight">
+						<div class="text-sm text-white font-medium">{ itoa(snap.Total) } selected</div>
+						<div class="text-[11px] text-slate-500">{ humanBytes(selTotalSize(snap.Files)) }</div>
+					</div>
+				</div>
+				<div
+					id="selection-progress"
+					class="flex-1 min-w-[220px]"
+					hx-get={ "/ui/selection/progress?token=" + token }
+					hx-trigger="load, every 600ms"
+					hx-swap="outerHTML"
+				>
+					@selectionProcessing(snap)
+				</div>
+				<button
+					class="btn-ghost text-sm shrink-0"
+					hx-post="/ui/selection/clear"
+					hx-vals={ selTokenVals(token) }
+					hx-target="#selection-bar"
+					hx-swap="outerHTML"
+				>Clear</button>
+			</div>
+		</div>
+	</div>
+}
+
+// SelectionProgress is the polled fragment. While discovery runs it re-renders
+// the progress bar (and keeps polling); once complete it renders the summary and
+// stops polling. Either way it emits out-of-band badge updates for the visible
+// explorer rows.
+templ SelectionProgress(token string, snap selection.ProgressSnapshot) {
+	if snap.Complete {
+		<div id="selection-progress" class="flex-1 min-w-[220px]">
+			@SelectionSummary(token, snap.Summary)
+		</div>
+	} else {
+		<div
+			id="selection-progress"
+			class="flex-1 min-w-[220px]"
+			hx-get={ "/ui/selection/progress?token=" + token }
+			hx-trigger="every 600ms"
+			hx-swap="outerHTML"
+		>
+			@selectionProcessing(snap)
+		</div>
+	}
+	// Live per-row compatibility badges (out-of-band; off-screen rows no-op).
+	for _, f := range snap.Files {
+		@rowBadgeOOB(f)
+	}
+	// On completion with incompatible files, surface a non-blocking toast (OOB
+	// into the persistent toast slot). Polling has stopped, so this fires once.
+	if snap.Complete && snap.Summary != nil && snap.Summary.ErrorCount > 0 {
+		<div id="toast-slot" hx-swap-oob="true">
+			@Toast(selErrorMessage(snap.Summary), "error")
+		</div>
+	}
+}
+
+// selectionProcessing shows the discovery progress bar and count.
+templ selectionProcessing(snap selection.ProgressSnapshot) {
+	<div class="flex items-center gap-3">
+		<span class="text-sm text-slate-300 whitespace-nowrap inline-flex items-center gap-2">
+			<span class="w-1.5 h-1.5 rounded-full bg-brand-400 animate-pulse"></span>
+			Processing selected files…
+		</span>
+		<div class="flex-1">@ProgressBar(snap.Fraction)</div>
+		<span class="text-xs text-slate-500 tabular-nums whitespace-nowrap">{ itoa(snap.Done) } / { itoa(snap.Total) }</span>
+	</div>
+}
+
+// SelectionExpired is shown when a polled token no longer exists (evicted/TTL).
+templ SelectionExpired() {
+	<div id="selection-progress" class="flex-1 min-w-[220px]">
+		<span class="text-sm text-slate-500">Selection expired — reselect the files.</span>
+	</div>
+}
+
+// SelectionSummary is the completed verdict: compatible/warning/error counts,
+// schema shape, estimates, live reader options, and the actions (Preview & Save,
+// Open in SQL, Details).
+templ SelectionSummary(token string, s *selection.CompatSummary) {
+	<div class="flex flex-wrap items-center gap-x-5 gap-y-2.5">
+		<div class="flex items-center gap-2 text-sm">
+			<span class="badge bg-accent-emerald/15 text-accent-emerald">✓ { itoa(s.CompatCount) }</span>
+			if s.WarnCount > 0 {
+				<span class="badge bg-accent-amber/15 text-accent-amber">⚠ { itoa(s.WarnCount) }</span>
+			}
+			if s.ErrorCount > 0 {
+				<span class="badge bg-accent-rose/15 text-accent-rose">✕ { itoa(s.ErrorCount) }</span>
+			}
+		</div>
+		<div class="flex items-center gap-4 text-xs text-slate-500">
+			<span><span class="text-slate-400">Cols</span> <span class="text-slate-200 font-medium">{ itoa(s.ColumnCount) }</span></span>
+			<span><span class="text-slate-400">Rows</span> <span class="text-slate-200 font-medium">{ rowsLabel(s.RowsEst) }</span></span>
+			<span><span class="text-slate-400">Size</span> <span class="text-slate-200 font-medium">{ humanBytes(s.TotalSize) }</span></span>
+			<span class="flex items-center gap-1">
+				for _, f := range s.Formats {
+					@FormatPill(f)
+				}
+			</span>
+		</div>
+		if s.MixedFormat {
+			<span class="badge bg-accent-amber/15 text-accent-amber" title="Different formats can't share one table — separate virtual tables will be generated">mixed formats</span>
+		}
+		<div class="flex items-center gap-2 ml-auto">
+			if s.ErrorCount > 0 {
+				<button type="button" class="btn-ghost text-sm" onclick="document.getElementById('sel-details').showModal()">Details</button>
+			}
+			if hasCompatible(s) {
+				<button type="button" class="btn-primary text-sm" data-sel-preview-open={ token }>@iconEye() Preview</button>
+				<a class="btn-ghost text-sm" href={ templ.SafeURL("/query?sel=" + token) }>@iconTerminal() Open in SQL</a>
+			} else {
+				<span class="text-sm text-accent-amber px-2">No compatible files — try “No header row” above</span>
+			}
+		</div>
+	</div>
+	if s.ErrorCount > 0 {
+		@SelectionDetails(s)
+	}
+	if hasCompatible(s) {
+		@SelectionPreviewDialog()
+	}
+}
+
+// SelectionPreviewDialog is the floating window that previews the combined
+// virtual table and lets the user save it as a SQL table. Its body is lazy-
+// loaded when the dialog opens (see the explorer selection script).
+templ SelectionPreviewDialog() {
+	<dialog id="sel-preview" class="rounded-xl bg-base-900 border border-base-800 text-slate-200 p-0 w-[min(960px,94vw)] backdrop:bg-black/50">
+		<div class="p-5 border-b border-base-800 flex items-center justify-between">
+			<h3 class="text-base font-semibold text-white">Preview selection</h3>
+			<button type="button" class="text-slate-500 hover:text-slate-200" onclick="document.getElementById('sel-preview').close()">✕</button>
+		</div>
+		<div id="sel-preview-body" class="p-5 max-h-[72vh] overflow-auto">
+			<div class="p-8 text-center text-sm text-slate-500">Loading preview…</div>
+		</div>
+	</dialog>
+}
+
+// SelectionPreviewBody is the dialog contents: the sample rows for the combined
+// table plus a Save-as-table form that registers a DuckDB view over the files.
+templ SelectionPreviewBody(token, suggestedName string, res *duckdb.Result) {
+	<form
+		hx-post="/ui/selection/save"
+		hx-target="#toast-slot"
+		hx-swap="innerHTML"
+		class="flex flex-wrap items-end gap-3 mb-4 pb-4 border-b border-base-800"
+	>
+		<input type="hidden" name="token" value={ token }/>
+		<label class="flex flex-col gap-1 text-xs text-slate-400">
+			Save as SQL table
+			<input
+				name="name"
+				value={ suggestedName }
+				spellcheck="false"
+				class="w-64 px-2.5 py-1.5 rounded-lg bg-base-950 border border-base-800 text-sm font-mono text-slate-200 focus:outline-none focus:ring-2 focus:ring-brand-500/40"
+			/>
+		</label>
+		<button type="submit" class="btn-primary text-sm">@iconInbox() Save to Datasets</button>
+		<p class="text-[11px] text-slate-500 basis-full">Creates a queryable DuckDB view over the selected files — no data is copied.</p>
+	</form>
+	@ResultTable(res)
+}
+
+// SelectionDetails is the incompatibility dialog: which files/columns clashed,
+// with one-click Remove (handled client-side by dropping the key from the
+// selection Set and re-posting).
+templ SelectionDetails(s *selection.CompatSummary) {
+	<dialog id="sel-details" class="rounded-xl bg-base-900 border border-base-800 text-slate-200 p-0 w-[min(680px,92vw)] backdrop:bg-black/50">
+		<div class="p-5 border-b border-base-800 flex items-center justify-between">
+			<h3 class="text-base font-semibold text-white">Incompatible files</h3>
+			<button type="button" class="text-slate-500 hover:text-slate-200" onclick="document.getElementById('sel-details').close()">✕</button>
+		</div>
+		<div class="p-5 max-h-[60vh] overflow-auto">
+			<table class="w-full text-sm">
+				<thead>
+					<tr class="text-left text-xs text-slate-500 border-b border-base-800">
+						<th class="py-2 pr-3 font-medium">File</th>
+						<th class="py-2 pr-3 font-medium">Column</th>
+						<th class="py-2 pr-3 font-medium">Expected</th>
+						<th class="py-2 pr-3 font-medium">Actual</th>
+						<th class="py-2 font-medium"></th>
+					</tr>
+				</thead>
+				<tbody class="divide-y divide-base-850">
+					for _, r := range s.Rejected {
+						<tr>
+							<td class="py-2 pr-3 font-mono text-xs text-slate-300 break-all">{ baseName(r.File.Key) }</td>
+							<td class="py-2 pr-3 text-slate-300">{ r.Column }</td>
+							<td class="py-2 pr-3 font-mono text-xs text-accent-emerald">{ r.Expected }</td>
+							<td class="py-2 pr-3 font-mono text-xs text-accent-rose">{ r.Actual }</td>
+							<td class="py-2 text-right">
+								<button type="button" class="btn-ghost text-xs" data-sel-remove={ selKey(r.File.Bucket, r.File.Key, string(r.File.Format)) }>Remove</button>
+							</td>
+						</tr>
+					}
+				</tbody>
+			</table>
+		</div>
+	</dialog>
+}
+
+// rowBadgeOOB updates one explorer row's compatibility badge out-of-band.
+templ rowBadgeOOB(f selection.FileState) {
+	<span id={ rowBadgeID(f.Ref.Bucket, f.Ref.Key, string(f.Ref.Format)) } hx-swap-oob="true">
+		@compatBadge(f)
+	</span>
+}
+
+// compatBadge renders a file's live status: a spinner while discovering, then a
+// ✓/⚠/✕ verdict pill.
+templ compatBadge(f selection.FileState) {
+	if f.Status == selection.StatusPending || f.Status == selection.StatusProcessing {
+		<span class="w-3.5 h-3.5 inline-block rounded-full border-2 border-brand-400/40 border-t-brand-400 animate-spin"></span>
+	} else {
+		{{ sym, cls := verdictBadge(f.Verdict) }}
+		<span class={ "badge", cls } title={ compatTitle(f) }>{ sym }</span>
+	}
+}

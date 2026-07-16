@@ -213,14 +213,19 @@ func (e *Engine) Ready() bool { return e.ready }
 // Close releases the DuckDB connection.
 func (e *Engine) Close() error { return e.db.Close() }
 
-// PreviewFile previews a single object: up to `limit` rows plus column types.
+// PreviewFile previews a single object with the safe defaults.
 func (e *Engine) PreviewFile(ctx context.Context, bucket, key string, format model.Format, limit int) (*Result, error) {
+	return e.PreviewFileWith(ctx, bucket, key, format, model.DefaultReadOptions(), limit)
+}
+
+// PreviewFileWith previews a single object with caller-supplied reader options
+// (Header, UnionByName, IgnoreErrors, …) so the preview UI can regenerate live.
+// The filename column is always suppressed — a spurious `filename` column on one
+// file is noise. Result.SQL carries the exact executed SQL for display.
+func (e *Engine) PreviewFileWith(ctx context.Context, bucket, key string, format model.Format, opts model.ReadOptions, limit int) (*Result, error) {
 	if !e.ready {
 		return nil, fmt.Errorf("S3 preview unavailable: %s", e.readErr)
 	}
-	// Single-file preview uses the safe defaults, but with Filename off: a
-	// spurious `filename` column on one file is noise.
-	opts := model.DefaultReadOptions()
 	opts.Filename = false
 	from, err := FromClause(bucket, key, format, opts)
 	if err != nil {
@@ -229,20 +234,43 @@ func (e *Engine) PreviewFile(ctx context.Context, bucket, key string, format mod
 	return e.query(ctx, fmt.Sprintf("SELECT * FROM %s", from), limit)
 }
 
-// PreviewDataset previews a dataset by globbing its data files.
+// PreviewDataset previews a dataset by globbing its data files with the defaults.
 func (e *Engine) PreviewDataset(ctx context.Context, bucket, prefix string, format model.Format, sampleKey string, limit int) (*Result, error) {
+	return e.PreviewDatasetWith(ctx, bucket, prefix, format, sampleKey, model.DefaultReadOptions(), limit)
+}
+
+// PreviewDatasetWith previews a dataset with caller-supplied reader options.
+func (e *Engine) PreviewDatasetWith(ctx context.Context, bucket, prefix string, format model.Format, sampleKey string, opts model.ReadOptions, limit int) (*Result, error) {
 	if !e.ready {
 		return nil, fmt.Errorf("S3 preview unavailable: %s", e.readErr)
 	}
-	// A multi-file dataset preview uses the safe defaults, minus the filename
-	// column (which the previous glob reader also omitted).
-	opts := model.DefaultReadOptions()
 	opts.Filename = false
 	from, err := globClause(bucket, prefix, format, sampleKey, opts)
 	if err != nil {
 		return nil, err
 	}
 	return e.query(ctx, fmt.Sprintf("SELECT * FROM %s", from), limit)
+}
+
+// PreviewDatasetPartitioned previews a dataset with its virtual partition columns
+// included — the same columns the registered view exposes. For positional
+// (bare-directory) datasets the columns are derived from the object path via
+// split_part; with no partNames it falls back to the plain preview (which still
+// surfaces native key=value hive partitions). This keeps the Preview tab
+// consistent with the Partitions tab and the eventual SQL view.
+func (e *Engine) PreviewDatasetPartitioned(ctx context.Context, bucket, prefix string, format model.Format, sampleKey string, partNames []string, opts model.ReadOptions, limit int) (*Result, error) {
+	if len(partNames) == 0 {
+		return e.PreviewDatasetWith(ctx, bucket, prefix, format, sampleKey, opts, limit)
+	}
+	if !e.ready {
+		return nil, fmt.Errorf("S3 preview unavailable: %s", e.readErr)
+	}
+	opts.Filename = false
+	sel, err := partitionSelectSQL(bucket, prefix, format, sampleKey, partNames, opts)
+	if err != nil {
+		return nil, err
+	}
+	return e.query(ctx, sel, limit)
 }
 
 // query executes an arbitrary (already-built) query, applying a row limit.
@@ -322,6 +350,77 @@ func stringify(v any) string {
 	default:
 		return fmt.Sprintf("%v", x)
 	}
+}
+
+// ColumnDef is a column's name and its DuckDB type as reported by DESCRIBE.
+type ColumnDef struct {
+	Name string
+	Type string
+}
+
+// DescribeReader returns the column names and types of a reader expression
+// WITHOUT scanning the data: DESCRIBE reads only metadata — a Parquet footer, or
+// the sample_size-bounded inference of read_csv_auto/read_json_auto. `from` is a
+// reader expression such as read_parquet('s3://…') built by tables.go.
+func (e *Engine) DescribeReader(ctx context.Context, from string) ([]ColumnDef, error) {
+	if !e.ready {
+		return nil, fmt.Errorf("schema discovery unavailable: %s", e.readErr)
+	}
+	rows, err := e.db.QueryContext(ctx, "DESCRIBE SELECT * FROM "+from)
+	if err != nil {
+		return nil, cleanErr(err)
+	}
+	defer rows.Close()
+
+	// DESCRIBE yields: column_name, column_type, null, key, default, extra.
+	cols, err := rows.Columns()
+	if err != nil {
+		return nil, err
+	}
+	var out []ColumnDef
+	for rows.Next() {
+		cells := make([]any, len(cols))
+		ptrs := make([]any, len(cols))
+		for i := range cells {
+			ptrs[i] = &cells[i]
+		}
+		if err := rows.Scan(ptrs...); err != nil {
+			return nil, err
+		}
+		out = append(out, ColumnDef{Name: stringify(cells[0]), Type: stringify(cells[1])})
+	}
+	if err := rows.Err(); err != nil {
+		return nil, cleanErr(err)
+	}
+	return out, nil
+}
+
+// DescribeFile returns the schema of a single object without scanning it. The
+// filename column is suppressed (it is discovery noise, not part of the data
+// schema). opts carry the reader options so CSV/JSON honour header/sample_size.
+func (e *Engine) DescribeFile(ctx context.Context, bucket, key string, format model.Format, opts model.ReadOptions) ([]ColumnDef, error) {
+	o := opts
+	o.Filename = false
+	from, err := FromClause(bucket, key, format, o)
+	if err != nil {
+		return nil, err
+	}
+	return e.DescribeReader(ctx, from)
+}
+
+// ParquetRowCount returns the total row count of a Parquet object from its
+// footer metadata (parquet_metadata) — no row scan. Used only for all-Parquet
+// selections; other formats have no cheap exact count.
+func (e *Engine) ParquetRowCount(ctx context.Context, uri string) (int64, error) {
+	if !e.ready {
+		return 0, fmt.Errorf("row count unavailable: %s", e.readErr)
+	}
+	q := fmt.Sprintf("SELECT COALESCE(SUM(num_rows), 0) FROM parquet_file_metadata('%s')", esc(uri))
+	var n int64
+	if err := e.db.QueryRowContext(ctx, q).Scan(&n); err != nil {
+		return 0, cleanErr(err)
+	}
+	return n, nil
 }
 
 func esc(s string) string { return strings.ReplaceAll(s, "'", "''") }

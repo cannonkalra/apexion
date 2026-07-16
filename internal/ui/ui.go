@@ -21,6 +21,7 @@ import (
 	"github.com/apexion/apexion/internal/explorer"
 	"github.com/apexion/apexion/internal/format"
 	"github.com/apexion/apexion/internal/model"
+	"github.com/apexion/apexion/internal/selection"
 	"github.com/apexion/apexion/internal/storage"
 )
 
@@ -39,6 +40,7 @@ type Handler struct {
 	preview     *duckdb.Engine
 	explorer    *explorer.Service
 	connections *connections.Manager
+	selection   *selection.SelectionService
 	store       *storage.Store
 	cfg         *config.Config
 	log         zerolog.Logger
@@ -46,10 +48,10 @@ type Handler struct {
 
 // New builds the UI handler.
 func New(cat *catalog.Service, prev *duckdb.Engine, expl *explorer.Service,
-	conns *connections.Manager, cfg *config.Config, log zerolog.Logger) *Handler {
+	conns *connections.Manager, sel *selection.SelectionService, cfg *config.Config, log zerolog.Logger) *Handler {
 	return &Handler{
 		catalog: cat, preview: prev, explorer: expl, connections: conns,
-		store: cat.Store(), cfg: cfg, log: log,
+		selection: sel, store: cat.Store(), cfg: cfg, log: log,
 	}
 }
 
@@ -71,6 +73,7 @@ func (h *Handler) Routes() http.Handler {
 	r.Route("/ui", func(r chi.Router) {
 		r.Get("/partials/explorer-summary", h.partialExplorerSummary)
 		r.Get("/partials/explorer-page", h.partialExplorerPage)
+		r.Get("/preview", h.partialFilePreview)
 		r.Get("/datasets/{id}/preview", h.partialDatasetPreview)
 		r.Post("/datasets/{id}/register", h.actionRegisterDataset)
 		r.Post("/datasets/{id}/refresh", h.actionRefreshDataset)
@@ -85,6 +88,14 @@ func (h *Handler) Routes() http.Handler {
 		r.Post("/catalog/{id}/refresh", h.actionRefreshCatalog)
 		r.Delete("/catalog/{id}", h.actionDeleteCatalog)
 		r.Post("/query", h.actionRunQuery)
+		// Multi-file smart selection (background schema discovery → virtual table).
+		r.Post("/selection", h.actionSelectionSet)
+		r.Get("/selection/progress", h.partialSelectionProgress)
+		r.Post("/selection/regenerate", h.actionSelectionRegenerate)
+		r.Post("/selection/options", h.actionSelectionOptions)
+		r.Get("/selection/preview", h.partialSelectionPreview)
+		r.Post("/selection/save", h.actionSelectionSave)
+		r.Post("/selection/clear", h.actionSelectionClear)
 		r.Post("/settings/crawl", h.actionSettingsCrawl)
 		r.Post("/connections", h.actionCreateConnection)
 		r.Post("/connections/{id}/activate", h.actionActivateConnection)
@@ -212,16 +223,19 @@ func (h *Handler) filePreview(w http.ResponseWriter, r *http.Request) {
 	if f == "" {
 		f = format.DetectFormat(key, nil)
 	}
+	opts := model.DefaultReadOptions()
+	opts.Filename = false
 	vm := PreviewVM{
 		Bucket: bucket, Key: key, Name: baseName(key), Format: f,
 		Compression: format.DetectCompression(key), Limit: 100, Ready: h.preview.Ready(),
+		Opts: opts,
 	}
 	// Show how this object maps to a virtual Hive-partitioned path (parent
 	// directories → pt0, pt1, …) without touching the stored object.
 	vp := virtualpath.New(h.cfg.Catalog.VirtualPartitionPrefix, h.cfg.Catalog.VirtualPartitionSeparator).Build(key, 1<<30)
 	vm.Partitions = vp.Partitions
 	vm.VirtualPath = vp.Virtual
-	res, err := h.preview.PreviewFile(r.Context(), bucket, key, f, 100)
+	res, err := h.preview.PreviewFileWith(r.Context(), bucket, key, f, opts, 100)
 	if err != nil {
 		vm.Error = err.Error()
 	} else {
@@ -293,12 +307,14 @@ func (h *Handler) partialDatasetPreview(w http.ResponseWriter, r *http.Request) 
 		h.render(w, r, QueryError("dataset not found"))
 		return
 	}
-	res, err := h.preview.PreviewDataset(r.Context(), ds.BucketName, ds.Path, ds.Format, h.store.SampleObjectKey(r.Context(), ds), 100)
+	partNames := h.catalog.VirtualPartitionColumns(r.Context(), ds)
+	res, err := h.preview.PreviewDatasetPartitioned(r.Context(), ds.BucketName, ds.Path, ds.Format,
+		h.store.SampleObjectKey(r.Context(), ds), partNames, previewOptsFromRequest(r), 100)
 	if err != nil {
 		h.render(w, r, QueryError(err.Error()))
 		return
 	}
-	h.render(w, r, ResultTable(res))
+	h.render(w, r, PreviewResult(res))
 }
 
 // ---- actions -------------------------------------------------------------

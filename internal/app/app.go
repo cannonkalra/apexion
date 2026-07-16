@@ -26,6 +26,7 @@ import (
 	// tags on that package decide which optional readers/resolvers are present.
 	"github.com/apexion/apexion/internal/duckdb"
 	_ "github.com/apexion/apexion/internal/plugins"
+	"github.com/apexion/apexion/internal/selection"
 	"github.com/apexion/apexion/internal/storage"
 	"github.com/apexion/apexion/internal/ui"
 	"github.com/apexion/apexion/pkg/logger"
@@ -44,6 +45,7 @@ type App struct {
 	Scheduler   *jobs.Scheduler
 	Preview     *duckdb.Engine
 	Explorer    *explorer.Service
+	Selection   *selection.SelectionService
 	Server      *httpserver.Server
 }
 
@@ -91,14 +93,19 @@ func New(ctx context.Context, cfg *config.Config) (*App, error) {
 
 	expl := explorer.New(conns)
 
+	// The selection service backs the multi-file "smart preview": it runs
+	// background schema discovery over the preview engine and lives for the
+	// process (ctx is the signal-scoped root), reaping idle sessions.
+	sel := selection.New(ctx, prev, log)
+
 	apiH := api.New(cat, prev, expl, conns, log)
-	uiH := ui.New(cat, prev, expl, conns, cfg, log)
+	uiH := ui.New(cat, prev, expl, conns, sel, cfg, log)
 	srv := httpserver.New(cfg.Server, apiH, uiH, log)
 
 	return &App{
 		Cfg: cfg, Log: log, Store: store, Bus: bus, Connections: conns, Crawler: cr,
 		Catalog: cat, Jobs: jobMgr, Scheduler: sched,
-		Preview: prev, Explorer: expl, Server: srv,
+		Preview: prev, Explorer: expl, Selection: sel, Server: srv,
 	}, nil
 }
 
@@ -135,6 +142,9 @@ func (a *App) Shutdown() error {
 	}
 	a.Scheduler.Stop()
 	a.Jobs.Shutdown(shutCtx)
+	if a.Selection != nil {
+		a.Selection.Close()
+	}
 	a.Bus.Close()
 	if a.Preview != nil {
 		_ = a.Preview.Close()

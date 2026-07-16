@@ -85,13 +85,229 @@ templ ExplorerPage(vm ExplorerVM) {
 					@breadcrumbs(vm.Bucket, vm.Crumbs)
 					@explorerToolbar(vm.Listing)
 					@explorerFilters(vm.Listing)
+					@selectionOptionsBar()
 					@DirListing(vm.Listing, vm.Infinite)
 				}
 			</div>
 		</div>
 		<div id="toast-slot"></div>
+		// Footer selection bar (populated by the selection script when files are
+		// picked). Reserve bottom space so the fixed bar never covers the last row.
+		<div id="selection-bar"></div>
+		<div id="selection-spacer" class="h-0"></div>
 		@explorerSidebarScript()
+		@selectionScript()
 	}
+}
+
+// selectionScript implements multi-file selection entirely client-side (only
+// htmx.min.js is loaded). A JS Set of composite keys is the source of truth, so
+// selection survives HTMX load-more row swaps; every change is debounced and
+// POSTed to /ui/selection, which starts background schema discovery and returns
+// the footer bar. Keyboard: Escape clears, Cmd/Ctrl+A selects the visible files,
+// double-click still opens the single-file preview.
+templ selectionScript() {
+	// Checkboxes are hidden until multi-select mode is on (the "Select files"
+	// toolbar button); the row link is disabled in that mode so a click selects.
+	<style>
+		#explorer-rows .sel-check { display: none; }
+		#explorer-rows.select-mode .sel-check { display: inline-block; }
+		#explorer-rows.select-mode [data-file-row] a { pointer-events: none; }
+		#explorer-rows.select-mode [data-file-row] { cursor: pointer; }
+	</style>
+	<script>
+		(function () {
+			var sel = new Map();          // key -> {bucket,key,format,size}
+			var token = "";               // server session token
+			var rows = document.getElementById("explorer-rows");
+			if (!rows) return;
+			var bar = document.getElementById("selection-bar");
+			var spacer = document.getElementById("selection-spacer");
+			var timer = null;
+
+			// ---- multi-select mode ------------------------------------------
+			function setMode(on) {
+				rows.classList.toggle("select-mode", on);
+				var opts = document.getElementById("selection-opts");
+				if (opts) opts.classList.toggle("hidden", !on);
+				var btn = document.querySelector("[data-multiselect-toggle]");
+				if (btn) {
+					btn.setAttribute("aria-pressed", on ? "true" : "false");
+					btn.classList.toggle("btn-primary", on);
+					btn.classList.toggle("btn-ghost", !on);
+					var lbl = btn.querySelector("[data-multiselect-label]");
+					if (lbl) lbl.textContent = on ? "Selecting…" : "Select files";
+				}
+				if (!on) clearSelection();
+			}
+			function clearSelection() {
+				sel.clear();
+				visibleChecks().forEach(function (cb) { cb.checked = false; });
+				reflectSpacer();
+				if (token) {
+					htmx.ajax("POST", "/ui/selection/clear", { target: "#selection-bar", swap: "outerHTML", values: { token: token } });
+					token = "";
+				}
+			}
+
+			// readOpts gathers the multi-file reader options from the explorer
+			// options strip so they ride along with every selection POST and drive
+			// the background schema discovery (e.g. header=false).
+			function readOpts() {
+				var o = {};
+				document.querySelectorAll("#selection-opts [data-sel-opt]").forEach(function (cb) {
+					o[cb.getAttribute("data-sel-opt")] = cb.checked ? "on" : "";
+				});
+				return o;
+			}
+			function post() {
+				var files = [];
+				sel.forEach(function (v) { files.push(v); });
+				var vals = { token: token, files: JSON.stringify(files) };
+				var o = readOpts();
+				for (var k in o) vals[k] = o[k];
+				htmx.ajax("POST", "/ui/selection", {
+					target: "#selection-bar",
+					swap: "outerHTML",
+					values: vals
+				});
+			}
+			function schedule() {
+				if (timer) clearTimeout(timer);
+				timer = setTimeout(post, 250);
+			}
+			function reflectSpacer() {
+				if (spacer) spacer.style.height = sel.size > 0 ? "72px" : "0px";
+			}
+			function setChecked(cb, on) {
+				cb.checked = on;
+				var k = cb.getAttribute("data-file");
+				if (on) {
+					sel.set(k, {
+						bucket: cb.getAttribute("data-bucket"),
+						key: cb.getAttribute("data-key"),
+						format: cb.getAttribute("data-format"),
+						size: parseInt(cb.getAttribute("data-size") || "0", 10)
+					});
+				} else {
+					sel.delete(k);
+				}
+			}
+			function visibleChecks() { return rows.querySelectorAll("input.sel-check"); }
+
+			// Re-apply the Set to any freshly swapped-in rows (load more / filter).
+			function restore() {
+				visibleChecks().forEach(function (cb) {
+					cb.checked = sel.has(cb.getAttribute("data-file"));
+				});
+			}
+
+			// Delegated change: a checkbox toggled.
+			rows.addEventListener("change", function (e) {
+				var cb = e.target.closest("input.sel-check");
+				if (!cb) return;
+				setChecked(cb, cb.checked);
+				reflectSpacer();
+				schedule();
+			});
+			// Changing a reader option re-runs discovery with the new options.
+			var optsEl = document.getElementById("selection-opts");
+			if (optsEl) optsEl.addEventListener("change", function () {
+				if (sel.size > 0) post();
+			});
+			// Double-click a row → open single preview (the <a> handles it; just
+			// don't let a stray text selection interfere).
+			// Shift-click range selection between two checkboxes.
+			var lastIdx = -1;
+			rows.addEventListener("click", function (e) {
+				var cb = e.target.closest("input.sel-check");
+				if (!cb) return;
+				var checks = Array.prototype.slice.call(visibleChecks());
+				var idx = checks.indexOf(cb);
+				if (e.shiftKey && lastIdx >= 0 && idx >= 0) {
+					var lo = Math.min(lastIdx, idx), hi = Math.max(lastIdx, idx);
+					for (var i = lo; i <= hi; i++) setChecked(checks[i], cb.checked);
+					reflectSpacer();
+					schedule();
+				}
+				lastIdx = idx;
+			});
+
+			document.addEventListener("click", function (e) {
+				// Toolbar "Select files" toggle.
+				var mt = e.target.closest("[data-multiselect-toggle]");
+				if (mt) {
+					e.preventDefault();
+					setMode(!rows.classList.contains("select-mode"));
+					return;
+				}
+				// In select mode, a click anywhere on a row toggles its checkbox
+				// (the row link is disabled via CSS). Checkbox clicks fall through to
+				// the native change handler.
+				if (rows.classList.contains("select-mode") && !e.target.closest("input.sel-check")) {
+					var row = e.target.closest("[data-file-row]");
+					if (row && rows.contains(row)) {
+						var rcb = row.querySelector("input.sel-check");
+						if (rcb) {
+							setChecked(rcb, !rcb.checked);
+							reflectSpacer();
+							schedule();
+							return;
+						}
+					}
+				}
+				// Remove-from-details (dialog lives in the bar).
+				var btn = e.target.closest("[data-sel-remove]");
+				if (btn) {
+					var k = btn.getAttribute("data-sel-remove");
+					sel.delete(k);
+					visibleChecks().forEach(function (cb) {
+						if (cb.getAttribute("data-file") === k) cb.checked = false;
+					});
+					reflectSpacer();
+					post();
+					return;
+				}
+				// Open the floating preview dialog and lazy-load its body.
+				var pv = e.target.closest("[data-sel-preview-open]");
+				if (pv) {
+					var t = pv.getAttribute("data-sel-preview-open");
+					var dlg = document.getElementById("sel-preview");
+					if (dlg) {
+						dlg.showModal();
+						htmx.ajax("GET", "/ui/selection/preview?token=" + encodeURIComponent(t), { target: "#sel-preview-body", swap: "innerHTML" });
+					}
+				}
+			});
+
+			// After any HTMX swap into the rows (load more) re-apply checkboxes; and
+			// capture the token the bar reports so the next POST reuses the session.
+			document.body.addEventListener("htmx:afterSwap", function (e) {
+				if (e.target && e.target.id === "explorer-rows") restore();
+				if (rows.contains(e.target)) restore();
+				// #selection-bar is replaced by outerHTML swaps, so re-query by id.
+				var b = document.getElementById("selection-bar");
+				var holder = b && b.querySelector("[data-sel-token]");
+				if (holder) token = holder.getAttribute("data-sel-token");
+			});
+
+			// Keyboard shortcuts (ignore when typing in an input/textarea).
+			document.addEventListener("keydown", function (e) {
+				var tag = (e.target.tagName || "").toLowerCase();
+				var typing = tag === "input" || tag === "textarea" || tag === "select";
+				if (e.key === "Escape" && rows.classList.contains("select-mode")) {
+					setMode(false); // exit multi-select and clear
+					return;
+				}
+				if ((e.metaKey || e.ctrlKey) && (e.key === "a" || e.key === "A") && !typing && rows.classList.contains("select-mode")) {
+					e.preventDefault();
+					visibleChecks().forEach(function (cb) { setChecked(cb, true); });
+					reflectSpacer();
+					schedule();
+				}
+			});
+		})();
+	</script>
 }
 
 // explorerSidebarScript toggles the bucket sidebar and persists the collapsed
@@ -241,7 +457,37 @@ templ explorerFilters(l *explorer.DirListing) {
 		if l.Search != "" {
 			<a href={ templ.SafeURL("/explorer?bucket=" + l.Bucket + "&prefix=" + l.Prefix) } class="btn-ghost text-sm">Clear</a>
 		}
+		// Toggle multi-select mode: reveals per-row checkboxes so several files can
+		// be opened together. type=button so it never submits the filter form.
+		<button type="button" data-multiselect-toggle aria-pressed="false" class="btn-ghost text-sm inline-flex items-center gap-1.5">
+			@iconCheckSquare()
+			<span data-multiselect-label>Select files</span>
+		</button>
 	</form>
+}
+
+// selectionOptionsBar is the multi-file reader-options strip on the Explorer
+// screen. It is hidden until multi-select mode is on (toggled by the script) and
+// its values are sent with every selection POST, so background schema discovery
+// uses them from the first file — e.g. tick "No header row" to read headerless
+// CSVs with header=false instead of DuckDB auto-detecting (and mis-reading) one.
+templ selectionOptionsBar() {
+	<div id="selection-opts" class="hidden card px-4 py-2.5 mb-4 flex flex-wrap items-center gap-x-5 gap-y-2 text-sm">
+		<span class="eyebrow">Multi-file reader</span>
+		<label class="flex items-center gap-2 cursor-pointer select-none text-slate-300">
+			<input type="checkbox" data-sel-opt="no_header" class="w-4 h-4 rounded accent-brand-500 cursor-pointer"/>
+			No header row <span class="text-slate-500 font-mono text-xs">(header=false)</span>
+		</label>
+		<label class="flex items-center gap-2 cursor-pointer select-none text-slate-300">
+			<input type="checkbox" data-sel-opt="union_by_name" checked class="w-4 h-4 rounded accent-brand-500 cursor-pointer"/>
+			Union by name
+		</label>
+		<label class="flex items-center gap-2 cursor-pointer select-none text-slate-300">
+			<input type="checkbox" data-sel-opt="ignore_errors" class="w-4 h-4 rounded accent-brand-500 cursor-pointer"/>
+			Ignore errors
+		</label>
+		<span class="text-xs text-slate-500 ml-auto">Applies to every selected file</span>
+	</div>
 }
 
 // FolderStats renders the recursive folder summary (HTMX target).
@@ -291,13 +537,31 @@ templ dirRows(l *explorer.DirListing) {
 		</a>
 	}
 	for _, file := range l.Files {
-		<a href={ templ.SafeURL(previewURL(l.Bucket, file)) } class="flex items-center gap-3 px-4 py-2.5 hover:bg-base-850/60">
-			<span class="text-slate-500">@iconFile()</span>
-			<span class="text-sm text-slate-200 flex-1 truncate">{ file.Name }</span>
+		// A file row: a selection checkbox, the preview link (single-click nav /
+		// double-click preview preserved), the format pill, an out-of-band
+		// compatibility-badge slot, and size/modified. Selection state is tracked
+		// client-side in a JS Set (see selectionScript) so it survives load-more
+		// swaps; the checkbox carries the data the POST needs.
+		<div class="group flex items-center gap-3 px-4 py-2.5 hover:bg-base-850/60 has-[:checked]:bg-brand-500/5" data-file-row>
+			<input
+				type="checkbox"
+				class="sel-check w-4 h-4 rounded accent-brand-500 shrink-0 cursor-pointer"
+				aria-label="Select file"
+				data-file={ selKey(l.Bucket, file.Key, string(file.Format)) }
+				data-bucket={ l.Bucket }
+				data-key={ file.Key }
+				data-format={ string(file.Format) }
+				data-size={ itoa64(file.Size) }
+			/>
+			<a href={ templ.SafeURL(previewURL(l.Bucket, file)) } class="flex items-center gap-3 flex-1 min-w-0">
+				<span class="text-slate-500">@iconFile()</span>
+				<span class="text-sm text-slate-200 flex-1 truncate">{ file.Name }</span>
+			</a>
 			@FormatPill(file.Format)
+			<span id={ rowBadgeID(l.Bucket, file.Key, string(file.Format)) } class="w-4 grid place-items-center"></span>
 			<span class="text-xs text-slate-500 w-20 text-right">{ humanBytes(file.Size) }</span>
 			<span class="text-xs text-slate-600 w-24 text-right hidden sm:block">{ timeAgo(file.Modified) }</span>
-		</a>
+		</div>
 	}
 }
 

@@ -207,4 +207,25 @@ func readerFor(uri string, format model.Format, opts model.ReadOptions) (string,
 	return readerExpr("'"+esc(uri)+"'", format, opts)
 }
 
+// ListReader builds a DuckDB reader over an explicit list of object URIs, e.g.
+// read_parquet(['s3://b/f1.parquet','s3://b/f2.parquet']). DuckDB's read_*
+// functions accept a list literal natively, so a multi-file virtual table is
+// just the normal per-format reader wrapped around a list expression — no
+// globbing, no catalog. Hive partitioning is off (an ad-hoc file list has no
+// key=value layout); the caller's ReadOptions (header, union_by_name,
+// ignore_errors, sample_size, filename) still apply. This is the single home
+// for multi-file reader syntax, so new source formats plug in via the same
+// per-format switch (see readerExprOpts).
+func ListReader(uris []string, format model.Format, opts model.ReadOptions) (string, error) {
+	if len(uris) == 0 {
+		return "", fmt.Errorf("no files selected")
+	}
+	quoted := make([]string, len(uris))
+	for i, u := range uris {
+		quoted[i] = "'" + esc(u) + "'"
+	}
+	list := "[" + strings.Join(quoted, ", ") + "]"
+	return readerExprOpts(list, format, false, opts)
+}
+
 // PreviewFile previews a single object: up to `limit` rows plus column types.

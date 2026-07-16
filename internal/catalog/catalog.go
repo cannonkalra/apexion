@@ -129,12 +129,77 @@ func (s *Service) partitionColumnsFor(ctx context.Context, ds *model.Dataset) []
 	return names
 }
 
+// RegisterSelectionView saves an ad-hoc multi-file selection as a queryable SQL
+// table: it persists a catalog entry backed by the generated SELECT (a
+// read_parquet([...]) / read_csv([...]) over the file list) and creates the
+// DuckDB view. No dataset, no crawl, no copy — the same transactional pattern as
+// RegisterDatasetWith (row first as the UNIQUE(name) gate, then the view).
+func (s *Service) RegisterSelectionView(ctx context.Context, name, selectSQL string, format model.Format) (*model.CatalogEntry, error) {
+	name = strings.TrimSpace(name)
+	if !duckdb.ValidIdentifier(name) {
+		return nil, fmt.Errorf("invalid table name %q (use letters, digits, underscore; may not start with a digit)", name)
+	}
+	if selectSQL == "" {
+		return nil, fmt.Errorf("no SQL to save")
+	}
+	if existing, _ := s.store.GetCatalogEntryByName(ctx, name); existing != nil {
+		return nil, ErrTableNameTaken
+	}
+	now := time.Now().UTC()
+	entry := &model.CatalogEntry{
+		ID:             uuid.NewString(),
+		Name:           name,
+		Format:         format,
+		Enabled:        true,
+		RefreshMode:    model.RefreshManual,
+		SchemaStrategy: model.SchemaUnion,
+		SelectSQL:      selectSQL,
+		Description:    "Saved from a multi-file selection",
+		CreatedAt:      now,
+		UpdatedAt:      now,
+	}
+	if err := s.store.UpsertCatalogEntry(ctx, entry); err != nil {
+		if existing, _ := s.store.GetCatalogEntryByName(ctx, name); existing != nil && existing.ID != entry.ID {
+			return nil, ErrTableNameTaken
+		}
+		return nil, err
+	}
+	if err := s.rebuildView(ctx, entry); err != nil {
+		_ = s.store.DeleteCatalogEntry(ctx, entry.ID)
+		return nil, fmt.Errorf("create view: %w", err)
+	}
+	s.log.Info().Str("table", name).Msg("selection registered into catalog")
+	return entry, nil
+}
+
+// VirtualPartitionColumns returns the derived partition column names to include
+// in a positional dataset's preview (pt0, pt1, …), matching the columns its
+// registered view would expose. Hive datasets return nil — DuckDB's
+// hive_partitioning surfaces their key=value columns natively, so the plain
+// preview reader already includes them.
+func (s *Service) VirtualPartitionColumns(ctx context.Context, ds *model.Dataset) []string {
+	if ds == nil {
+		return nil
+	}
+	if ds.DiscoveryStrategy == discovery.StrategyHive {
+		return nil
+	}
+	if ds.DiscoveryStrategy == "" && len(ds.PartitionKeys) > 0 {
+		return nil // legacy dataset crawled before discovery metadata (hive keys)
+	}
+	return s.partitionColumnsFor(ctx, ds)
+}
+
 // rebuildView (re)creates a catalog entry's DuckDB view. Real Hive datasets use
 // DuckDB's native hive_partitioning; bare-directory (positional) datasets derive
 // virtual partition columns via split_part. Reading always comes from the
 // original objects — no data is copied. The strategy is read from the dataset's
 // stored discovery metadata (no path reparsing here).
 func (s *Service) rebuildView(ctx context.Context, entry *model.CatalogEntry) error {
+	// Selection-backed tables carry their own explicit SELECT over a file list.
+	if entry.SelectSQL != "" {
+		return s.duckdb.CreateViewFromSelect(ctx, entry.Name, entry.SelectSQL)
+	}
 	strategy := discovery.StrategyPositional
 	var sampleKey string
 	if ds, _ := s.store.GetDataset(ctx, entry.DatasetID); ds != nil {

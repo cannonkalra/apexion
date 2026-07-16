@@ -8,6 +8,8 @@ import (
 
 func itoa(i int) string { return strconv.Itoa(i) }
 
+func itoa64(i int64) string { return strconv.FormatInt(i, 10) }
+
 // Text inputs/selects use the shared `.input`/`.select` CSS classes (see
 // assets/css/input.css) — no Go-side style constant.
 
