@@ -161,50 +161,53 @@ func (c *Client) ListDirectory(ctx context.Context, bucket, prefix string, limit
 
 // ListPage lists one bounded, cursor-resumable page of a prefix's immediate
 // children (sub-folders and files, non-recursive), like ListDirectory but with
-// an opaque resume cursor. It resumes from cursor via minio's StartAfter, so
-// paging never re-enumerates earlier entries. Once limit entries are collected
-// it sets HasMore, records the last streamed key as NextCursor and cancels the
-// underlying LIST — so a folder with millions of children returns immediately
-// instead of enumerating them all. When the stream ends first, HasMore is false
-// and NextCursor is "". limit<=0 uses defaultPageSize.
+// an opaque resume cursor.
+//
+// It maps directly onto S3's ListObjectsV2: the cursor IS the
+// ContinuationToken and limit IS MaxKeys, so a single request returns at most
+// one page and NextContinuationToken resumes exactly where it left off — even
+// across common prefixes (folders). This is why we use the low-level Core API
+// rather than the high-level streaming ListObjects: the streaming API hides the
+// continuation token and its StartAfter cannot correctly resume a *delimited*
+// listing (a folder cursor re-collapses into the same common prefix). A folder
+// with millions of children therefore returns immediately, never enumerated.
+// When the listing is not truncated, HasMore is false and NextCursor is "".
+// limit<=0 uses defaultPageSize; S3 caps MaxKeys at 1000 per request.
 func (c *Client) ListPage(ctx context.Context, bucket, prefix, cursor string, limit int) (objstore.PageResult, error) {
 	if limit <= 0 {
 		limit = defaultPageSize
 	}
-
-	lctx, cancel := context.WithCancel(ctx)
-	defer cancel()
+	core := minio.Core{Client: c.mc}
+	// startAfter is empty — pagination is driven entirely by the continuation
+	// token (cursor). delimiter "/" gives the file-browser (non-recursive) view.
+	result, err := core.ListObjectsV2(bucket, prefix, "", cursor, "/", limit)
+	if err != nil {
+		return objstore.PageResult{}, err
+	}
 
 	var res objstore.PageResult
-	opts := minio.ListObjectsOptions{Prefix: prefix, StartAfter: cursor, Recursive: false}
-	for obj := range c.mc.ListObjects(lctx, bucket, opts) {
-		if obj.Err != nil {
-			if lctx.Err() != nil {
-				break // we cancelled after reaching the limit
-			}
-			return objstore.PageResult{}, obj.Err
+	for _, cp := range result.CommonPrefixes {
+		if cp.Prefix == prefix {
+			continue // the prefix itself, if echoed back
 		}
+		res.Folders = append(res.Folders, cp.Prefix)
+	}
+	for _, obj := range result.Contents {
 		if strings.HasSuffix(obj.Key, "/") {
-			if obj.Key == prefix {
-				continue // skip the prefix key itself
-			}
-			res.Folders = append(res.Folders, obj.Key)
-		} else {
-			res.Files = append(res.Files, objstore.ObjectMeta{
-				Key:          obj.Key,
-				ETag:         obj.ETag,
-				Size:         obj.Size,
-				LastModified: obj.LastModified,
-				StorageClass: obj.StorageClass,
-				VersionID:    obj.VersionID,
-			})
+			continue // a folder-placeholder object (key == prefix), not a file
 		}
-		if len(res.Folders)+len(res.Files) >= limit {
-			res.HasMore = true
-			res.NextCursor = obj.Key // resume after the last streamed key
-			cancel()                 // stop the SDK's background pagination goroutine
-			break
-		}
+		res.Files = append(res.Files, objstore.ObjectMeta{
+			Key:          obj.Key,
+			ETag:         obj.ETag,
+			Size:         obj.Size,
+			LastModified: obj.LastModified,
+			StorageClass: obj.StorageClass,
+			VersionID:    obj.VersionID,
+		})
+	}
+	res.HasMore = result.IsTruncated
+	if res.HasMore {
+		res.NextCursor = result.NextContinuationToken
 	}
 	return res, nil
 }

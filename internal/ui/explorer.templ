@@ -260,14 +260,13 @@ templ FolderStatsError() {
 // inside #explorer-rows; cursor-based "load more" fragments are appended into
 // this same container so the divide styling flows across pages.
 templ DirListing(l *explorer.DirListing, infinite bool) {
-	<div class="card overflow-hidden divide-y divide-base-800">
+	<div class="card overflow-hidden">
 		<div id="explorer-rows" class="divide-y divide-base-800">
 			if len(l.Folders) == 0 && len(l.Files) == 0 {
 				<div class="p-8 text-center text-sm text-slate-500">Empty folder.</div>
 			}
-			@dirRows(l)
+			@explorerPageFragment(l, infinite)
 		</div>
-		@explorerPageFragment(l, infinite)
 	</div>
 }
 
