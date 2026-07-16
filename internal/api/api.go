@@ -296,7 +296,7 @@ func (a *API) explore(w http.ResponseWriter, r *http.Request) {
 	}
 	listing, err := a.explorer.ListDir(r.Context(), bucket,
 		r.URL.Query().Get("prefix"), r.URL.Query().Get("search"), r.URL.Query().Get("sort"),
-		intParam(r, "limit", explorer.DefaultPageSize))
+		r.URL.Query().Get("cursor"), intParam(r, "limit", explorer.DefaultPageSize))
 	writeOrErr(w, listing, err)
 }
 
@@ -340,7 +340,7 @@ func (a *API) previewDataset(w http.ResponseWriter, r *http.Request) {
 		writeErr(w, http.StatusNotFound, "dataset not found")
 		return
 	}
-	res, err := a.preview.PreviewDataset(r.Context(), ds.BucketName, ds.Path, ds.Format, intParam(r, "limit", 100))
+	res, err := a.preview.PreviewDataset(r.Context(), ds.BucketName, ds.Path, ds.Format, a.store.SampleObjectKey(r.Context(), ds), intParam(r, "limit", 100))
 	if err != nil {
 		writeErr(w, http.StatusBadRequest, err.Error())
 		return

@@ -14,6 +14,7 @@ import (
 	"github.com/rs/zerolog"
 
 	"github.com/apexion/apexion/internal/catalog"
+	"github.com/apexion/apexion/internal/catalog/virtualpath"
 	"github.com/apexion/apexion/internal/config"
 	"github.com/apexion/apexion/internal/connections"
 	"github.com/apexion/apexion/internal/duckdb"
@@ -138,8 +139,9 @@ func (h *Handler) explorerPage(w http.ResponseWriter, r *http.Request) {
 		prefix := r.URL.Query().Get("prefix")
 		search := r.URL.Query().Get("search")
 		sortBy := r.URL.Query().Get("sort")
+		cursor := r.URL.Query().Get("cursor")
 		limit := intFrom(r.URL.Query().Get("limit"), explorer.DefaultPageSize)
-		listing, err := h.explorer.ListDir(ctx, selected, prefix, search, sortBy, limit)
+		listing, err := h.explorer.ListDir(ctx, selected, prefix, search, sortBy, cursor, limit)
 		if err != nil {
 			vm.Error = err.Error()
 		} else {
@@ -181,6 +183,11 @@ func (h *Handler) filePreview(w http.ResponseWriter, r *http.Request) {
 		Bucket: bucket, Key: key, Name: baseName(key), Format: f,
 		Compression: format.DetectCompression(key), Limit: 100, Ready: h.preview.Ready(),
 	}
+	// Show how this object maps to a virtual Hive-partitioned path (parent
+	// directories → pt0, pt1, …) without touching the stored object.
+	vp := virtualpath.New(h.cfg.Catalog.VirtualPartitionPrefix, h.cfg.Catalog.VirtualPartitionSeparator).Build(key, 1<<30)
+	vm.Partitions = vp.Partitions
+	vm.VirtualPath = vp.Virtual
 	res, err := h.preview.PreviewFile(r.Context(), bucket, key, f, 100)
 	if err != nil {
 		vm.Error = err.Error()
@@ -253,7 +260,7 @@ func (h *Handler) partialDatasetPreview(w http.ResponseWriter, r *http.Request) 
 		h.render(w, r, QueryError("dataset not found"))
 		return
 	}
-	res, err := h.preview.PreviewDataset(r.Context(), ds.BucketName, ds.Path, ds.Format, 100)
+	res, err := h.preview.PreviewDataset(r.Context(), ds.BucketName, ds.Path, ds.Format, h.store.SampleObjectKey(r.Context(), ds), 100)
 	if err != nil {
 		h.render(w, r, QueryError(err.Error()))
 		return

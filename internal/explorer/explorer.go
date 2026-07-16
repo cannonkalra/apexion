@@ -59,18 +59,23 @@ type FolderSummary struct {
 // summary is computed separately (lazily) — it is a recursive scan and would
 // otherwise make every click slow on a large bucket.
 type DirListing struct {
-	Bucket    string
-	Prefix    string
-	Search    string // server-side name prefix filter within the folder
-	Sort      string // one of the Sort* constants
-	Folders   []FolderEntry
-	Files     []FileEntry
-	Limit     int
-	Truncated bool // more children exist than were returned
+	Bucket     string
+	Prefix     string
+	Search     string // server-side name prefix filter within the folder
+	Sort       string // one of the Sort* constants
+	Folders    []FolderEntry
+	Files      []FileEntry
+	Limit      int
+	Cursor     string // cursor that produced THIS page ("" = first page)
+	NextCursor string // pass to the next ListDir call; "" when !HasMore
+	HasMore    bool   // more children exist beyond this page
 }
 
 // DefaultPageSize bounds how many immediate children a listing returns.
 const DefaultPageSize = 500
+
+// DefaultBucketPageSize bounds how many buckets a bucket listing returns.
+const DefaultBucketPageSize = 250
 
 // Sort options for a listing.
 const (
@@ -82,24 +87,27 @@ const (
 	SortModifiedDesc = "modified_desc"
 )
 
-// ListDir returns up to `limit` immediate children of a prefix. `search`
-// filters by name prefix server-side (S3 Prefix), which also reduces the amount
-// listed. `sortBy` orders the returned page. The recursive summary is computed
-// separately (lazily).
-func (s *Service) ListDir(ctx context.Context, bucket, prefix, search, sortBy string, limit int) (*DirListing, error) {
+// ListDir returns up to `limit` immediate children of a prefix, resumable from
+// `cursor` (""=first page). `search` filters by name prefix server-side (S3
+// Prefix), which also reduces the amount listed. `sortBy` orders the returned
+// page. The recursive summary is computed separately (lazily).
+func (s *Service) ListDir(ctx context.Context, bucket, prefix, search, sortBy, cursor string, limit int) (*DirListing, error) {
 	if limit <= 0 {
 		limit = DefaultPageSize
 	}
 	// Server-side prefix filter: list keys beginning with prefix+search.
-	folders, files, truncated, err := s.storeFor(bucket).ListDirectory(ctx, bucket, prefix+search, limit)
+	pr, err := s.storeFor(bucket).ListPage(ctx, bucket, prefix+search, cursor, limit)
 	if err != nil {
 		return nil, err
 	}
-	out := &DirListing{Bucket: bucket, Prefix: prefix, Search: search, Sort: sortBy, Limit: limit, Truncated: truncated}
-	for _, f := range folders {
+	out := &DirListing{
+		Bucket: bucket, Prefix: prefix, Search: search, Sort: sortBy, Limit: limit,
+		Cursor: cursor, NextCursor: pr.NextCursor, HasMore: pr.HasMore,
+	}
+	for _, f := range pr.Folders {
 		out.Folders = append(out.Folders, FolderEntry{Name: folderName(f), Path: f})
 	}
-	for _, om := range files {
+	for _, om := range pr.Files {
 		out.Files = append(out.Files, FileEntry{
 			Name:        path.Base(om.Key),
 			Key:         om.Key,
@@ -111,6 +119,16 @@ func (s *Service) ListDir(ctx context.Context, bucket, prefix, search, sortBy st
 	}
 	sortListing(out, sortBy)
 	return out, nil
+}
+
+// ListBucketsPage returns one bounded, cursor-resumable page of bucket names.
+// Buckets are connection-level (not bucket-scoped), so it uses Store() rather
+// than StoreFor.
+func (s *Service) ListBucketsPage(ctx context.Context, cursor string, limit int) (names []string, nextCursor string, hasMore bool, err error) {
+	if limit <= 0 {
+		limit = DefaultBucketPageSize
+	}
+	return s.provider.Store().ListBucketsPage(ctx, cursor, limit)
 }
 
 // sortListing orders folders and files. Folders always sort by name (they carry

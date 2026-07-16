@@ -941,7 +941,7 @@ func DirListing(l *explorer.DirListing) templ.Component {
 				return templ_7745c5c3_Err
 			}
 		}
-		if l.Truncated {
+		if l.HasMore {
 			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 77, "<div class=\"flex items-center justify-between px-4 py-3 bg-base-850/50 text-sm\"><span class=\"text-slate-500\">Showing first ")
 			if templ_7745c5c3_Err != nil {
 				return templ_7745c5c3_Err
