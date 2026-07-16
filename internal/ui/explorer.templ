@@ -5,43 +5,72 @@ import "github.com/apexion/apexion/internal/explorer"
 templ ExplorerPage(vm ExplorerVM) {
 	@Layout("explorer", "Explorer") {
 		<div class="grid grid-cols-1 lg:grid-cols-4 gap-4">
-			<div class="card p-3 lg:col-span-1 h-fit">
-				@connectionSwitcher(vm)
-				<div class="text-xs uppercase tracking-wider text-slate-500 px-2 mb-2 mt-3">Open a bucket</div>
-				<form method="get" action="/explorer" class="px-1 mb-3">
-					<div class="flex gap-1.5">
-						<input
-							name="bucket"
-							value={ vm.Bucket }
-							placeholder="bucket name…"
-							class="flex-1 min-w-0 px-2.5 py-1.5 rounded-lg bg-base-950 border border-base-800 text-sm text-slate-200 placeholder-slate-500 focus:outline-none focus:ring-2 focus:ring-brand-500/40"
-						/>
-						<button type="submit" class="btn-primary !px-2.5" title="Open">→</button>
-					</div>
-				</form>
-				<div class="flex items-center justify-between px-2 mb-2">
-					<span class="text-xs uppercase tracking-wider text-slate-500">Buckets</span>
-					if !vm.ServerListOK {
-						<span class="badge bg-accent-amber/15 text-accent-amber" title="ListAllMyBuckets is not permitted for these credentials">restricted</span>
-					}
+			// Collapsible bucket sidebar. Collapsed state is persisted in
+			// localStorage (key "explorer.sidebar.collapsed") and re-applied on
+			// load by the inline script below, so it survives navigation.
+			<div id="explorer-sidebar" class="card p-3 lg:col-span-1 h-fit" data-collapsible>
+				<div class="flex items-center justify-between px-1 mb-2">
+					<span class="text-xs uppercase tracking-wider text-slate-500">Explorer</span>
+					<button
+						type="button"
+						data-sidebar-toggle
+						aria-controls="explorer-sidebar-body"
+						aria-expanded="true"
+						title="Collapse sidebar"
+						class="grid place-items-center w-6 h-6 rounded text-slate-500 hover:bg-base-800 hover:text-slate-200"
+					>
+						<span data-sidebar-caret>«</span>
+					</button>
 				</div>
-				if !vm.ServerListOK {
-					<p class="text-[11px] text-slate-500 px-2 mb-2 leading-snug">
-						Can't list all buckets (missing <span class="font-mono">s3:ListAllMyBuckets</span>). Type a bucket name above to browse one you have access to.
-					</p>
-				}
-				<div class="space-y-0.5">
-					if len(vm.Buckets) == 0 {
-						<p class="text-sm text-slate-500 px-2">No buckets to show yet — open one by name above.</p>
+				<div id="explorer-sidebar-body">
+					@connectionSwitcher(vm)
+					<div class="text-xs uppercase tracking-wider text-slate-500 px-2 mb-2 mt-3">Open a bucket</div>
+					<form method="get" action="/explorer" class="px-1 mb-3">
+						<div class="flex gap-1.5">
+							<input
+								name="bucket"
+								value={ vm.Bucket }
+								placeholder="bucket name…"
+								class="flex-1 min-w-0 px-2.5 py-1.5 rounded-lg bg-base-950 border border-base-800 text-sm text-slate-200 placeholder-slate-500 focus:outline-none focus:ring-2 focus:ring-brand-500/40"
+							/>
+							<button type="submit" class="btn-primary !px-2.5" title="Open">→</button>
+						</div>
+					</form>
+					<div class="flex items-center justify-between px-2 mb-2">
+						<span class="text-xs uppercase tracking-wider text-slate-500">Buckets</span>
+						if !vm.ServerListOK {
+							<span class="badge bg-accent-amber/15 text-accent-amber" title="ListAllMyBuckets is not permitted for these credentials">restricted</span>
+						}
+					</div>
+					if !vm.ServerListOK {
+						<p class="text-[11px] text-slate-500 px-2 mb-2 leading-snug">
+							Can't list all buckets (missing <span class="font-mono">s3:ListAllMyBuckets</span>). Type a bucket name above to browse one you have access to.
+						</p>
 					}
-					for _, b := range vm.Buckets {
+					<div class="space-y-0.5">
+						if len(vm.Buckets) == 0 {
+							<p class="text-sm text-slate-500 px-2">No buckets to show yet — open one by name above.</p>
+						}
+						for _, b := range vm.Buckets {
+							<a
+								href={ templ.SafeURL("/explorer?bucket=" + b) }
+								class={ "flex items-center gap-2 px-2 py-2 rounded-lg text-sm", templ.KV("bg-base-800 text-white", b == vm.Bucket), templ.KV("text-slate-300 hover:bg-base-850", b != vm.Bucket) }
+							>
+								@iconBucket()
+								<span class="truncate flex-1">{ b }</span>
+							</a>
+						}
+					</div>
+					// Bucket paging: the handler caps the rendered rail at
+					// explorer.DefaultBucketPageSize. The full bucket set is already
+					// assembled server-side, so rather than a second round-trip we
+					// link back to /explorer with a larger bucket cap to reveal the
+					// rest — the initial DOM stays capped either way.
+					if vm.TotalBuckets > len(vm.Buckets) {
 						<a
-							href={ templ.SafeURL("/explorer?bucket=" + b) }
-							class={ "flex items-center gap-2 px-2 py-2 rounded-lg text-sm", templ.KV("bg-base-800 text-white", b == vm.Bucket), templ.KV("text-slate-300 hover:bg-base-850", b != vm.Bucket) }
-						>
-							@iconBucket()
-							<span class="truncate flex-1">{ b }</span>
-						</a>
+							href={ templ.SafeURL(moreBucketsURL(vm)) }
+							class="block mt-1 px-2 py-2 rounded-lg text-xs text-brand-300 hover:bg-base-800"
+						>Load more buckets ({ itoa(vm.TotalBuckets - len(vm.Buckets)) } more)</a>
 					}
 				</div>
 			</div>
@@ -55,12 +84,42 @@ templ ExplorerPage(vm ExplorerVM) {
 					@breadcrumbs(vm.Bucket, vm.Crumbs)
 					@explorerToolbar(vm.Listing)
 					@explorerFilters(vm.Listing)
-					@DirListing(vm.Listing)
+					@DirListing(vm.Listing, vm.Infinite)
 				}
 			</div>
 		</div>
 		<div id="toast-slot"></div>
+		@explorerSidebarScript()
 	}
+}
+
+// explorerSidebarScript toggles the bucket sidebar and persists the collapsed
+// state in localStorage so it survives full-page navigation.
+templ explorerSidebarScript() {
+	<script>
+		(function () {
+			var KEY = "explorer.sidebar.collapsed";
+			var root = document.getElementById("explorer-sidebar");
+			if (!root) return;
+			var body = document.getElementById("explorer-sidebar-body");
+			var btn = root.querySelector("[data-sidebar-toggle]");
+			var caret = root.querySelector("[data-sidebar-caret]");
+			function apply(collapsed) {
+				if (body) body.style.display = collapsed ? "none" : "";
+				if (caret) caret.textContent = collapsed ? "»" : "«";
+				if (btn) {
+					btn.setAttribute("aria-expanded", collapsed ? "false" : "true");
+					btn.setAttribute("title", collapsed ? "Expand sidebar" : "Collapse sidebar");
+				}
+			}
+			apply(localStorage.getItem(KEY) === "1");
+			if (btn) btn.addEventListener("click", function () {
+				var next = localStorage.getItem(KEY) !== "1";
+				localStorage.setItem(KEY, next ? "1" : "0");
+				apply(next);
+			});
+		})();
+	</script>
 }
 
 // connectionSwitcher lets the user pick the active account without leaving the
@@ -197,33 +256,76 @@ templ FolderStatsError() {
 	<span class="text-sm text-slate-500">Folder stats unavailable</span>
 }
 
-// DirListing renders folders and files for a prefix (paginated).
-templ DirListing(l *explorer.DirListing) {
+// DirListing renders folders and files for a prefix (paginated). The rows live
+// inside #explorer-rows; cursor-based "load more" fragments are appended into
+// this same container so the divide styling flows across pages.
+templ DirListing(l *explorer.DirListing, infinite bool) {
 	<div class="card overflow-hidden divide-y divide-base-800">
-		if len(l.Folders) == 0 && len(l.Files) == 0 {
-			<div class="p-8 text-center text-sm text-slate-500">Empty folder.</div>
-		}
-		for _, f := range l.Folders {
-			<a href={ templ.SafeURL("/explorer?bucket=" + l.Bucket + "&prefix=" + f.Path) } class="flex items-center gap-3 px-4 py-2.5 hover:bg-base-850/60">
-				<span class="text-accent-amber">@iconFolder()</span>
-				<span class="text-sm text-slate-200 flex-1 truncate">{ f.Name }</span>
-				<span class="text-xs text-slate-600">folder</span>
-			</a>
-		}
-		for _, file := range l.Files {
-			<a href={ templ.SafeURL(previewURL(l.Bucket, file)) } class="flex items-center gap-3 px-4 py-2.5 hover:bg-base-850/60">
-				<span class="text-slate-500">@iconFile()</span>
-				<span class="text-sm text-slate-200 flex-1 truncate">{ file.Name }</span>
-				@FormatPill(file.Format)
-				<span class="text-xs text-slate-500 w-20 text-right">{ humanBytes(file.Size) }</span>
-				<span class="text-xs text-slate-600 w-24 text-right hidden sm:block">{ timeAgo(file.Modified) }</span>
-			</a>
-		}
-		if l.HasMore {
-			<div class="flex items-center justify-between px-4 py-3 bg-base-850/50 text-sm">
-				<span class="text-slate-500">Showing first { itoa(len(l.Folders) + len(l.Files)) } items in this folder.</span>
-				<a class="btn-ghost text-xs" href={ templ.SafeURL(loadMoreURL(l)) }>Load more</a>
+		<div id="explorer-rows" class="divide-y divide-base-800">
+			if len(l.Folders) == 0 && len(l.Files) == 0 {
+				<div class="p-8 text-center text-sm text-slate-500">Empty folder.</div>
+			}
+			@dirRows(l)
+		</div>
+		@explorerPageFragment(l, infinite)
+	</div>
+}
+
+// dirRows renders just the folder + file <a> rows for one page. Shared by the
+// initial page and the load-more fragment so appended rows are identical.
+templ dirRows(l *explorer.DirListing) {
+	for _, f := range l.Folders {
+		<a href={ templ.SafeURL("/explorer?bucket=" + l.Bucket + "&prefix=" + f.Path) } class="flex items-center gap-3 px-4 py-2.5 hover:bg-base-850/60">
+			<span class="text-accent-amber">@iconFolder()</span>
+			<span class="text-sm text-slate-200 flex-1 truncate">{ f.Name }</span>
+			<span class="text-xs text-slate-600">folder</span>
+		</a>
+	}
+	for _, file := range l.Files {
+		<a href={ templ.SafeURL(previewURL(l.Bucket, file)) } class="flex items-center gap-3 px-4 py-2.5 hover:bg-base-850/60">
+			<span class="text-slate-500">@iconFile()</span>
+			<span class="text-sm text-slate-200 flex-1 truncate">{ file.Name }</span>
+			@FormatPill(file.Format)
+			<span class="text-xs text-slate-500 w-20 text-right">{ humanBytes(file.Size) }</span>
+			<span class="text-xs text-slate-600 w-24 text-right hidden sm:block">{ timeAgo(file.Modified) }</span>
+		</a>
+	}
+}
+
+// explorerPageFragment is the unit returned by the /ui/partials/explorer-page
+// route: the rows for a freshly fetched page PLUS a new #load-more sentinel that
+// carries the next cursor. Swapped via hx-swap="outerHTML" onto the OLD
+// #load-more, so the new rows + sentinel replace only the sentinel — existing
+// DOM rows are never re-rendered, which is why scroll position and any in-page
+// selection are inherently preserved across load-more.
+templ explorerPageFragment(l *explorer.DirListing, infinite bool) {
+	@dirRows(l)
+	if l.HasMore {
+		if infinite {
+			// Infinite scroll: fetch the next page automatically once the sentinel
+			// scrolls into view.
+			<div
+				id="load-more"
+				hx-get={ explorerPageURL(l, true) }
+				hx-target="#load-more"
+				hx-swap="outerHTML"
+				hx-trigger="revealed"
+				class="px-4 py-3 bg-base-850/50 text-sm text-slate-500 text-center"
+			>
+				<span class="inline-flex items-center gap-2">
+					<span class="w-1.5 h-1.5 rounded-full bg-brand-400 animate-pulse"></span> Loading more…
+				</span>
+			</div>
+		} else {
+			// Default UX: a Load More button (hx-trigger defaults to click).
+			<div id="load-more" class="flex items-center justify-center px-4 py-3 bg-base-850/50 text-sm">
+				<button
+					class="btn-ghost text-xs"
+					hx-get={ explorerPageURL(l, false) }
+					hx-target="#load-more"
+					hx-swap="outerHTML"
+				>Load more</button>
 			</div>
 		}
-	</div>
+	}
 }

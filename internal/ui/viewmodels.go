@@ -2,6 +2,7 @@ package ui
 
 import (
 	"github.com/apexion/apexion/internal/catalog"
+	"github.com/apexion/apexion/internal/catalog/virtualpath"
 	"github.com/apexion/apexion/internal/duckdb"
 	"github.com/apexion/apexion/internal/explorer"
 	"github.com/apexion/apexion/internal/model"
@@ -30,6 +31,14 @@ type ExplorerVM struct {
 	Connections  []model.Connection
 	ActiveConn   *model.Connection
 	ServerListOK bool // false when ListAllMyBuckets is denied/unavailable
+	// Infinite selects the load-more UX: false (default) renders a "Load more"
+	// button; true swaps in the next page automatically when the sentinel scrolls
+	// into view (hx-trigger="revealed"). Threaded into DirListing so the fragment
+	// route can reproduce the same trigger for appended sentinels.
+	Infinite bool
+	// TotalBuckets is the full number of buckets known before capping. When it
+	// exceeds len(Buckets), the sidebar shows a "Load more buckets" control.
+	TotalBuckets int
 }
 
 // PreviewVM powers the instant file preview page.
@@ -44,6 +53,8 @@ type PreviewVM struct {
 	Result      *duckdb.Result
 	Error       string
 	Ready       bool
+	Partitions  []virtualpath.Partition // virtual Hive partitions inferred from the path
+	VirtualPath string                  // pt0=…/pt1=…/file
 }
 
 // DatasetsVM is the datasets listing view model.

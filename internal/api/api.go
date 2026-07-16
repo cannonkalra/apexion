@@ -6,6 +6,8 @@ import (
 	"encoding/json"
 	"net/http"
 	"strconv"
+	"strings"
+	"time"
 
 	"github.com/go-chi/chi/v5"
 	"github.com/rs/zerolog"
@@ -68,6 +70,7 @@ func (a *API) Routes() http.Handler {
 	r.Post("/jobs/{id}/cancel", a.cancelJob)
 
 	r.Get("/explorer", a.explore)
+	r.Get("/explorer/list", a.exploreList)
 	r.Post("/directories/crawl", a.crawlDirectory)
 	r.Get("/preview/file", a.previewFile)
 	r.Get("/preview/dataset/{id}", a.previewDataset)
@@ -298,6 +301,98 @@ func (a *API) explore(w http.ResponseWriter, r *http.Request) {
 		r.URL.Query().Get("prefix"), r.URL.Query().Get("search"), r.URL.Query().Get("sort"),
 		r.URL.Query().Get("cursor"), intParam(r, "limit", explorer.DefaultPageSize))
 	writeOrErr(w, listing, err)
+}
+
+// exploreList is the JSON cursor-paginated directory listing endpoint. It
+// mirrors the UI explorer but returns a stable machine-readable page: immediate
+// folders/files under a prefix plus an opaque cursor to resume. totalKnown is
+// always null — we never full-scan a bucket to count children.
+func (a *API) exploreList(w http.ResponseWriter, r *http.Request) {
+	q := r.URL.Query()
+	bucket := q.Get("bucket")
+	prefix := q.Get("prefix")
+	// Fallback: `path`=<bucket>/<prefix> when bucket not given explicitly.
+	if bucket == "" {
+		if p := strings.TrimPrefix(q.Get("path"), "/"); p != "" {
+			if i := strings.IndexByte(p, '/'); i >= 0 {
+				bucket, prefix = p[:i], p[i+1:]
+			} else {
+				bucket = p
+			}
+		}
+	}
+	if bucket == "" {
+		writeErr(w, http.StatusBadRequest, "bucket required")
+		return
+	}
+
+	// Sort: a bare field ("name"|"size"|"modified"|"type") is combined with
+	// `direction` (asc|desc) into the explorer.Sort* form. A value already
+	// carrying an _asc/_desc suffix passes through; empty stays empty (the
+	// service defaults to name asc).
+	sort := q.Get("sort")
+	if sort != "" && !strings.HasSuffix(sort, "_asc") && !strings.HasSuffix(sort, "_desc") {
+		dir := q.Get("direction")
+		if dir == "" {
+			dir = "asc"
+		}
+		sort = sort + "_" + dir
+	}
+
+	listing, err := a.explorer.ListDir(r.Context(), bucket, prefix,
+		q.Get("search"), sort, q.Get("cursor"), intParam(r, "limit", explorer.DefaultPageSize))
+	if err != nil {
+		writeErr(w, http.StatusInternalServerError, err.Error())
+		return
+	}
+
+	type folderJSON struct {
+		Name string `json:"name"`
+		Path string `json:"path"`
+	}
+	type fileJSON struct {
+		Name        string `json:"name"`
+		Key         string `json:"key"`
+		Size        int64  `json:"size"`
+		Modified    string `json:"modified"`
+		Format      string `json:"format"`
+		Compression string `json:"compression"`
+	}
+	type listResponse struct {
+		Bucket     string       `json:"bucket"`
+		Prefix     string       `json:"prefix"`
+		Folders    []folderJSON `json:"folders"`
+		Files      []fileJSON   `json:"files"`
+		Cursor     string       `json:"cursor"`
+		NextCursor string       `json:"nextCursor"`
+		HasMore    bool         `json:"hasMore"`
+		TotalKnown *int64       `json:"totalKnown"`
+	}
+
+	resp := listResponse{
+		Bucket:     listing.Bucket,
+		Prefix:     listing.Prefix,
+		Folders:    make([]folderJSON, 0, len(listing.Folders)),
+		Files:      make([]fileJSON, 0, len(listing.Files)),
+		Cursor:     listing.Cursor,
+		NextCursor: listing.NextCursor,
+		HasMore:    listing.HasMore,
+		TotalKnown: nil,
+	}
+	for _, f := range listing.Folders {
+		resp.Folders = append(resp.Folders, folderJSON{Name: f.Name, Path: f.Path})
+	}
+	for _, f := range listing.Files {
+		resp.Files = append(resp.Files, fileJSON{
+			Name:        f.Name,
+			Key:         f.Key,
+			Size:        f.Size,
+			Modified:    f.Modified.Format(time.RFC3339),
+			Format:      string(f.Format),
+			Compression: string(f.Compression),
+		})
+	}
+	writeJSON(w, http.StatusOK, resp)
 }
 
 func (a *API) crawlDirectory(w http.ResponseWriter, r *http.Request) {

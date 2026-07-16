@@ -101,12 +101,15 @@ func summaryQuery(bucket, prefix string) string {
 	return v.Encode()
 }
 
-// loadMoreURL bumps the page size to reveal more of a large folder, preserving
-// the current search and sort.
-func loadMoreURL(l *explorer.DirListing) string {
-	next := l.Limit * 4
-	if next <= 0 {
-		next = explorer.DefaultPageSize * 4
+// explorerPageURL builds the cursor-based load-more URL for the next page of the
+// current folder. It targets the /ui/partials/explorer-page fragment route,
+// carrying the same bucket/search/sort plus l.NextCursor so the server resumes
+// exactly where this page ended. Unlike the old loadMoreURL, it does NOT grow
+// the limit — each request fetches one bounded page and the rows are appended.
+func explorerPageURL(l *explorer.DirListing, infinite bool) string {
+	limit := l.Limit
+	if limit <= 0 {
+		limit = explorer.DefaultPageSize
 	}
 	v := url.Values{}
 	v.Set("bucket", l.Bucket)
@@ -119,7 +122,24 @@ func loadMoreURL(l *explorer.DirListing) string {
 	if l.Sort != "" {
 		v.Set("sort", l.Sort)
 	}
-	v.Set("limit", strconv.Itoa(next))
+	v.Set("cursor", l.NextCursor)
+	v.Set("limit", strconv.Itoa(limit))
+	if infinite {
+		v.Set("infinite", "1")
+	}
+	return "/ui/partials/explorer-page?" + v.Encode()
+}
+
+// moreBucketsURL reveals the next slice of buckets by re-requesting /explorer
+// with a larger bucket cap. The rendered rail is always capped server-side
+// (see explorerPage), so the initial DOM never carries the full set; this link
+// simply raises the cap by one page.
+func moreBucketsURL(vm ExplorerVM) string {
+	v := url.Values{}
+	if vm.Bucket != "" {
+		v.Set("bucket", vm.Bucket)
+	}
+	v.Set("buckets", strconv.Itoa(len(vm.Buckets)+explorer.DefaultBucketPageSize))
 	return "/explorer?" + v.Encode()
 }
 

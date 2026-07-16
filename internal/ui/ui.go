@@ -70,6 +70,7 @@ func (h *Handler) Routes() http.Handler {
 
 	r.Route("/ui", func(r chi.Router) {
 		r.Get("/partials/explorer-summary", h.partialExplorerSummary)
+		r.Get("/partials/explorer-page", h.partialExplorerPage)
 		r.Get("/datasets/{id}/preview", h.partialDatasetPreview)
 		r.Post("/datasets/{id}/register", h.actionRegisterDataset)
 		r.Post("/datasets/{id}/refresh", h.actionRefreshDataset)
@@ -129,11 +130,23 @@ func (h *Handler) explorerPage(w http.ResponseWriter, r *http.Request) {
 	add(selected)
 	sort.Strings(buckets)
 
+	// Cap the rendered bucket rail so a large account doesn't dump thousands of
+	// rows into the initial DOM. The full set is assembled above; ExplorerVM.
+	// TotalBuckets records the true count so the sidebar can show a "Load more
+	// buckets" control. The cap is raised via the ?buckets= query param.
+	total := len(buckets)
+	bucketCap := intFrom(r.URL.Query().Get("buckets"), explorer.DefaultBucketPageSize)
+	if bucketCap < len(buckets) {
+		buckets = buckets[:bucketCap]
+	}
+
 	conns, _ := h.connections.List(ctx)
 	vm := ExplorerVM{
 		Buckets: buckets, Bucket: selected,
 		Connections: conns, ActiveConn: h.connections.Active(),
 		ServerListOK: serverErr == nil,
+		Infinite:     r.URL.Query().Get("infinite") == "1",
+		TotalBuckets: total,
 	}
 	if selected != "" {
 		prefix := r.URL.Query().Get("prefix")
@@ -166,6 +179,26 @@ func (h *Handler) partialExplorerSummary(w http.ResponseWriter, r *http.Request)
 		return
 	}
 	h.render(w, r, FolderStats(*summary))
+}
+
+// partialExplorerPage returns ONE cursor-resumed page of a folder: just the rows
+// to append plus a fresh #load-more sentinel carrying the next cursor. HTMX
+// swaps it (outerHTML) onto the current sentinel, so only new rows are added and
+// existing rows/scroll are untouched.
+func (h *Handler) partialExplorerPage(w http.ResponseWriter, r *http.Request) {
+	q := r.URL.Query()
+	bucket := q.Get("bucket")
+	if bucket == "" {
+		w.WriteHeader(http.StatusOK)
+		return
+	}
+	limit := intFrom(q.Get("limit"), explorer.DefaultPageSize)
+	listing, err := h.explorer.ListDir(r.Context(), bucket, q.Get("prefix"), q.Get("search"), q.Get("sort"), q.Get("cursor"), limit)
+	if err != nil {
+		h.render(w, r, QueryError(err.Error()))
+		return
+	}
+	h.render(w, r, explorerPageFragment(listing, q.Get("infinite") == "1"))
 }
 
 func (h *Handler) filePreview(w http.ResponseWriter, r *http.Request) {
