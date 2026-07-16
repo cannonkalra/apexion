@@ -2,7 +2,68 @@
 @tailwind components;
 @tailwind utilities;
 
+/*
+ * Theme variables. The default (`:root`) is the DARK theme, so a document with
+ * no `data-theme` attribute renders exactly as it always has. `[data-theme=
+ * "light"]` swaps the same variables to a light surface/text palette. Values
+ * are space-separated RGB channels so Tailwind's `rgb(var(--…) / <alpha>)`
+ * color functions keep working with opacity modifiers (e.g. bg-base-950/80).
+ */
 @layer base {
+  :root,
+  [data-theme="dark"] {
+    /* Neutral surfaces (dark). */
+    --base-950: 10 11 15;
+    --base-900: 17 19 24;
+    --base-850: 22 25 32;
+    --base-800: 28 32 41;
+    --base-700: 39 44 56;
+    --base-600: 58 65 80;
+    --base-500: 91 100 114;
+    /* Text scale (dark) — Tailwind slate defaults. */
+    --slate-100: 241 245 249;
+    --slate-200: 226 232 240;
+    --slate-300: 203 213 225;
+    --slate-400: 148 163 184;
+    --slate-500: 100 116 139;
+    --slate-600: 71 85 105;
+  }
+
+  [data-theme="light"] {
+    /* Neutral surfaces (light): 950 = app background (lightest), ascending
+       shades get progressively darker so borders/hover states still read as
+       "raised" like the dark theme's ascending-lightness ramp. */
+    --base-950: 247 248 250;
+    --base-900: 255 255 255;
+    --base-850: 241 243 246;
+    --base-800: 226 230 236;
+    --base-700: 209 214 222;
+    --base-600: 148 156 168;
+    --base-500: 113 122 136;
+    /* Text scale (light): high shades = strong/dark text, low = muted. This
+       inverts the dark ramp so `text-slate-500` (muted) stays muted etc. */
+    --slate-100: 15 18 24;
+    --slate-200: 24 29 38;
+    --slate-300: 40 47 60;
+    --slate-400: 71 82 100;
+    --slate-500: 100 110 128;
+    --slate-600: 130 140 156;
+  }
+
+  /*
+   * `text-white` is used throughout the templates for two distinct purposes:
+   *   (a) emphasis text (headings, active nav/tab labels) on neutral surfaces —
+   *       invisible on a light background, so it must become dark text; and
+   *   (b) foreground on a filled BRAND-colored control (buttons, badges, the
+   *       logo tile) — which should stay white on both themes.
+   * Since the templates aren't rewritten per-element, resolve this in CSS: in
+   * light mode remap the bare `.text-white` utility to strong dark text, then
+   * re-assert white wherever `text-white` sits on a known brand/accent fill.
+   */
+  [data-theme="light"] .text-white {
+    color: rgb(var(--slate-100));
+  }
+
   html {
     font-feature-settings: "cv02", "cv03", "cv04", "cv11";
   }
@@ -38,4 +99,19 @@
   }
   .table-cell { @apply px-4 py-2.5 text-sm; }
   .th { @apply px-4 py-2.5 text-left text-xs font-semibold uppercase tracking-wider text-slate-500; }
+
+  /*
+   * Re-assert white foreground on filled BRAND/ACCENT controls under light mode.
+   * The base-layer `[data-theme="light"] .text-white` rule (which greys out
+   * emphasis headings so they stay legible on light surfaces) also matches these
+   * controls via their `@apply text-white`; emitting these overrides last in the
+   * components layer restores white on the colored fills that need it.
+   */
+  [data-theme="light"] .btn-primary,
+  [data-theme="light"] .btn-danger,
+  [data-theme="light"] .bg-brand-600.text-white,
+  [data-theme="light"] .bg-brand-500.text-white,
+  [data-theme="light"] .bg-brand-700.text-white {
+    color: #fff;
+  }
 }

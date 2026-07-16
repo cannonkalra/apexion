@@ -1,19 +1,39 @@
 /** @type {import('tailwindcss').Config} */
+
+// Theme-aware colors are defined as CSS custom properties (see input.css) so
+// that light mode is a *variable swap*, not a per-element class rewrite. The
+// `base-*` neutral surfaces and the subset of `slate-*` text shades actually
+// used by the UI resolve to `rgb(var(--…) / <alpha-value>)`; their values are
+// declared on `:root` (dark, the default) and overridden under
+// `[data-theme="light"]`. Brand/accent hues are intentionally fixed — they read
+// well on both themes.
+const v = (name) => `rgb(var(--${name}) / <alpha-value>)`;
+
 module.exports = {
-  darkMode: "class",
+  darkMode: ["selector", '[data-theme="dark"]'],
   content: ["./internal/ui/**/*.templ", "./internal/ui/**/*_templ.go"],
   theme: {
     extend: {
       colors: {
-        // templui-kit inspired neutral + accent palette.
+        // templui-kit inspired neutral surfaces — now theme variables.
         base: {
-          950: "#0a0b0f",
-          900: "#111318",
-          850: "#161920",
-          800: "#1c2029",
-          700: "#272c38",
-          600: "#3a4150",
-          500: "#5b6472",
+          950: v("base-950"),
+          900: v("base-900"),
+          850: v("base-850"),
+          800: v("base-800"),
+          700: v("base-700"),
+          600: v("base-600"),
+          500: v("base-500"),
+        },
+        // Only the slate shades the UI actually uses are themed; the rest fall
+        // back to Tailwind's defaults (unused, so harmless).
+        slate: {
+          100: v("slate-100"),
+          200: v("slate-200"),
+          300: v("slate-300"),
+          400: v("slate-400"),
+          500: v("slate-500"),
+          600: v("slate-600"),
         },
         brand: {
           50: "#eef6ff",

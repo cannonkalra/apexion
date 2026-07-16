@@ -31,7 +31,7 @@ func Layout(active string, pageTitle string) templ.Component {
 			templ_7745c5c3_Var1 = templ.NopComponent
 		}
 		ctx = templ.ClearChildren(ctx)
-		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 1, "<!doctype html><html lang=\"en\" class=\"dark\"><head><meta charset=\"utf-8\"><meta name=\"viewport\" content=\"width=device-width, initial-scale=1\"><title>")
+		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 1, "<!doctype html><html lang=\"en\" data-theme=\"dark\"><head><meta charset=\"utf-8\"><meta name=\"viewport\" content=\"width=device-width, initial-scale=1\"><title>")
 		if templ_7745c5c3_Err != nil {
 			return templ_7745c5c3_Err
 		}
@@ -44,7 +44,7 @@ func Layout(active string, pageTitle string) templ.Component {
 		if templ_7745c5c3_Err != nil {
 			return templ_7745c5c3_Err
 		}
-		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 2, " · Apexion</title><link rel=\"stylesheet\" href=\"/assets/css/app.css\"><link rel=\"icon\" href=\"/assets/img/favicon.svg\" type=\"image/svg+xml\"><script src=\"/assets/js/htmx.min.js\" defer></script><script>\n\t\t\t\t// Restore theme preference before paint.\n\t\t\t\tif (localStorage.getItem('theme') === 'light') { document.documentElement.classList.remove('dark'); }\n\t\t\t</script></head><body class=\"min-h-screen\"><div class=\"flex min-h-screen\">")
+		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 2, " · Apexion</title><link rel=\"stylesheet\" href=\"/assets/css/app.css\"><link rel=\"icon\" href=\"/assets/img/favicon.svg\" type=\"image/svg+xml\"><script src=\"/assets/js/htmx.min.js\" defer></script><script>\n\t\t\t\t// Apply the saved theme before first paint to avoid a flash. Dark is\n\t\t\t\t// the default: only an explicit 'light' choice overrides it.\n\t\t\t\t(function () {\n\t\t\t\t\ttry {\n\t\t\t\t\t\tif (localStorage.getItem('apexion.theme') === 'light') {\n\t\t\t\t\t\t\tdocument.documentElement.dataset.theme = 'light';\n\t\t\t\t\t\t}\n\t\t\t\t\t} catch (e) {}\n\t\t\t\t})();\n\t\t\t\t// Sync the toggle icons to the restored theme once the DOM is ready.\n\t\t\t\tdocument.addEventListener('DOMContentLoaded', function () {\n\t\t\t\t\tvar light = document.documentElement.dataset.theme === 'light';\n\t\t\t\t\tdocument.querySelectorAll('[data-theme-icon]').forEach(function (el) {\n\t\t\t\t\t\tel.hidden = el.getAttribute('data-theme-icon') !== (light ? 'light' : 'dark');\n\t\t\t\t\t});\n\t\t\t\t});\n\t\t\t</script></head><body class=\"min-h-screen\"><div class=\"flex min-h-screen\">")
 		if templ_7745c5c3_Err != nil {
 			return templ_7745c5c3_Err
 		}
@@ -68,7 +68,7 @@ func Layout(active string, pageTitle string) templ.Component {
 		if templ_7745c5c3_Err != nil {
 			return templ_7745c5c3_Err
 		}
-		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 5, "</main><footer class=\"px-6 py-4 text-xs text-slate-600 border-t border-base-800\">Apexion · open-source data discovery · DuckDB + MinIO + templ</footer></div></div><script>\n\t\t\t\tfunction toggleTheme() {\n\t\t\t\t\tconst root = document.documentElement;\n\t\t\t\t\troot.classList.toggle('dark');\n\t\t\t\t\tlocalStorage.setItem('theme', root.classList.contains('dark') ? 'dark' : 'light');\n\t\t\t\t}\n\t\t\t</script></body></html>")
+		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 5, "</main><footer class=\"px-6 py-4 text-xs text-slate-600 border-t border-base-800\">Apexion · open-source data discovery · DuckDB + MinIO + templ</footer></div></div><script>\n\t\t\t\tfunction toggleTheme() {\n\t\t\t\t\tconst root = document.documentElement;\n\t\t\t\t\tconst light = root.dataset.theme !== 'light';\n\t\t\t\t\troot.dataset.theme = light ? 'light' : 'dark';\n\t\t\t\t\ttry { localStorage.setItem('apexion.theme', light ? 'light' : 'dark'); } catch (e) {}\n\t\t\t\t\tdocument.querySelectorAll('[data-theme-icon]').forEach(function (el) {\n\t\t\t\t\t\tel.hidden = el.getAttribute('data-theme-icon') !== (light ? 'dark' : 'light');\n\t\t\t\t\t});\n\t\t\t\t}\n\t\t\t</script></body></html>")
 		if templ_7745c5c3_Err != nil {
 			return templ_7745c5c3_Err
 		}
@@ -166,7 +166,7 @@ func navLink(href, label string, isActive bool, icon templ.Component) templ.Comp
 		var templ_7745c5c3_Var6 templ.SafeURL
 		templ_7745c5c3_Var6, templ_7745c5c3_Err = templ.JoinURLErrs(templ.SafeURL(href))
 		if templ_7745c5c3_Err != nil {
-			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/ui/layout.templ`, Line: 69, Col: 28}
+			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/ui/layout.templ`, Line: 87, Col: 28}
 		}
 		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var6))
 		if templ_7745c5c3_Err != nil {
@@ -200,7 +200,7 @@ func navLink(href, label string, isActive bool, icon templ.Component) templ.Comp
 		var templ_7745c5c3_Var8 string
 		templ_7745c5c3_Var8, templ_7745c5c3_Err = templ.JoinStringErrs(label)
 		if templ_7745c5c3_Err != nil {
-			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/ui/layout.templ`, Line: 73, Col: 15}
+			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/ui/layout.templ`, Line: 91, Col: 15}
 		}
 		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var8))
 		if templ_7745c5c3_Err != nil {
@@ -242,13 +242,21 @@ func topbar(pageTitle string) templ.Component {
 		var templ_7745c5c3_Var10 string
 		templ_7745c5c3_Var10, templ_7745c5c3_Err = templ.JoinStringErrs(pageTitle)
 		if templ_7745c5c3_Err != nil {
-			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/ui/layout.templ`, Line: 79, Col: 58}
+			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/ui/layout.templ`, Line: 97, Col: 58}
 		}
 		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var10))
 		if templ_7745c5c3_Err != nil {
 			return templ_7745c5c3_Err
 		}
-		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 15, "</h1><div class=\"flex-1\"></div><button onclick=\"toggleTheme()\" class=\"btn-ghost\" title=\"Toggle theme\">")
+		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 15, "</h1><div class=\"flex-1\"></div><button onclick=\"toggleTheme()\" class=\"btn-ghost\" title=\"Toggle theme\" aria-label=\"Toggle light/dark theme\"><!-- Shown in dark mode (click → light). --><span data-theme-icon=\"dark\">")
+		if templ_7745c5c3_Err != nil {
+			return templ_7745c5c3_Err
+		}
+		templ_7745c5c3_Err = iconSun().Render(ctx, templ_7745c5c3_Buffer)
+		if templ_7745c5c3_Err != nil {
+			return templ_7745c5c3_Err
+		}
+		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 16, "</span><!-- Shown in light mode (click → dark). Hidden by default (dark). --><span data-theme-icon=\"light\" hidden>")
 		if templ_7745c5c3_Err != nil {
 			return templ_7745c5c3_Err
 		}
@@ -256,7 +264,7 @@ func topbar(pageTitle string) templ.Component {
 		if templ_7745c5c3_Err != nil {
 			return templ_7745c5c3_Err
 		}
-		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 16, "</button></header>")
+		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 17, "</span></button></header>")
 		if templ_7745c5c3_Err != nil {
 			return templ_7745c5c3_Err
 		}

@@ -4,7 +4,7 @@ package ui
 // default; a vanilla-JS toggle persists the preference (no Alpine needed).
 templ Layout(active string, pageTitle string) {
 	<!doctype html>
-	<html lang="en" class="dark">
+	<html lang="en" data-theme="dark">
 		<head>
 			<meta charset="utf-8"/>
 			<meta name="viewport" content="width=device-width, initial-scale=1"/>
@@ -13,8 +13,22 @@ templ Layout(active string, pageTitle string) {
 			<link rel="icon" href="/assets/img/favicon.svg" type="image/svg+xml"/>
 			<script src="/assets/js/htmx.min.js" defer></script>
 			<script>
-				// Restore theme preference before paint.
-				if (localStorage.getItem('theme') === 'light') { document.documentElement.classList.remove('dark'); }
+				// Apply the saved theme before first paint to avoid a flash. Dark is
+				// the default: only an explicit 'light' choice overrides it.
+				(function () {
+					try {
+						if (localStorage.getItem('apexion.theme') === 'light') {
+							document.documentElement.dataset.theme = 'light';
+						}
+					} catch (e) {}
+				})();
+				// Sync the toggle icons to the restored theme once the DOM is ready.
+				document.addEventListener('DOMContentLoaded', function () {
+					var light = document.documentElement.dataset.theme === 'light';
+					document.querySelectorAll('[data-theme-icon]').forEach(function (el) {
+						el.hidden = el.getAttribute('data-theme-icon') !== (light ? 'light' : 'dark');
+					});
+				});
 			</script>
 		</head>
 		<body class="min-h-screen">
@@ -33,8 +47,12 @@ templ Layout(active string, pageTitle string) {
 			<script>
 				function toggleTheme() {
 					const root = document.documentElement;
-					root.classList.toggle('dark');
-					localStorage.setItem('theme', root.classList.contains('dark') ? 'dark' : 'light');
+					const light = root.dataset.theme !== 'light';
+					root.dataset.theme = light ? 'light' : 'dark';
+					try { localStorage.setItem('apexion.theme', light ? 'light' : 'dark'); } catch (e) {}
+					document.querySelectorAll('[data-theme-icon]').forEach(function (el) {
+						el.hidden = el.getAttribute('data-theme-icon') !== (light ? 'dark' : 'light');
+					});
 				}
 			</script>
 		</body>
@@ -78,8 +96,15 @@ templ topbar(pageTitle string) {
 	<header class="sticky top-0 z-20 flex items-center gap-4 h-16 px-6 border-b border-base-800 bg-base-950/80 backdrop-blur">
 		<h1 class="text-lg font-semibold text-white">{ pageTitle }</h1>
 		<div class="flex-1"></div>
-		<button onclick="toggleTheme()" class="btn-ghost" title="Toggle theme">
-			@iconMoon()
+		<button onclick="toggleTheme()" class="btn-ghost" title="Toggle theme" aria-label="Toggle light/dark theme">
+			<!-- Shown in dark mode (click → light). -->
+			<span data-theme-icon="dark">
+				@iconSun()
+			</span>
+			<!-- Shown in light mode (click → dark). Hidden by default (dark). -->
+			<span data-theme-icon="light" hidden>
+				@iconMoon()
+			</span>
 		</button>
 	</header>
 }
