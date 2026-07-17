@@ -158,7 +158,10 @@ a one-shot seeder that uploads sample datasets, and the app:
 make up      # docker compose up --build
 ```
 
-Then open **http://localhost:8080**.
+Then open **http://localhost:8080**. The bundled stack pre-wires the MinIO
+endpoint through `APEXION_MINIO_*` environment variables, so the demo works
+without creating a connection. Against your own storage you instead create a
+connection from **Settings** (Apexion ships with no connections configured).
 
 Prefer to run it directly against your own storage? Start the server:
 
@@ -173,10 +176,15 @@ Apexion listens on **http://localhost:8080** by default. Configuration comes fro
 
 ### A five-minute tour
 
-1. **Connect to S3.** Open **Settings → Connections**, add your endpoint,
-   region, and credentials (or enable IAM-role auth on EC2), then **Test** and
-   **Activate**. On the command line, set `APEXION_MINIO_ENDPOINT`,
-   `APEXION_MINIO_ACCESS_KEY`, and `APEXION_MINIO_SECRET_KEY`.
+1. **Create your first connection.** Apexion starts with **zero configured
+   connections** — you create one explicitly. Open **Settings → Connections →
+   New connection**. The form defaults to **AWS S3** with **IAM** authentication,
+   so on EC2 (or any host with an attached IAM role) you only set a **name**,
+   **region**, and **endpoint** and leave the keys blank. For MinIO or another
+   S3-compatible store, switch **Authentication** to *Access key & secret* and
+   enter your credentials. Then **Test** and **Activate**. For headless/CLI runs
+   you can instead export `APEXION_MINIO_ENDPOINT`, `APEXION_MINIO_ACCESS_KEY`,
+   and `APEXION_MINIO_SECRET_KEY` (see [Running on EC2](#running-on-ec2)).
 
 2. **Crawl a bucket.** From the UI wizard, or the CLI:
    ```bash
@@ -201,6 +209,78 @@ Apexion listens on **http://localhost:8080** by default. Configuration comes fro
 
 Everything you register and discover is persisted to a single DuckDB catalog file
 (`data/apexion.duckdb` by default).
+
+## Running on EC2
+
+Apexion is designed to run directly on an EC2 instance — or any AWS compute
+service with an attached **IAM Role** (ECS task role, EKS/IRSA service account,
+Lambda, etc.). In that setup it accesses S3 through the standard AWS credential
+chain, so you **never store long-lived AWS access keys**. Nothing is written to
+disk beyond the local DuckDB catalog.
+
+When creating a connection on such a host, leave authentication set to **IAM**
+and you typically only configure:
+
+- **Storage Type:** `AWS S3`
+- **Region** (e.g. `us-east-1`)
+- **Bucket** — the bucket you want to crawl (entered when you start a crawl or
+  browse the Explorer)
+- **Optional prefix** — narrow a crawl to a sub-path within the bucket
+
+Access Key and Secret Key are left blank; Apexion resolves credentials from the
+instance profile / task role automatically. Static access keys are only needed
+for MinIO, Cloudflare R2, SeaweedFS, or other non-AWS S3 stores — switch
+**Authentication** to *Access key & secret* for those.
+
+## Minimum IAM policy
+
+For **read-only** exploration of an S3 data lake, attach a policy like the one
+below to the instance profile / role (or the IAM user whose keys you use).
+Replace `YOUR_BUCKET` with your actual bucket name and follow the principle of
+least privilege — grant only the buckets Apexion needs.
+
+```json
+{
+  "Version": "2012-10-17",
+  "Statement": [
+    {
+      "Sid": "ListBuckets",
+      "Effect": "Allow",
+      "Action": [
+        "s3:ListAllMyBuckets"
+      ],
+      "Resource": "*"
+    },
+    {
+      "Sid": "ListBucket",
+      "Effect": "Allow",
+      "Action": [
+        "s3:ListBucket",
+        "s3:GetBucketLocation"
+      ],
+      "Resource": "arn:aws:s3:::YOUR_BUCKET"
+    },
+    {
+      "Sid": "ReadObjects",
+      "Effect": "Allow",
+      "Action": [
+        "s3:GetObject"
+      ],
+      "Resource": "arn:aws:s3:::YOUR_BUCKET/*"
+    }
+  ]
+}
+```
+
+Notes:
+
+- `s3:ListAllMyBuckets` powers the bucket picker. It is optional — if you omit
+  it, Apexion can still browse buckets you name explicitly; the sidebar just
+  shows a **restricted** badge instead of listing every bucket.
+- `s3:GetBucketLocation` lets Apexion sign requests for the bucket's real region
+  (buckets outside `us-east-1` fail without it).
+- Scope `ListBucket`/`ReadObjects` to multiple buckets by adding more resource
+  ARNs, or to a sub-path with a `Condition` on `s3:prefix`.
 
 ## Why?
 

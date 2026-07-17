@@ -7,6 +7,23 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.0.2] - 2026-07-17
+
+### Changed
+- **No default connection.** Fresh installs now start with zero configured
+  connections and a proper empty state instead of an auto-seeded `Default`
+  MinIO connection. Existing saved connections are untouched, and no migration
+  recreates a default.
+- **IAM-first New connection form.** Defaults to AWS S3 with IAM (instance
+  profile / role) authentication, region `us-east-1`, and endpoint
+  `s3.amazonaws.com`; Access Key / Secret Key stay hidden and optional until
+  explicit key-based auth is selected. Credentials are only validated when the
+  chosen authentication method requires them.
+
+### Docs
+- Added **Running on EC2** and **Minimum IAM policy** sections to the README and
+  reworked configuration docs to reflect the IAM-first, empty-state onboarding.
+
 ## [0.1.0] - 2026-07-17
 
 First public release.
@@ -33,5 +50,7 @@ First public release.
 - Cross-platform release binaries for linux/amd64, linux/arm64, darwin/arm64, and
   windows/amd64, published with SHA256 checksums.
 
-[Unreleased]: https://github.com/cannonkalra/apexion/compare/v0.1.0...HEAD
+[Unreleased]: https://github.com/cannonkalra/apexion/compare/v0.0.2...HEAD
+[0.0.2]: https://github.com/cannonkalra/apexion/compare/v0.0.1...v0.0.2
 [0.1.0]: https://github.com/cannonkalra/apexion/releases/tag/v0.1.0
+[0.0.1]: https://github.com/cannonkalra/apexion/releases/tag/v0.0.1

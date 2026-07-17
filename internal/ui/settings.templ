@@ -6,11 +6,11 @@ templ SettingsPage(vm SettingsVM) {
 	@Layout("settings", "Settings") {
 		<div class="max-w-5xl mx-auto space-y-6">
 			@Card() {
-				@CardHeader("Connections", "Connect multiple AWS / MinIO / S3 accounts. Activate one, then browse it in the Explorer.") {
+				@CardHeader("Connections", "Connect one or more AWS / MinIO / S3 accounts. Activate one, then browse it in the Explorer.") {
 				}
 				@CardBody() {
 					if len(vm.Connections) == 0 {
-						<p class="text-sm text-slate-500 mb-4">No connections yet. Add one below.</p>
+						@connectionsEmptyState()
 					} else {
 						<div class="space-y-2 mb-5">
 							for _, c := range vm.Connections {
@@ -18,59 +18,9 @@ templ SettingsPage(vm SettingsVM) {
 							}
 						</div>
 					}
-					<details class="rounded-lg border border-base-800 bg-base-850 p-4">
-						<summary class="text-sm font-medium text-slate-200 cursor-pointer flex items-center gap-2">@iconDatabase() Add a connection</summary>
-						<form hx-post="/ui/connections" hx-target="#toast-slot" hx-swap="innerHTML" class="mt-4 grid grid-cols-1 md:grid-cols-2 gap-4">
-							<div>
-								<label class="form-label">Name</label>
-								<input name="name" required placeholder="Production AWS" class="input"/>
-							</div>
-							<div>
-								<label class="form-label">Provider</label>
-								<select name="provider" class="select">
-									<option value="minio">MinIO / S3-compatible</option>
-									<option value="aws">AWS S3</option>
-									<option value="s3">Other S3</option>
-								</select>
-							</div>
-							<div>
-								<label class="form-label">Endpoint</label>
-								<input name="endpoint" placeholder="localhost:9000 or s3.amazonaws.com" class="input"/>
-							</div>
-							<div>
-								<label class="form-label">Region</label>
-								<input name="region" value="us-east-1" class="input"/>
-							</div>
-							<div>
-								<label class="form-label">Access key <span class="text-slate-600 normal-case">(leave blank for AWS role)</span></label>
-								<input name="access_key" autocomplete="off" class="input"/>
-							</div>
-							<div>
-								<label class="form-label">Secret key</label>
-								<input name="secret_key" type="password" autocomplete="new-password" class="input"/>
-							</div>
-							<label class="flex items-center gap-2 text-sm text-slate-300 md:col-span-2 rounded-lg border border-base-800 bg-base-900 px-3 py-2">
-								<input type="checkbox" name="use_role" class="check"/>
-								<span>
-									<span class="font-medium">AWS Mode — use IAM role / instance profile</span>
-									<span class="block text-xs text-slate-500">Uses the EC2/ECS/IRSA service role (and env vars / <span class="font-mono">~/.aws</span>) — no access keys needed. Forces HTTPS and auto-detects each bucket's region.</span>
-								</span>
-							</label>
-							<label class="check-row md:col-span-2">
-								<input type="checkbox" name="use_ssl" class="check"/>
-								Use SSL (auto-enabled for AWS)
-							</label>
-							<label class="flex items-center gap-2 text-sm text-slate-300 md:col-span-2">
-								<input type="checkbox" name="path_style" class="check"/>
-								<span>
-									Force path-style addressing
-									<span class="block text-xs text-slate-500">For legacy bucket names with uppercase/underscores/dots (auto-applied when detected).</span>
-								</span>
-							</label>
-							@ActionBar() {
-								<button class="btn-primary" type="submit">@iconPlay() Add connection</button>
-							}
-						</form>
+					<details id="new-connection" class="rounded-lg border border-base-800 bg-base-850 p-4" open?={ len(vm.Connections) == 0 }>
+						<summary class="text-sm font-medium text-slate-200 cursor-pointer flex items-center gap-2">@iconDatabase() New connection</summary>
+						@newConnectionForm()
 					</details>
 				}
 			}
@@ -131,6 +81,111 @@ templ SettingsPage(vm SettingsVM) {
 		</div>
 		<div id="toast-slot"></div>
 	}
+}
+
+// connectionsEmptyState is shown on a fresh install (or after every connection
+// is deleted). No connection is created automatically — this guides the user to
+// create their first one instead.
+templ connectionsEmptyState() {
+	<div class="rounded-lg border border-dashed border-base-700 bg-base-900 px-6 py-8 text-center mb-4">
+		<div class="grid place-items-center w-11 h-11 rounded-lg bg-base-800 text-slate-400 mx-auto mb-3">
+			@iconDatabase()
+		</div>
+		<p class="text-sm font-medium text-slate-200">No storage connections configured.</p>
+		<p class="text-sm text-slate-500 mt-1 max-w-md mx-auto">
+			Create your first object storage connection to begin exploring your data lake.
+		</p>
+		<button
+			type="button"
+			class="btn-primary mt-4 inline-flex"
+			onclick="var d=document.getElementById('new-connection'); if(d){d.open=true; d.scrollIntoView({behavior:'smooth'});}"
+		>@iconPlay() New connection</button>
+	</div>
+}
+
+// newConnectionForm is the create-connection form. It is IAM-first: the
+// authentication method defaults to an IAM role / instance profile, so the
+// Access key and Secret key fields stay hidden (and unrequired) until the user
+// switches to explicit key auth.
+templ newConnectionForm() {
+	<form hx-post="/ui/connections" hx-target="#toast-slot" hx-swap="innerHTML" class="mt-4 grid grid-cols-1 md:grid-cols-2 gap-4">
+		<div>
+			<label class="form-label">Connection name</label>
+			<input name="name" required placeholder="e.g. Production S3" class="input"/>
+		</div>
+		<div>
+			<label class="form-label">Storage type</label>
+			<select name="provider" class="select">
+				<option value="aws" selected>AWS S3</option>
+				<option value="minio">MinIO / S3-compatible</option>
+				<option value="s3">Other S3</option>
+			</select>
+		</div>
+		<div>
+			<label class="form-label">Authentication</label>
+			<select name="auth" class="select" onchange="apexionAuthToggle(this)">
+				<option value="iam" selected>IAM role / instance profile</option>
+				<option value="keys">Access key &amp; secret</option>
+			</select>
+		</div>
+		<div>
+			<label class="form-label">Region</label>
+			<input name="region" value="us-east-1" class="input"/>
+		</div>
+		<div class="md:col-span-2">
+			<label class="form-label">Endpoint</label>
+			<input name="endpoint" value="s3.amazonaws.com" class="input"/>
+			<p class="form-help">Editable. AWS uses <span class="font-mono">s3.amazonaws.com</span>; set your MinIO / R2 / SeaweedFS host for other stores.</p>
+		</div>
+		<div id="conn-iam-hint" class="md:col-span-2 rounded-lg border border-base-800 bg-base-900 px-3 py-2 text-xs text-slate-400 leading-snug">
+			If running on EC2 or another AWS environment with an IAM Role, Access Key and Secret Key can be left blank — Apexion uses the AWS credential chain (instance profile / ECS task role / IRSA, env vars, and <span class="font-mono">~/.aws</span>).
+		</div>
+		<div id="conn-credentials" class="md:col-span-2 grid grid-cols-1 md:grid-cols-2 gap-4 hidden">
+			<div>
+				<label class="form-label">Access key</label>
+				<input name="access_key" autocomplete="off" class="input"/>
+			</div>
+			<div>
+				<label class="form-label">Secret key</label>
+				<input name="secret_key" type="password" autocomplete="new-password" class="input"/>
+			</div>
+		</div>
+		<label class="check-row md:col-span-2">
+			<input type="checkbox" name="use_ssl" class="check"/>
+			Use SSL (auto-enabled for AWS)
+		</label>
+		<label class="flex items-center gap-2 text-sm text-slate-300 md:col-span-2">
+			<input type="checkbox" name="path_style" class="check"/>
+			<span>
+				Force path-style addressing
+				<span class="block text-xs text-slate-500">For legacy bucket names with uppercase/underscores/dots (auto-applied when detected).</span>
+			</span>
+		</label>
+		@ActionBar() {
+			<button class="btn-primary" type="submit">@iconPlay() Add connection</button>
+		}
+	</form>
+	@newConnectionScript()
+}
+
+// newConnectionScript shows or hides the Access key / Secret key fields based on
+// the selected authentication method, so credentials are only requested (and
+// only required) when explicit key auth is chosen. It runs on load so the
+// IAM-first default renders correctly.
+templ newConnectionScript() {
+	<script>
+		function apexionAuthToggle(sel) {
+			var keys = sel && sel.value === 'keys';
+			var creds = document.getElementById('conn-credentials');
+			var hint = document.getElementById('conn-iam-hint');
+			if (creds) creds.classList.toggle('hidden', !keys);
+			if (hint) hint.classList.toggle('hidden', keys);
+		}
+		(function () {
+			var sel = document.querySelector('#new-connection select[name="auth"]');
+			if (sel) apexionAuthToggle(sel);
+		})();
+	</script>
 }
 
 templ connectionRow(c model.Connection, active bool) {

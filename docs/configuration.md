@@ -36,20 +36,27 @@ The embedded DuckDB catalog that holds all Apexion state.
 
 ### `minio`
 
-The default object-store connection. Despite the name it works with any
-S3-compatible store (AWS S3, MinIO, Cloudflare R2, SeaweedFS, …). Additional
-connections can be created and switched from the **Settings** page.
+Optional object-store credentials for **headless / CLI** runs (and the fallback
+store used before any connection is active). Despite the name it works with any
+S3-compatible store (AWS S3, MinIO, Cloudflare R2, SeaweedFS, …).
+
+These values are **not a persisted connection** — Apexion starts with zero
+configured connections, and you create your first one from the **Settings**
+page. The keys below only apply when you have not created and activated a
+connection in the UI.
 
 | Key | Env | Default | Description |
 | --- | --- | --- | --- |
 | `minio.endpoint` | `APEXION_MINIO_ENDPOINT` | `localhost:9000` | Host:port of the S3 endpoint (no scheme). |
-| `minio.access_key` | `APEXION_MINIO_ACCESS_KEY` | `minioadmin` | Access key. |
-| `minio.secret_key` | `APEXION_MINIO_SECRET_KEY` | `minioadmin` | Secret key. |
+| `minio.access_key` | `APEXION_MINIO_ACCESS_KEY` | `minioadmin` | Access key. Leave blank on EC2/IAM. |
+| `minio.secret_key` | `APEXION_MINIO_SECRET_KEY` | `minioadmin` | Secret key. Leave blank on EC2/IAM. |
 | `minio.use_ssl` | `APEXION_MINIO_USE_SSL` | `false` | Use TLS for the connection. |
 | `minio.region` | `APEXION_MINIO_REGION` | `us-east-1` | Region. |
 
-> **On EC2:** leave the keys empty and use an IAM instance profile — enable
-> role-based auth on the connection from the Settings page.
+> **On EC2:** leave the keys empty and use an IAM instance profile. In the UI,
+> the **New connection** form defaults to IAM authentication, so Access Key and
+> Secret Key can be left blank — Apexion uses the AWS credential chain. See
+> [Running on EC2](../README.md#running-on-ec2) for the minimum IAM policy.
 
 ### `crawler`
 

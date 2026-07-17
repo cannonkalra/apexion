@@ -32,7 +32,7 @@ var ErrConnectionNotFound = errors.New("connection not found")
 type Manager struct {
 	store   *storage.Store
 	preview *duckdb.Engine
-	def     config.MinIOConfig
+	def     config.MinIOConfig // fallback object-store defaults; never a persisted connection
 	log     zerolog.Logger
 
 	mu       sync.RWMutex
@@ -43,8 +43,9 @@ type Manager struct {
 
 var _ objstore.Provider = (*Manager)(nil)
 
-// New creates a connection manager. def is the connection seeded from the
-// static config on first run.
+// New creates a connection manager. def holds the static-config object-store
+// defaults used only for the fallback store (CLI/headless use before any
+// connection is active); it is never persisted as a connection.
 func New(store *storage.Store, prev *duckdb.Engine, def config.MinIOConfig, log zerolog.Logger) *Manager {
 	return &Manager{
 		store: store, preview: prev, def: def,
@@ -53,26 +54,13 @@ func New(store *storage.Store, prev *duckdb.Engine, def config.MinIOConfig, log 
 	}
 }
 
-// Init seeds a default connection on first run and loads the active one.
+// Init loads the active connection. No connection is created automatically: a
+// fresh install starts with zero configured connections and an empty state in
+// the UI, and the user explicitly creates their first connection. Existing
+// installs keep whatever connections they have already saved.
 func (m *Manager) Init(ctx context.Context) error {
-	n, err := m.store.CountConnections(ctx)
-	if err != nil {
-		return err
-	}
-	if n == 0 {
-		now := time.Now().UTC()
-		seed := &model.Connection{
-			ID: uuid.NewString(), Name: "Default", Provider: "minio",
-			Endpoint: m.def.Endpoint, Region: m.def.Region,
-			AccessKey: m.def.AccessKey, SecretKey: m.def.SecretKey,
-			UseSSL: m.def.UseSSL, IsActive: true, CreatedAt: now, UpdatedAt: now,
-		}
-		if err := m.store.UpsertConnection(ctx, seed); err != nil {
-			return err
-		}
-		m.log.Info().Str("name", seed.Name).Msg("seeded default connection")
-	}
-	// Ensure exactly one active connection exists.
+	// Ensure exactly one active connection exists when connections are present.
+	// On a fresh install this leaves the manager with no active connection.
 	active, err := m.store.GetActiveConnection(ctx)
 	if err != nil {
 		return err

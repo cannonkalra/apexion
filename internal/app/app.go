@@ -64,9 +64,10 @@ func New(ctx context.Context, cfg *config.Config) (*App, error) {
 	bus := events.NewBus(log, 4096)
 
 	// The preview engine and the connection manager come first: the manager
-	// seeds a default connection (from static config), tracks the active one,
-	// hands out the active S3 client, and reconfigures the preview engine on
-	// switch. Everything downstream depends on the active connection.
+	// tracks the active connection, hands out the active S3 client, and
+	// reconfigures the preview engine on switch. A fresh install has no
+	// connection until the user creates one; everything downstream tolerates a
+	// nil active connection and downstream state follows the active connection.
 	prev, err := duckdb.New(cfg.MinIO, log)
 	if err != nil {
 		return nil, err

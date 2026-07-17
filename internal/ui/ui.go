@@ -367,6 +367,12 @@ func (h *Handler) actionCreateConnection(w http.ResponseWriter, r *http.Request)
 		v := r.FormValue(name)
 		return v == "on" || v == "true"
 	}
+	// IAM-first: the form's Authentication select drives whether static keys are
+	// used. "iam" uses the AWS credential chain (instance profile / ECS / IRSA,
+	// env, ~/.aws) — no keys needed. A missing "auth" field falls back to the
+	// legacy use_role checkbox so older clients keep working.
+	auth := r.FormValue("auth")
+	useRole := auth == "iam" || (auth == "" && checked("use_role"))
 	c := &model.Connection{
 		Name:      r.FormValue("name"),
 		Provider:  r.FormValue("provider"),
@@ -375,12 +381,23 @@ func (h *Handler) actionCreateConnection(w http.ResponseWriter, r *http.Request)
 		AccessKey: r.FormValue("access_key"),
 		SecretKey: r.FormValue("secret_key"),
 		UseSSL:    checked("use_ssl"),
-		UseRole:   checked("use_role"),
+		UseRole:   useRole,
 		PathStyle: checked("path_style"),
 	}
 	if c.Name == "" {
 		h.render(w, r, Toast("Connection name is required", "error"))
 		return
+	}
+	// Credentials are only required for explicit key-based auth. IAM connections
+	// intentionally leave them blank.
+	if !useRole && (c.AccessKey == "" || c.SecretKey == "") {
+		h.render(w, r, Toast("Access key and secret key are required for key-based authentication", "error"))
+		return
+	}
+	// Never persist stray key material for an IAM connection.
+	if useRole {
+		c.AccessKey = ""
+		c.SecretKey = ""
 	}
 	if err := h.connections.Create(r.Context(), c); err != nil {
 		h.render(w, r, Toast("Failed to add connection: "+err.Error(), "error"))

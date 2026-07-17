@@ -18,9 +18,13 @@ storage:
   path: data/apexion.duckdb
   max_open_conns: 1
 
-# Default object-store connection. S3-compatible: AWS S3, MinIO, Cloudflare R2,
-# SeaweedFS, and anything speaking the S3 API. Additional connections can be
-# added and switched at runtime from the Settings page.
+# Optional object-store credentials for headless / CLI runs (and the fallback
+# store used before any connection is active). These are NOT a persisted
+# connection: Apexion starts with zero configured connections, and you create
+# your first one from the Settings page. On EC2 (or any host with an attached
+# IAM role) leave access_key/secret_key blank to use the AWS credential chain.
+# S3-compatible: AWS S3, MinIO, Cloudflare R2, SeaweedFS, and anything speaking
+# the S3 API.
 minio:
   endpoint: localhost:9000
   access_key: minioadmin

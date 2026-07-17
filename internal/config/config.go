@@ -54,7 +54,11 @@ type StorageConfig struct {
 	MaxOpenConns  int    `mapstructure:"max_open_conns"`
 }
 
-// MinIOConfig configures the default object-store connection.
+// MinIOConfig holds optional object-store credentials used for headless/CLI
+// runs and as the pre-connection fallback store. It is NOT persisted as a
+// connection: the app starts with zero configured connections and you create
+// your first one from the Settings page. On EC2 (or any host with an attached
+// IAM role) these can be left blank and the AWS credential chain is used.
 type MinIOConfig struct {
 	Endpoint  string `mapstructure:"endpoint"`
 	AccessKey string `mapstructure:"access_key"`

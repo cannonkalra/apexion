@@ -352,13 +352,16 @@ templ connectionSwitcher(vm ExplorerVM) {
 						if vm.ActiveConn != nil {
 							{ vm.ActiveConn.Name }
 						} else {
-							none
+							<span class="text-slate-500">No connection</span>
 						}
 					</div>
 				</div>
 				<span class="text-slate-500 group-open:rotate-180 transition-transform">▾</span>
 			</summary>
 			<div class="mt-1 space-y-0.5 border border-base-800 rounded-lg p-1 bg-base-900">
+				if len(vm.Connections) == 0 {
+					<p class="px-2 py-1.5 text-xs text-slate-500">No storage connections yet.</p>
+				}
 				for _, c := range vm.Connections {
 					if vm.ActiveConn != nil && c.ID == vm.ActiveConn.ID {
 						<div class="flex items-center gap-2 px-2 py-1.5 rounded text-sm text-white bg-base-800">
