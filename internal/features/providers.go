@@ -36,8 +36,8 @@ func RegisterStorageProvider(p StorageProvider) {
 	}
 }
 
-// StorageProvider resolves a provider by canonical name or alias. ok is false
-// when no such backend was compiled in.
+// LookupStorageProvider resolves a provider by canonical name or alias. ok is
+// false when no such backend was compiled in.
 func LookupStorageProvider(name string) (StorageProvider, bool) {
 	p, ok := storageProviders[name]
 	return p, ok

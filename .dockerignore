@@ -1,10 +1,27 @@
+# VCS & CI
 .git
 .gitignore
+.github/
+
+# Build output & local state
 bin/
+dist/
 data/
 *.duckdb
 *.duckdb.wal
-.DS_Store
-README.md
+tmp/
+
+# Local env
+.env
+
+# Docs & misc (not needed in the image)
 docs/
+examples/
+README.md
+CHANGELOG.md
+CONTRIBUTING.md
+CODE_OF_CONDUCT.md
+SECURITY.md
+LICENSE
+.DS_Store
 node_modules/

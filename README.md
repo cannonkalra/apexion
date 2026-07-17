@@ -1,368 +1,251 @@
+<div align="center">
+
 # Apexion
 
-**An open-source, AI-powered data discovery platform — a self-hostable alternative to AWS Glue Data Catalog + Glue Crawlers.**
+**Explore, catalog, and query data lakes from a single binary.**
 
-Apexion crawls object storage (MinIO / any S3-compatible store), discovers datasets, infers schemas and semantic types, detects PII, catalogs everything in an embedded **DuckDB**, and serves a clean, server-rendered dashboard. Its crawler is event-driven, so **AI agents** plug in as event subscribers without touching the crawl path.
+Apexion is a single-binary data lake exploration tool designed to run directly on
+an EC2 instance — or any machine with access to object storage. It crawls your
+buckets, discovers datasets, infers their schemas, catalogs them into an embedded
+[DuckDB](https://duckdb.org) database, and lets you query everything locally with
+SQL. No metastore, no cluster, no notebooks — just one executable.
 
-```
-crawl  →  discover datasets  →  infer schema  →  detect PII / keys  →  catalog  →  REST + UI
-                              (events)  →  AI agents (enrich, summarize)
-```
+[![CI](https://github.com/cannonkalra/apexion/actions/workflows/ci.yml/badge.svg)](https://github.com/cannonkalra/apexion/actions/workflows/ci.yml)
+[![Release](https://github.com/cannonkalra/apexion/actions/workflows/release.yml/badge.svg)](https://github.com/cannonkalra/apexion/actions/workflows/release.yml)
+[![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](LICENSE)
 
-- **100% Go** crawler & backend (Go 1.24+, CGO for embedded DuckDB)
-- **Server-rendered UI** with **templ**, **HTMX**, **Tailwind** — no React, no Vue, dark mode
-- **Formats:** CSV, TSV, JSON, JSONL, Parquet, Avro, ORC, **Iceberg**, **Delta Lake**, Hive partitions
-- **Instant preview** — query files *directly from MinIO* with embedded DuckDB (`httpfs`), no download
-- **VS Code-style explorer** — browse buckets → folders → files, lazy-loaded
-- **SQL scratchpad** — run read-only DuckDB SQL over object storage
-- **Cancellable background jobs**, per-directory crawls
-- **Event-driven Agent SDK** with pluggable LLMs (offline Ollama, **Groq**, OpenAI/Anthropic)
-
-## Data Explorer & Preview (Phase 1)
-
-Apexion is a **Data Explorer + Data Catalog**, not an ETL tool. The explorer lets you
-browse and preview data before (and after) cataloging it:
-
-- **Explorer** (`/explorer`) — a VS Code-style tree over object storage. Click a bucket, drill
-  into folders (delimiter-based, lazy), see a live folder summary (files, size, formats, last
-  modified), and **Crawl Directory** to catalog just that prefix. If the credentials can't list
-  all buckets (no `s3:ListAllMyBuckets`, common on scoped AWS roles), the rail still shows the
-  buckets you've already connected and offers an **Open a bucket by name** box — browsing a single
-  bucket only needs `s3:ListBucket` on it.
-  - Built for **large buckets**: listings are **paginated** (default 500 immediate children, with
-    *Load more*) and stop the S3 LIST early instead of enumerating millions of keys; the recursive
-    folder summary is **loaded lazily** so folders open instantly; a **name-prefix search** filters
-    the folder **server-side** (S3 `Prefix`, so it also cuts the LIST cost); and results can be
-    **sorted** by name/size/modified, ascending or descending.
-- **Instant file preview** (`/preview`) — opens any CSV/TSV/JSON/JSONL/Parquet file and runs
-  `read_csv_auto` / `read_json_auto` / `read_parquet` **directly against `s3://…`** via DuckDB's
-  `httpfs` extension. Shows column names, DuckDB types, and 100 sample rows — the file is never
-  downloaded. Table-format files (Iceberg/Delta) use `iceberg_scan`/`delta_scan` with a DuckDB S3
-  secret.
-- **SQL Scratchpad** (`/sql`) — a read-only DuckDB editor. Only `SELECT`, `WITH`, `DESCRIBE`,
-  `SUMMARIZE`, `SHOW`, and `EXPLAIN` are permitted (destructive statements are rejected). Every
-  dataset has an **Open SQL** button that pre-fills a query over its files.
-- **Jobs** (`/jobs`) — background crawl/inference/profile jobs with live progress and a **Cancel** button.
-- **Dataset tabs** — Overview, Schema, Column Insights, Files, Partitions, Preview, Statistics, History.
-- **Connections** (`/settings`) — connect multiple AWS / MinIO / S3 accounts, **test** and **activate**
-  one, then browse it. Switching the active connection instantly re-points the explorer, crawler,
-  and DuckDB preview engine (its S3 credentials + endpoint) at the new account — pick one from the
-  switcher in the Explorer or from Settings. Credentials are stored in the DuckDB catalog and
-  redacted in API listings.
-  - **AWS**: choosing the `aws` provider forces HTTPS and auto-detects each bucket's region (no need
-    to know it up front). Tick **AWS Mode — use IAM role / instance profile** (or just leave the
-    access key blank) to authenticate with the EC2/ECS/IRSA **service role** via the AWS credential
-    chain — no static keys required. The DuckDB preview engine uses the same chain
-    (`PROVIDER credential_chain`).
-    - **Legacy bucket names** (uppercase, underscores, or dots — e.g. `Dharani_test`) aren't
-      DNS-compatible, so virtual-hosted addressing (`bucket.s3.amazonaws.com`) fails with
-      *NoSuchBucket*. Apexion auto-switches those buckets to **path-style** addressing; you can also
-      tick **Force path-style addressing** on the connection. DNS-compliant buckets keep using
-      virtual-hosted style.
-
-### Automatic profiling & Column Insights
-
-Every discovered dataset is **profiled automatically** after a crawl (and on-demand via **Analyze
-Dataset**). The profiling engine (`internal/profiler`) runs entirely through the DuckDB query
-provider over `s3://…` — it never materializes the data in Go and never depends on the underlying
-store (S3, MinIO, local, …), so it works for any dataset DuckDB can read. Reads target the **exact
-cataloged object keys** for the dataset, so compressed files (`part.csv.gz`, `.json.zst`, …) and
-nested partition directories are handled without extension guessing.
-
-- **Whole-dataset statistics** — one DuckDB `SUMMARIZE` per dataset (a single scan) computes, for
-  every column: row/distinct/null counts, completeness & uniqueness, min/max, mean, **std dev**,
-  **variance**, and the **25/50/75 percentiles** (median). Text columns also get **min/max/avg
-  length**; categorical columns get an **entropy** estimate. Results are persisted in the DuckDB
-  catalog (`statistics`, `dataset_profiles`).
-- **Column Insights** tab — an interactive card per column (physical/logical/semantic type,
-  nullable, PK/PII badges, quick stats) with a **lazily-loaded distribution**: a histogram for
-  numeric columns, a top-values bar chart for everything else — rendered from the profile without
-  loading the full dataset into the browser.
-- **Data health score** — an overall 0–100 grade (A–D) from completeness/freshness, shown on the
-  dataset **Overview** alongside a full summary (storage/catalog provider, rows, columns, files,
-  size, partition keys, schema version, last crawl/profile/inference, freshness).
-- **Incrementally refreshable** — a profile is keyed by a data fingerprint (schema + file count +
-  size); a re-crawl **skips datasets whose data hasn't changed** rather than recomputing.
-- **Feeds the LLM** — inference consumes the persisted statistics (distinct counts, value ranges)
-  instead of only a raw sample, so the agent reasons over the whole dataset with fewer tokens.
-
-The AI inference now also produces a **business description**, **recommended partition columns**,
-**duplicate & missing-value analysis**, a **recommended Apache Doris schema**, and **Spark/Flink
-optimization** hints — with **Groq** as a first-class LLM provider (`provider: groq`).
-
-> DuckDB's `httpfs`/`delta`/`iceberg` extensions are auto-installed on first use, which needs
-> network once. In a fully offline environment the preview reports a clear message instead of
-> failing, and everything else keeps working.
+</div>
 
 ---
 
-## Quick start
+## What it does
 
-### Option A — full stack in Docker (recommended)
+Point Apexion at an S3-compatible bucket and it lets you:
 
-```bash
-make up          # builds the image, starts MinIO, seeds sample data, starts Apexion
-```
+- 🔎 **Explore S3 buckets** — a fast, VS Code-style browser for your object storage
+- 🕸️ **Crawl data lakes** — recursively walk buckets and group objects into datasets
+- 🔦 **Search datasets** — filter and find tables across your lake
+- 👁️ **Preview files** — inspect CSV, JSON, and Parquet without downloading anything
+- 🧬 **Inspect schemas** — automatic schema inference and column-level insights
+- 📦 **Import multiple datasets** — bulk-register everything a crawl discovers
+- 🗂️ **Register datasets into a DuckDB catalog** — turn raw prefixes into logical SQL tables
+- ⚡ **Query everything locally through DuckDB** — read-only SQL, straight over object storage
 
-Then open **http://localhost:8080**, go to **Buckets**, and click **Scan** on `warehouse`.
-(MinIO console: http://localhost:9001 — `minioadmin` / `minioadmin`.)
+Everything runs from one process. Drop the binary on an EC2 box next to your data
+and open the web UI — no heavyweight infrastructure required.
 
-### Option B — local dev
+## Features
 
-```bash
-# 1. Start MinIO (S3 API on :9000)
-docker run -d -p 9000:9000 -p 9001:9001 \
-  -e MINIO_ROOT_USER=minioadmin -e MINIO_ROOT_PASSWORD=minioadmin \
-  minio/minio server /data --console-address ":9001"
-
-# 2. Seed sample datasets, then run the server
-make seed
-make run          # http://localhost:8080
-```
-
-`make run` regenerates templ + Tailwind and starts the server. The first build compiles the
-embedded DuckDB (a few seconds). Everything after that is instant.
-
-### One-off crawl from the CLI
-
-```bash
-make crawl BUCKET=warehouse         # or: ./bin/apexion crawl warehouse
-```
-
----
+- 🧊 **Single self-contained binary** — one file, no runtime dependencies
+- 🐹 **Built in Go** — fast, portable, easy to deploy
+- 🦆 **Native DuckDB engine** — analytical SQL embedded in the binary
+- 🚀 **Fast dataset previews** — sample files in place, no downloads
+- 🪣 **Object-store crawling** — walks buckets and prefixes concurrently
+- 🔁 **Recursive discovery** — full and incremental crawl modes
+- ☁️ **S3-compatible storage** — AWS S3, MinIO, Cloudflare R2, SeaweedFS, and more
+- 🧵 **Parallel metadata extraction** — worker pools with rate limiting and checkpointing
+- 🗃️ **Dataset cataloging** — persistent catalog of datasets and logical tables
+- 🧠 **Schema inference** — types, partitions, and column statistics
+- 🔤 **SQL querying** — a read-only SQL scratchpad over your lake
+- 💾 **Local DuckDB catalog** — a single `.duckdb` file holds all state
+- 🖥️ **Works directly on EC2** — great for IAM instance-profile auth
+- 🏔️ **Supports massive data lakes** — cursor pagination and streaming listings
+- 🪶 **Zero external services required** — no metastore, no message queue, no cluster
+- 📉 **Lightweight deployment** — copy one binary and run
 
 ## Architecture
 
-```mermaid
-flowchart TB
-    subgraph Sources["Object storage"]
-        MinIO[(MinIO / S3)]
-    end
+Apexion is a server-rendered web application with an embedded analytical engine:
 
-    subgraph Crawler["Crawler (Go, worker pool)"]
-        Walk[Walk objects<br/>rate-limit · checkpoint · resume]
-        Group[Group into datasets<br/>Hive partitions · table formats]
-        Readers[Format readers<br/>CSV/JSON/Parquet/Avro/ORC]
-        Resolvers[Table resolvers<br/>Iceberg · Delta]
-    end
+| Layer | Technology |
+| --- | --- |
+| Language | **Go** |
+| Query engine | **DuckDB** (embedded, via CGO) |
+| Views & templates | **[Templ](https://templ.guide)** |
+| UI components | **[TemplUI](https://templui.io)** |
+| Interactivity | **[HTMX](https://htmx.org)** (modern server-side rendering — no SPA) |
+| Storage | pluggable **object-store abstraction** with concurrent crawlers |
 
-    subgraph Core["Core services"]
-        Bus{{Event Bus}}
-        Infer[Inference engine<br/>types · semantic · PII · PK/FK · quality]
-        Lineage[Lineage builder]
-        Jobs[Jobs + Scheduler<br/>cron · progress]
-        Agents[Agent SDK<br/>Discover · Inference]
-    end
-
-    subgraph Storage["Storage"]
-        Duck[(DuckDB catalog<br/>normalized)]
-    end
-
-    subgraph Serve["Delivery"]
-        API[REST API /api/*]
-        UI[templ UI + HTMX]
-    end
-
-    LLM[/LLM provider<br/>Ollama · OpenAI · Anthropic/]
-
-    MinIO --> Walk --> Group --> Readers
-    Group --> Resolvers
-    Readers --> Bus
-    Resolvers --> Bus
-    Crawler --> Duck
-    Bus --> Infer --> Duck
-    Bus --> Lineage --> Duck
-    Bus --> Agents
-    Agents <--> LLM
-    Jobs --> Crawler
-    Jobs --> Infer
-    Duck --> API --> UI
-    Infer --> Bus
-```
-
-**Event-driven core.** Every meaningful action (`DatasetDiscovered`, `SchemaChanged`, `NewPartition`,
-`InferenceCompleted`, `CatalogUpdated`, …) is published on an in-process event bus. Persistence, the
-UI activity feed, lineage, and AI agents are all just subscribers — the crawler has no knowledge of them.
-This is the extension seam: a new agent or sink is one `bus.Subscribe(...)` call.
-
----
-
-## Entity model (ER diagram)
-
-```mermaid
-erDiagram
-    BUCKETS      ||--o{ OBJECTS      : contains
-    BUCKETS      ||--o{ DATASETS     : holds
-    DATASETS     ||--o{ OBJECTS      : groups
-    DATASETS     ||--o{ SCHEMAS      : "versioned as"
-    DATASETS     ||--o{ PARTITIONS   : "partitioned into"
-    DATASETS     ||--o{ INFERENCE_RUNS : analyzed_by
-    DATASETS     ||--|| DATA_SAMPLES  : samples
-    SCHEMAS      ||--o{ COLUMNS      : has
-    COLUMNS      ||--o| STATISTICS   : profiled_by
-    BUCKETS      ||--o{ CRAWLER_RUNS : scanned_by
-    LINEAGE_NODES ||--o{ LINEAGE_EDGES : connects
-
-    BUCKETS { string id PK  string name  bigint object_count  bigint total_size  string schedule }
-    OBJECTS { string id PK  string bucket_id FK  string key  string etag  bigint size  string format  string metadata_hash }
-    DATASETS { string id PK  string bucket_id FK  string name  string path  string format  bigint file_count  bigint row_count  string partition_keys }
-    SCHEMAS { string id PK  string dataset_id FK  int version  string fingerprint }
-    COLUMNS { string id PK  string schema_id FK  string name  string data_type  bool nullable  string semantic_type }
-    STATISTICS { string id PK  string column_id FK  bigint null_count  bigint distinct_count  double completeness }
-    PARTITIONS { string id PK  string dataset_id FK  string path  string values  bigint file_count }
-    CRAWLER_RUNS { string id PK  string bucket_id FK  string mode  string status  bigint objects_scanned }
-    INFERENCE_RUNS { string id PK  string dataset_id FK  string status  double quality_score  string findings }
-    LINEAGE_NODES { string id PK  string kind  string ref_id  string label }
-    LINEAGE_EDGES { string id PK  string from_id FK  string to_id FK  string relation }
-```
-
-Migrations live in [`migrations/`](migrations/) and are embedded in the binary; they run automatically on start.
-
----
-
-## Project layout
+The crawler, catalog, and object-store backends are decoupled behind small
+interfaces, so storage backends and file-format readers are **pluggable** and
+selected at build time.
 
 ```
-cmd/
-  apexion/          CLI entrypoint (cobra): serve | crawl | migrate | version
-  seed/             sample-data uploader
-internal/
-  config/           viper configuration
-  model/            domain types (shared vocabulary)
-  events/           in-process event bus + typed events
-  storage/          DuckDB store + repositories
-  crawler/          orchestrator (worker pool, checkpoint, incremental)
-    s3/             MinIO client + format.Source/Catalog adapters
-    format/         reader/resolver interfaces + detection + type inference
-    csv/ json/ parquet/ avro/ orc/     file-format readers
-    iceberg/ delta/                    table-format resolvers
-  inference/        schema/semantic/PII/PK-FK/quality engine
-  lineage/          lineage graph builder (event subscriber)
-  jobs/             background job manager + cron scheduler
-  catalog/          orchestration service (crawl/infer + read models)
-  agents/           Agent SDK: providers + DiscoverAgent + InferenceAgent
-  api/              REST handlers (chi)
-  ui/               templ pages + components + HTMX handlers
-  httpserver/       router assembly, middleware, graceful shutdown
-  app/              dependency injection & lifecycle
-pkg/logger/         zerolog wrapper
-migrations/         embedded SQL migrations
-assets/             htmx.min.js, compiled Tailwind CSS, favicon (embedded)
-configs/            apexion.yaml
+apexion (single binary)
+├── web UI + REST API        server-rendered, HTMX
+├── crawler                  concurrent discovery, schema inference
+├── catalog                  datasets → logical SQL tables
+├── DuckDB engine            preview + read-only query, over S3
+└── object-store backends    S3 / MinIO / R2 / SeaweedFS / …
+        │
+        ▼
+   your object storage  ──►  local apexion.duckdb catalog
 ```
 
----
+## Supported storage
 
-## What the crawler does
+Apexion speaks the S3 API, so it works with:
 
-- Connects to MinIO and **streams** every object (constant memory — scales to millions).
-- **Ignores** hidden/marker files (`.`-prefixed, `_SUCCESS`, `_temporary/…`).
-- Detects format by **extension and magic bytes** (`PAR1`, `Obj␁`, `ORC`).
-- Groups objects into **datasets**, collapsing folders of same-format files and recognizing
-  **Hive `k=v` partitions**.
-- Recognizes **table formats**: a `_delta_log/` marks a Delta table; `metadata/*.metadata.json`
-  marks an Iceberg table. Their schemas are read from metadata (no data scan).
-- **Never loads whole files**: text formats read a bounded byte prefix; Parquet/ORC read only the
-  footer via ranged GETs.
-- **Worker pool** for parallel schema resolution, optional **rate limiting**, periodic
-  **checkpointing** (`--checkpoint_every`), **resume**, and **incremental** crawls via a metadata
-  hash of `(etag, size, version, modified)`.
+- **Amazon S3** — including IAM instance-profile / role auth (no static keys on EC2)
+- **MinIO**
+- **Cloudflare R2**
+- **SeaweedFS**
+- **Any S3-compatible object store**
 
-## Inference engine
+Connections support virtual-hosted and path-style addressing, custom regions,
+and TLS, and can be added or switched at runtime from the **Settings** page.
 
-For a dataset's sampled rows it derives, per column: logical type, **semantic type** (email, phone,
-URL, UUID, IP, SSN, credit-card [Luhn], country, currency, language, gender, lat/long, name, address,
-zip), **PII flag**, primary-key candidacy, completeness/uniqueness/distinct, min/max, sample values,
-and date format. At the dataset level it produces **primary-key** and **foreign-key** candidates
-(value-overlap + name affinity) and a **quality score** (completeness · uniqueness · validity ·
-consistency).
+### File formats
 
-## AI Agent SDK
-
-Agents are event subscribers with a pluggable LLM backend. Two are shipped:
-
-| Agent            | Trigger               | Action                                                        |
-|------------------|-----------------------|---------------------------------------------------------------|
-| `DiscoverAgent`  | `DatasetDiscovered`   | Writes a concise dataset description                          |
-| `InferenceAgent` | `InferenceCompleted`  | Summarizes findings (PK, PII, quality) in natural language    |
-
-Roadmap interfaces (`QualityAgent`, `LineageAgent`, `DocumentationAgent`) are defined for extension.
-
-The LLM provider is selected by config and works **fully offline** by default (deterministic local
-text). To use a real model:
-
-```yaml
-agents:
-  provider: ollama                       # or openai | anthropic
-  llm:
-    base_url: http://localhost:11434/v1  # Ollama's OpenAI-compatible endpoint
-    model: llama3.1
-```
-
-Nothing in the crawler or inference engine changes — the agents just get smarter.
-
----
-
-## REST API
-
-All endpoints return JSON under `/api`.
-
-| Method & path                         | Description                          |
-|---------------------------------------|--------------------------------------|
-| `GET  /api/buckets`                   | list buckets                         |
-| `POST /api/buckets/{name}/crawl`      | start a crawl (`?mode=incremental`)  |
-| `GET  /api/datasets`                  | list datasets (`?bucket_id&format&q`)|
-| `GET  /api/datasets/{id}`             | dataset detail (schema, sample, …)   |
-| `DELETE /api/datasets/{id}`           | remove a dataset from the catalog    |
-| `POST /api/datasets/{id}/infer`       | run inference                        |
-| `GET  /api/tables`                    | tables (datasets with a schema)      |
-| `GET  /api/schema?dataset_id=`        | latest schema                        |
-| `GET  /api/columns?dataset_id=`       | columns + statistics                 |
-| `GET  /api/jobs` · `/api/jobs/{id}`   | background jobs & progress            |
-| `POST /api/jobs/{id}/cancel`          | cancel a running job                 |
-| `GET  /api/runs`                      | crawler run history                  |
-| `GET  /api/explorer?bucket=&prefix=`  | browse folders & files (live S3)     |
-| `POST /api/directories/crawl`         | crawl a directory (`{bucket,prefix}`)|
-| `GET  /api/preview/file?bucket=&key=` | DuckDB preview of a file             |
-| `GET  /api/preview/dataset/{id}`      | DuckDB preview of a dataset          |
-| `POST /api/sql`                       | run read-only DuckDB SQL (`{sql}`)   |
-| `GET  /api/server/buckets`            | live buckets on the connected server |
-| `GET  /api/lineage`                   | lineage nodes + edges                |
-| `POST /api/infer`                     | run inference (`{"dataset_id": …}`)  |
-| `GET  /api/search?q=`                 | global search                        |
-| `GET  /api/statistics`                | dashboard metrics + format breakdown |
-| `GET  /api/events`                    | recent domain events                 |
-| `GET  /api/agents`                    | registered AI agents                 |
-
----
-
-## Configuration
-
-Defaults live in [`configs/apexion.yaml`](configs/apexion.yaml). Every key is overridable via an
-`APEXION_`-prefixed env var (dots → underscores), e.g. `APEXION_MINIO_ENDPOINT`,
-`APEXION_CRAWLER_WORKERS`, `APEXION_AGENTS_PROVIDER`.
-
-## Development
+The default binary reads **CSV/TSV**, **JSON/JSONL**, and **Parquet**. Additional
+readers — **Avro**, **ORC**, **Iceberg**, and **Delta Lake** — are experimental
+and compiled in via build tags:
 
 ```bash
-make tools      # install templ + tailwind
-make generate   # regenerate *_templ.go
-make css        # rebuild Tailwind
-make test       # unit + integration tests (uses real DuckDB + generated fixtures)
-make vet
+go build -tags "avro,orc,iceberg,delta" ./cmd/apexion
 ```
 
-Generated templ files and the compiled CSS are committed, so `go build ./...` and the Docker image
-work without the frontend toolchains.
+First-class support for Iceberg, Delta Lake, and Hudi is on the [roadmap](#roadmap).
 
-## Extending Apexion
+## Installation
 
-- **New file format** → implement `format.Reader`, register in `crawler/registry.go`.
-- **New table format** → implement `format.TableResolver`, register in `DefaultResolvers()`.
-- **New source** (Postgres, Snowflake, GCS, Kafka, …) → the `format.Source`/`format.Catalog`
-  interfaces are storage-agnostic; add a new client package alongside `crawler/s3`.
-- **New AI agent** → implement `agents.Agent`, subscribe to the events you care about.
+### Download a binary
+
+Grab the latest build for your platform from the
+[**Releases**](https://github.com/cannonkalra/apexion/releases) page and verify it
+against `SHA256SUMS`.
+
+**Linux (x86_64)**
+```bash
+curl -fsSL -o apexion https://github.com/cannonkalra/apexion/releases/latest/download/apexion-linux-amd64
+chmod +x apexion && ./apexion version
+```
+
+**Linux (arm64)**
+```bash
+curl -fsSL -o apexion https://github.com/cannonkalra/apexion/releases/latest/download/apexion-linux-arm64
+chmod +x apexion && ./apexion version
+```
+
+**macOS (Apple Silicon)**
+```bash
+curl -fsSL -o apexion https://github.com/cannonkalra/apexion/releases/latest/download/apexion-darwin-arm64
+chmod +x apexion && ./apexion version
+```
+
+**Windows (x86_64)** — download `apexion-windows-amd64.exe` from the Releases page.
+
+### Build from source
+
+Requires **Go 1.26+** and a C toolchain (the DuckDB driver uses CGO).
+
+```bash
+git clone https://github.com/cannonkalra/apexion.git
+cd apexion
+make build          # → ./bin/apexion
+./bin/apexion version
+```
+
+The generated `*_templ.go` files and compiled CSS are committed, so a plain
+`go build ./cmd/apexion` works without the Templ or Tailwind toolchains.
+
+## Quick start
+
+The fastest way to see Apexion in action is the bundled Docker stack — MinIO,
+a one-shot seeder that uploads sample datasets, and the app:
+
+```bash
+make up      # docker compose up --build
+```
+
+Then open **http://localhost:8080**.
+
+Prefer to run it directly against your own storage? Start the server:
+
+```bash
+apexion serve
+# apexion v0.1.0  ·  data lake exploration, one binary
+```
+
+Apexion listens on **http://localhost:8080** by default. Configuration comes from
+`configs/apexion.yaml` and/or `APEXION_`-prefixed environment variables — see
+[Configuration](docs/configuration.md).
+
+### A five-minute tour
+
+1. **Connect to S3.** Open **Settings → Connections**, add your endpoint,
+   region, and credentials (or enable IAM-role auth on EC2), then **Test** and
+   **Activate**. On the command line, set `APEXION_MINIO_ENDPOINT`,
+   `APEXION_MINIO_ACCESS_KEY`, and `APEXION_MINIO_SECRET_KEY`.
+
+2. **Crawl a bucket.** From the UI wizard, or the CLI:
+   ```bash
+   apexion crawl warehouse
+   apexion crawl warehouse --mode incremental   # only new/changed objects
+   ```
+
+3. **Preview data.** Browse the **Explorer**, drill into a prefix, and preview
+   any CSV/JSON/Parquet file instantly — Apexion reads it in place, no download.
+
+4. **Register datasets.** From a dataset's page (or the crawl wizard), **Register**
+   it as a logical table. Apexion creates a DuckDB view over the underlying files,
+   handling Hive and positional partitions for you.
+
+5. **Query with DuckDB.** Open the **Query** page and run read-only SQL:
+   ```sql
+   SELECT country, count(*) AS n
+   FROM customers
+   GROUP BY country
+   ORDER BY n DESC;
+   ```
+
+Everything you register and discover is persisted to a single DuckDB catalog file
+(`data/apexion.duckdb` by default).
+
+## Why?
+
+Traditional data-lake exploration is heavy. To answer "what's in this bucket and
+what does it look like?" you often stand up a metadata catalog, a crawler service,
+a query engine, a notebook server, and the distributed infrastructure to glue them
+together — then keep all of it running.
+
+Apexion intentionally avoids all of that. It collapses discovery, cataloging,
+preview, and SQL into **one binary** backed by an embedded DuckDB database. You get
+an extremely lightweight workflow for understanding a data lake from a single
+executable you can run on your laptop or drop straight onto an EC2 instance beside
+your data — and delete just as easily when you're done.
+
+## Screenshots
+
+> 📸 Placeholders for now — real captures welcome via PR (see [`docs/screenshots/`](docs/screenshots/)).
+
+| Explorer | Datasets & schemas | SQL query |
+| --- | --- | --- |
+| ![Explorer](docs/screenshots/explorer.svg) | ![Datasets](docs/screenshots/datasets.svg) | ![Query](docs/screenshots/query.svg) |
+
+## Roadmap
+
+Apexion is early and moving quickly. Planned work includes:
+
+- 🧊 First-class **Apache Iceberg** support
+- 🔺 First-class **Delta Lake** support
+- 🌊 **Apache Hudi** support
+- 🧭 Column- and table-level **lineage**
+- 📝 A richer in-app **SQL editor**
+- 📊 **Data profiling** and distribution stats
+- 🕸️ **Graph visualization** of datasets and relationships
+- 🔄 **Catalog synchronization** with external metastores (e.g. Glue)
+- ✅ **Data quality checks** and assertions
+
+Have an idea? [Open an issue](https://github.com/cannonkalra/apexion/issues).
+
+## Documentation
+
+- [Configuration reference](docs/configuration.md)
+- [Architecture overview](docs/architecture.md)
+- [Contributing guide](CONTRIBUTING.md)
+- [Changelog](CHANGELOG.md)
 
 ## License
 
-MIT.
+Apexion is released under the [MIT License](LICENSE).

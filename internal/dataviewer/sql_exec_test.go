@@ -44,7 +44,7 @@ func TestProfilingSQLExecutes(t *testing.T) {
 		t.Fatalf("stats query failed: %v\nSQL: %s", err, statsSQL)
 	}
 	statRow := scanStringRow(t, rowsA)
-	rowsA.Close()
+	_ = rowsA.Close()
 	if len(statRow) != len(plan) {
 		t.Fatalf("stats returned %d cols, plan has %d", len(statRow), len(plan))
 	}
@@ -73,7 +73,7 @@ func TestProfilingSQLExecutes(t *testing.T) {
 		t.Fatalf("top-N query failed: %v\nSQL: %s", err, topSQL)
 	}
 	res := scanResult(t, rowsB)
-	rowsB.Close()
+	_ = rowsB.Close()
 	applyTopN(&res, profiles)
 	if len(profiles[1].TopValues) == 0 {
 		t.Errorf("expected top values for email, got none")

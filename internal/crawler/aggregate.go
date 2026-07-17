@@ -37,7 +37,6 @@ type dsAgg struct {
 	formatVotes map[model.Format]int
 	fileCount   int64
 	totalSize   int64
-	rowEstimate int64
 	partKeySet  map[string]bool
 	partKeys    []string
 	partitions  map[string]*partAgg

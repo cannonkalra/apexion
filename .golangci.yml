@@ -1,0 +1,23 @@
+# golangci-lint configuration (v2 schema).
+# Runs the standard linter set: errcheck, govet, ineffassign, staticcheck, unused.
+version: "2"
+
+linters:
+  default: standard
+  settings:
+    staticcheck:
+      checks:
+        - all
+        # QF* are opt-in "quickfix" style hints, not correctness checks.
+        - -QF1001 # could apply De Morgan's law
+        - -QF1002 # could use tagged switch
+  exclusions:
+    rules:
+      # Don't flag deferred cleanup (Close/Rollback) whose error is
+      # conventionally ignored.
+      - linters: [errcheck]
+        source: "^\\s*defer "
+
+formatters:
+  enable:
+    - gofmt

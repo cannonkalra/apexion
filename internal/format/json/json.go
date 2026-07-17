@@ -162,10 +162,6 @@ func readJSONArray(r io.Reader, maxRows int) []map[string]json.RawMessage {
 		}
 		return out
 	}
-	// Single object.
-	if d, ok := tok.(json.Delim); ok && d == '{' {
-		// Re-decode from scratch is simpler: not worth it; treat as one row.
-	}
 	return out
 }
 

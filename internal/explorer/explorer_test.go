@@ -30,7 +30,6 @@ func newFakeStore() *fakeStore {
 	return &fakeStore{keys: map[string]int64{}, stamp: time.Unix(1_700_000_000, 0).UTC()}
 }
 
-func (f *fakeStore) addFolder(key string) { f.keys[key] = 0 }
 func (f *fakeStore) addFile(key string, size int64) {
 	f.keys[key] = size
 }

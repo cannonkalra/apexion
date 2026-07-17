@@ -199,7 +199,7 @@ func (s *Service) FolderSummary(ctx context.Context, bucket, prefix string) (*Fo
 	return sum, nil
 }
 
-// Breadcrumb splits a prefix into cumulative path segments for navigation.
+// Crumb is one cumulative path segment of a prefix, used for breadcrumb navigation.
 type Crumb struct {
 	Name string
 	Path string

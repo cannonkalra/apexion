@@ -13,7 +13,6 @@ import (
 	"context"
 	"crypto/sha256"
 	"encoding/hex"
-	"encoding/json"
 	"fmt"
 	"sort"
 	"strings"
@@ -299,7 +298,7 @@ func (c *Crawler) processDatasets(ctx context.Context, bucket *model.Bucket, run
 // metadataHash hashes the fields that change when an object is rewritten.
 func metadataHash(om objstore.ObjectMeta) string {
 	h := sha256.New()
-	fmt.Fprintf(h, "%s|%d|%s|%s", om.ETag, om.Size, om.VersionID, om.LastModified.UTC().Format(time.RFC3339Nano))
+	_, _ = fmt.Fprintf(h, "%s|%d|%s|%s", om.ETag, om.Size, om.VersionID, om.LastModified.UTC().Format(time.RFC3339Nano))
 	return hex.EncodeToString(h.Sum(nil))[:32]
 }
 
@@ -330,9 +329,4 @@ func fingerprint(fields []format.Field) string {
 	sort.Strings(parts)
 	h := sha256.Sum256([]byte(strings.Join(parts, "|")))
 	return hex.EncodeToString(h[:])[:32]
-}
-
-func mustJSON(v any) string {
-	b, _ := json.Marshal(v)
-	return string(b)
 }

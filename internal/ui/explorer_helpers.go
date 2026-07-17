@@ -6,7 +6,6 @@ import (
 	"net/url"
 	"path"
 	"strconv"
-	"time"
 
 	"github.com/apexion/apexion/internal/duckdb"
 	"github.com/apexion/apexion/internal/explorer"
@@ -43,25 +42,6 @@ func sqlURLForFile(vm PreviewVM) string {
 	v := url.Values{}
 	v.Set("sql", q)
 	return "/sql?" + v.Encode()
-}
-
-// jobElapsed formats how long a job ran (or has been running).
-func jobElapsed(j model.Job) string {
-	if j.StartedAt == nil {
-		return "—"
-	}
-	end := time.Now()
-	if j.FinishedAt != nil {
-		end = *j.FinishedAt
-	}
-	d := end.Sub(*j.StartedAt)
-	if d < time.Second {
-		return "<1s"
-	}
-	if d < time.Minute {
-		return fmt.Sprintf("%ds", int(d.Seconds()))
-	}
-	return fmt.Sprintf("%dm %ds", int(d.Minutes()), int(d.Seconds())%60)
 }
 
 // urlValues builds an encoded bucket/key/format query string.

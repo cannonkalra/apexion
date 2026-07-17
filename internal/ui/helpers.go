@@ -144,13 +144,6 @@ func progressPct(f float64) string {
 	return fmt.Sprintf("%.0f%%", f*100)
 }
 
-func title(s string) string {
-	if s == "" {
-		return ""
-	}
-	return strings.ToUpper(s[:1]) + s[1:]
-}
-
 func join(ss []string, sep string) string { return strings.Join(ss, sep) }
 
 func truncate(s string, n int) string {

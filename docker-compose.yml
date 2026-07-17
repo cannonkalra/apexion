@@ -1,3 +1,6 @@
+# Full local stack: MinIO (S3-compatible store) + a one-shot seeder that uploads
+# sample datasets + the Apexion server. Start it with `docker compose up --build`
+# and open http://localhost:8080.
 services:
   minio:
     image: minio/minio:latest
@@ -17,7 +20,8 @@ services:
       timeout: 3s
       retries: 10
 
-  # One-shot: waits for MinIO, then uploads the sample datasets.
+  # One-shot: waits for MinIO, then uploads the sample datasets to the
+  # "warehouse" bucket so Apexion has something to discover.
   seed:
     build:
       context: .
@@ -51,31 +55,10 @@ services:
       APEXION_MINIO_SECRET_KEY: password
       APEXION_STORAGE_PATH: /app/data/apexion.duckdb
       APEXION_LOG_PRETTY: "true"
-      # To enable a local LLM agent, point at Ollama:
-      # APEXION_AGENTS_PROVIDER: ollama
-      # APEXION_AGENTS_LLM_BASE_URL: http://host.docker.internal:11434/v1
-      # APEXION_AGENTS_LLM_MODEL: llama3.1
     ports:
       - "8080:8080"
     volumes:
       - apexion-data:/app/data
-
-  create-bucket:
-    image: minio/mc
-    depends_on:
-      - minio
-    volumes:
-      - ./tmp/raw:/tmp/data
-    entrypoint: /bin/bash
-    command:
-      - -c
-      - |
-        sleep 8;
-        /usr/bin/mc alias set minio http://minio:9000 admin password;
-        /usr/bin/mc mb --ignore-existing minio/raw;
-        /usr/bin/mc anonymous set download minio/raw;
-        /usr/bin/mc mirror /tmp/data/ minio/raw;
-        exit 0;
 
 volumes:
   minio-data:

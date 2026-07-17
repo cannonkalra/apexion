@@ -1,0 +1,87 @@
+name: Release
+
+# Publish binaries for every supported platform when a v* tag is pushed.
+#   git tag v0.1.0 && git push origin v0.1.0
+#
+# Because the embedded DuckDB driver uses CGO, each target is built natively on
+# its own runner (cross-compiling CGO is unreliable). A final job aggregates the
+# binaries, writes SHA256SUMS, and creates the GitHub Release.
+on:
+  push:
+    tags: ["v*"]
+
+permissions:
+  contents: write
+
+jobs:
+  build:
+    name: Build ${{ matrix.goos }}/${{ matrix.goarch }}
+    runs-on: ${{ matrix.runner }}
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - { runner: ubuntu-latest,    goos: linux,   goarch: amd64, ext: "" }
+          - { runner: ubuntu-24.04-arm, goos: linux,   goarch: arm64, ext: "" }
+          - { runner: macos-14,         goos: darwin,  goarch: arm64, ext: "" }
+          - { runner: windows-latest,   goos: windows, goarch: amd64, ext: ".exe" }
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0 # tags + full history for version metadata
+
+      - uses: actions/setup-go@v5
+        with:
+          go-version-file: go.mod
+          cache: true
+
+      - name: Build binary
+        shell: bash
+        env:
+          CGO_ENABLED: "1"
+        run: |
+          VERSION="${GITHUB_REF_NAME}"
+          COMMIT="$(git rev-parse --short HEAD)"
+          DATE="$(git show -s --format=%cI HEAD)"
+          OUT="apexion-${{ matrix.goos }}-${{ matrix.goarch }}${{ matrix.ext }}"
+          mkdir -p dist
+          go build -trimpath \
+            -ldflags "-s -w -X main.version=${VERSION} -X main.commit=${COMMIT} -X main.date=${DATE}" \
+            -o "dist/${OUT}" ./cmd/apexion
+          echo "built dist/${OUT}"
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: apexion-${{ matrix.goos }}-${{ matrix.goarch }}
+          path: dist/apexion-*
+          if-no-files-found: error
+          retention-days: 7
+
+  release:
+    name: Publish release
+    needs: build
+    runs-on: ubuntu-latest
+    steps:
+      - name: Download all binaries
+        uses: actions/download-artifact@v4
+        with:
+          path: staging
+          merge-multiple: true
+
+      - name: Assemble artifacts + checksums
+        run: |
+          mkdir -p dist
+          cp staging/apexion-* dist/
+          cd dist
+          shasum -a 256 apexion-* > SHA256SUMS
+          echo "----- SHA256SUMS -----"
+          cat SHA256SUMS
+
+      - name: Create GitHub Release
+        uses: softprops/action-gh-release@v2
+        with:
+          draft: true
+          generate_release_notes: true
+          files: |
+            dist/apexion-*
+            dist/SHA256SUMS
