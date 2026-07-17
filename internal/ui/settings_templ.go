@@ -43,7 +43,7 @@ func SettingsPage(vm SettingsVM) templ.Component {
 				}()
 			}
 			ctx = templ.InitializeContext(ctx)
-			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 1, "<div class=\"max-w-5xl mx-auto space-y-6\">")
+			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 1, "<div class=\"max-w-4xl mx-auto space-y-6\">")
 			if templ_7745c5c3_Err != nil {
 				return templ_7745c5c3_Err
 			}
@@ -71,13 +71,27 @@ func SettingsPage(vm SettingsVM) templ.Component {
 						}()
 					}
 					ctx = templ.InitializeContext(ctx)
+					if len(vm.Connections) > 0 {
+						templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 2, "<button type=\"button\" class=\"btn-primary\" data-conn-open aria-controls=\"conn-form\">")
+						if templ_7745c5c3_Err != nil {
+							return templ_7745c5c3_Err
+						}
+						templ_7745c5c3_Err = iconPlus().Render(ctx, templ_7745c5c3_Buffer)
+						if templ_7745c5c3_Err != nil {
+							return templ_7745c5c3_Err
+						}
+						templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 3, "New connection</button>")
+						if templ_7745c5c3_Err != nil {
+							return templ_7745c5c3_Err
+						}
+					}
 					return nil
 				})
-				templ_7745c5c3_Err = CardHeader("Connections", "Connect one or more AWS / MinIO / S3 accounts. Activate one, then browse it in the Explorer.").Render(templ.WithChildren(ctx, templ_7745c5c3_Var4), templ_7745c5c3_Buffer)
+				templ_7745c5c3_Err = CardHeader("Connections", "Object storage accounts Apexion can crawl, catalog, and query.").Render(templ.WithChildren(ctx, templ_7745c5c3_Var4), templ_7745c5c3_Buffer)
 				if templ_7745c5c3_Err != nil {
 					return templ_7745c5c3_Err
 				}
-				templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 2, " ")
+				templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 4, " ")
 				if templ_7745c5c3_Err != nil {
 					return templ_7745c5c3_Err
 				}
@@ -93,13 +107,8 @@ func SettingsPage(vm SettingsVM) templ.Component {
 						}()
 					}
 					ctx = templ.InitializeContext(ctx)
-					if len(vm.Connections) == 0 {
-						templ_7745c5c3_Err = connectionsEmptyState().Render(ctx, templ_7745c5c3_Buffer)
-						if templ_7745c5c3_Err != nil {
-							return templ_7745c5c3_Err
-						}
-					} else {
-						templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 3, "<div class=\"space-y-2 mb-5\">")
+					if len(vm.Connections) > 0 {
+						templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 5, "<div id=\"conn-list\" class=\"space-y-2.5\">")
 						if templ_7745c5c3_Err != nil {
 							return templ_7745c5c3_Err
 						}
@@ -109,38 +118,21 @@ func SettingsPage(vm SettingsVM) templ.Component {
 								return templ_7745c5c3_Err
 							}
 						}
-						templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 4, "</div>")
+						templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 6, "</div>")
+						if templ_7745c5c3_Err != nil {
+							return templ_7745c5c3_Err
+						}
+					} else {
+						templ_7745c5c3_Err = ConnectionEmptyState().Render(ctx, templ_7745c5c3_Buffer)
 						if templ_7745c5c3_Err != nil {
 							return templ_7745c5c3_Err
 						}
 					}
-					templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 5, " <details id=\"new-connection\" class=\"rounded-lg border border-base-800 bg-base-850 p-4\"")
+					templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 7, " ")
 					if templ_7745c5c3_Err != nil {
 						return templ_7745c5c3_Err
 					}
-					if len(vm.Connections) == 0 {
-						templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 6, " open")
-						if templ_7745c5c3_Err != nil {
-							return templ_7745c5c3_Err
-						}
-					}
-					templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 7, "><summary class=\"text-sm font-medium text-slate-200 cursor-pointer flex items-center gap-2\">")
-					if templ_7745c5c3_Err != nil {
-						return templ_7745c5c3_Err
-					}
-					templ_7745c5c3_Err = iconDatabase().Render(ctx, templ_7745c5c3_Buffer)
-					if templ_7745c5c3_Err != nil {
-						return templ_7745c5c3_Err
-					}
-					templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 8, "New connection</summary>")
-					if templ_7745c5c3_Err != nil {
-						return templ_7745c5c3_Err
-					}
-					templ_7745c5c3_Err = newConnectionForm().Render(ctx, templ_7745c5c3_Buffer)
-					if templ_7745c5c3_Err != nil {
-						return templ_7745c5c3_Err
-					}
-					templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 9, "</details>")
+					templ_7745c5c3_Err = ConnectionForm().Render(ctx, templ_7745c5c3_Buffer)
 					if templ_7745c5c3_Err != nil {
 						return templ_7745c5c3_Err
 					}
@@ -186,7 +178,7 @@ func SettingsPage(vm SettingsVM) templ.Component {
 				if templ_7745c5c3_Err != nil {
 					return templ_7745c5c3_Err
 				}
-				templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 10, " ")
+				templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 8, " ")
 				if templ_7745c5c3_Err != nil {
 					return templ_7745c5c3_Err
 				}
@@ -202,7 +194,7 @@ func SettingsPage(vm SettingsVM) templ.Component {
 						}()
 					}
 					ctx = templ.InitializeContext(ctx)
-					templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 11, "<dl class=\"space-y-3 text-sm\">")
+					templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 9, "<dl class=\"space-y-3 text-sm\">")
 					if templ_7745c5c3_Err != nil {
 						return templ_7745c5c3_Err
 					}
@@ -218,7 +210,7 @@ func SettingsPage(vm SettingsVM) templ.Component {
 					if templ_7745c5c3_Err != nil {
 						return templ_7745c5c3_Err
 					}
-					templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 12, "</dl>")
+					templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 10, "</dl>")
 					if templ_7745c5c3_Err != nil {
 						return templ_7745c5c3_Err
 					}
@@ -264,7 +256,7 @@ func SettingsPage(vm SettingsVM) templ.Component {
 				if templ_7745c5c3_Err != nil {
 					return templ_7745c5c3_Err
 				}
-				templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 13, " <form hx-post=\"/ui/settings/crawl\" hx-target=\"#toast-slot\" hx-swap=\"innerHTML\">")
+				templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 11, " <form hx-post=\"/ui/settings/crawl\" hx-target=\"#toast-slot\" hx-swap=\"innerHTML\">")
 				if templ_7745c5c3_Err != nil {
 					return templ_7745c5c3_Err
 				}
@@ -280,63 +272,63 @@ func SettingsPage(vm SettingsVM) templ.Component {
 						}()
 					}
 					ctx = templ.InitializeContext(ctx)
-					templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 14, "<div class=\"flex flex-wrap items-end gap-4\"><div><label class=\"form-label\">Bucket name</label> <input name=\"bucket\" placeholder=\"e.g. warehouse\" class=\"input\"></div><div><label class=\"form-label\">Mode</label> <select name=\"mode\" class=\"select\"><option value=\"full\">Full</option> <option value=\"incremental\">Incremental</option></select></div></div>")
+					templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 12, "<div class=\"flex flex-wrap items-end gap-4\"><div><label class=\"form-label\">Bucket name</label> <input name=\"bucket\" placeholder=\"e.g. warehouse\" class=\"input\"></div><div><label class=\"form-label\">Mode</label> <select name=\"mode\" class=\"select\"><option value=\"full\">Full</option> <option value=\"incremental\">Incremental</option></select></div></div>")
 					if templ_7745c5c3_Err != nil {
 						return templ_7745c5c3_Err
 					}
 					if len(vm.Buckets) > 0 {
-						templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 15, "<div class=\"mt-5\"><div class=\"eyebrow mb-2\">Scheduled buckets</div><div class=\"space-y-1\">")
+						templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 13, "<div class=\"mt-5\"><div class=\"eyebrow mb-2\">Scheduled buckets</div><div class=\"space-y-1\">")
 						if templ_7745c5c3_Err != nil {
 							return templ_7745c5c3_Err
 						}
 						for _, b := range vm.Buckets {
-							templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 16, "<div class=\"flex items-center justify-between gap-3 px-3 py-2 rounded-lg bg-base-850 border border-base-800 text-sm\"><span class=\"text-slate-200 truncate min-w-0\">")
+							templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 14, "<div class=\"flex items-center justify-between gap-3 px-3 py-2 rounded-lg bg-base-850 border border-base-800 text-sm\"><span class=\"text-slate-200 truncate min-w-0\">")
 							if templ_7745c5c3_Err != nil {
 								return templ_7745c5c3_Err
 							}
 							var templ_7745c5c3_Var12 string
 							templ_7745c5c3_Var12, templ_7745c5c3_Err = templ.JoinStringErrs(b.Name)
 							if templ_7745c5c3_Err != nil {
-								return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/ui/settings.templ`, Line: 64, Col: 65}
+								return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/ui/settings.templ`, Line: 67, Col: 65}
 							}
 							_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var12))
 							if templ_7745c5c3_Err != nil {
 								return templ_7745c5c3_Err
 							}
-							templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 17, "</span> ")
+							templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 15, "</span> ")
 							if templ_7745c5c3_Err != nil {
 								return templ_7745c5c3_Err
 							}
 							if b.Schedule != "" {
-								templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 18, "<span class=\"badge bg-brand-500/15 text-brand-300 font-mono shrink-0\">")
+								templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 16, "<span class=\"badge bg-brand-500/15 text-brand-300 font-mono shrink-0\">")
 								if templ_7745c5c3_Err != nil {
 									return templ_7745c5c3_Err
 								}
 								var templ_7745c5c3_Var13 string
 								templ_7745c5c3_Var13, templ_7745c5c3_Err = templ.JoinStringErrs(b.Schedule)
 								if templ_7745c5c3_Err != nil {
-									return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/ui/settings.templ`, Line: 66, Col: 94}
+									return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/ui/settings.templ`, Line: 69, Col: 94}
 								}
 								_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var13))
 								if templ_7745c5c3_Err != nil {
 									return templ_7745c5c3_Err
 								}
-								templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 19, "</span>")
+								templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 17, "</span>")
 								if templ_7745c5c3_Err != nil {
 									return templ_7745c5c3_Err
 								}
 							} else {
-								templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 20, "<span class=\"text-slate-600 text-xs shrink-0\">manual</span>")
+								templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 18, "<span class=\"text-slate-600 text-xs shrink-0\">manual</span>")
 								if templ_7745c5c3_Err != nil {
 									return templ_7745c5c3_Err
 								}
 							}
-							templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 21, "</div>")
+							templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 19, "</div>")
 							if templ_7745c5c3_Err != nil {
 								return templ_7745c5c3_Err
 							}
 						}
-						templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 22, "</div></div>")
+						templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 20, "</div></div>")
 						if templ_7745c5c3_Err != nil {
 							return templ_7745c5c3_Err
 						}
@@ -359,7 +351,7 @@ func SettingsPage(vm SettingsVM) templ.Component {
 						}()
 					}
 					ctx = templ.InitializeContext(ctx)
-					templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 23, "<button class=\"btn-primary\" type=\"submit\">")
+					templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 21, "<button class=\"btn-primary\" type=\"submit\">")
 					if templ_7745c5c3_Err != nil {
 						return templ_7745c5c3_Err
 					}
@@ -367,7 +359,7 @@ func SettingsPage(vm SettingsVM) templ.Component {
 					if templ_7745c5c3_Err != nil {
 						return templ_7745c5c3_Err
 					}
-					templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 24, "Start crawl</button>")
+					templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 22, "Start crawl</button>")
 					if templ_7745c5c3_Err != nil {
 						return templ_7745c5c3_Err
 					}
@@ -377,7 +369,7 @@ func SettingsPage(vm SettingsVM) templ.Component {
 				if templ_7745c5c3_Err != nil {
 					return templ_7745c5c3_Err
 				}
-				templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 25, "</form>")
+				templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 23, "</form>")
 				if templ_7745c5c3_Err != nil {
 					return templ_7745c5c3_Err
 				}
@@ -387,7 +379,11 @@ func SettingsPage(vm SettingsVM) templ.Component {
 			if templ_7745c5c3_Err != nil {
 				return templ_7745c5c3_Err
 			}
-			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 26, "</div><div id=\"toast-slot\"></div>")
+			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 24, "</div><div id=\"toast-slot\"></div>")
+			if templ_7745c5c3_Err != nil {
+				return templ_7745c5c3_Err
+			}
+			templ_7745c5c3_Err = connectionFormScript().Render(ctx, templ_7745c5c3_Buffer)
 			if templ_7745c5c3_Err != nil {
 				return templ_7745c5c3_Err
 			}
@@ -401,10 +397,10 @@ func SettingsPage(vm SettingsVM) templ.Component {
 	})
 }
 
-// connectionsEmptyState is shown on a fresh install (or after every connection
-// is deleted). No connection is created automatically — this guides the user to
-// create their first one instead.
-func connectionsEmptyState() templ.Component {
+// ConnectionEmptyState is the single, compact zero-state shown when no
+// connections exist. It explains what a connection is and offers exactly one
+// call to action, which swaps this state for the form (never both at once).
+func ConnectionEmptyState() templ.Component {
 	return templruntime.GeneratedTemplate(func(templ_7745c5c3_Input templruntime.GeneratedComponentInput) (templ_7745c5c3_Err error) {
 		templ_7745c5c3_W, ctx := templ_7745c5c3_Input.Writer, templ_7745c5c3_Input.Context
 		if templ_7745c5c3_CtxErr := ctx.Err(); templ_7745c5c3_CtxErr != nil {
@@ -425,7 +421,7 @@ func connectionsEmptyState() templ.Component {
 			templ_7745c5c3_Var15 = templ.NopComponent
 		}
 		ctx = templ.ClearChildren(ctx)
-		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 27, "<div class=\"rounded-lg border border-dashed border-base-700 bg-base-900 px-6 py-8 text-center mb-4\"><div class=\"grid place-items-center w-11 h-11 rounded-lg bg-base-800 text-slate-400 mx-auto mb-3\">")
+		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 25, "<div id=\"conn-empty\" class=\"flex flex-col items-center text-center px-6 py-8\"><div class=\"grid place-items-center w-11 h-11 rounded-xl bg-base-800 text-slate-400 ring-1 ring-inset ring-base-700\">")
 		if templ_7745c5c3_Err != nil {
 			return templ_7745c5c3_Err
 		}
@@ -433,15 +429,15 @@ func connectionsEmptyState() templ.Component {
 		if templ_7745c5c3_Err != nil {
 			return templ_7745c5c3_Err
 		}
-		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 28, "</div><p class=\"text-sm font-medium text-slate-200\">No storage connections configured.</p><p class=\"text-sm text-slate-500 mt-1 max-w-md mx-auto\">Create your first object storage connection to begin exploring your data lake.</p><button type=\"button\" class=\"btn-primary mt-4 inline-flex\" onclick=\"var d=document.getElementById('new-connection'); if(d){d.open=true; d.scrollIntoView({behavior:'smooth'});}\">")
+		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 26, "</div><h3 class=\"mt-3.5 text-sm font-semibold text-slate-100\">No storage connections</h3><p class=\"mt-1.5 max-w-md text-sm text-slate-500 leading-relaxed\">Connect an S3-compatible bucket — AWS S3, MinIO, Cloudflare R2, or SeaweedFS — so Apexion can crawl, catalog, and query your data lake.</p><button type=\"button\" class=\"btn-primary mt-5\" data-conn-open aria-controls=\"conn-form\">")
 		if templ_7745c5c3_Err != nil {
 			return templ_7745c5c3_Err
 		}
-		templ_7745c5c3_Err = iconPlay().Render(ctx, templ_7745c5c3_Buffer)
+		templ_7745c5c3_Err = iconPlus().Render(ctx, templ_7745c5c3_Buffer)
 		if templ_7745c5c3_Err != nil {
 			return templ_7745c5c3_Err
 		}
-		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 29, "New connection</button></div>")
+		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 27, "Create connection</button></div>")
 		if templ_7745c5c3_Err != nil {
 			return templ_7745c5c3_Err
 		}
@@ -449,11 +445,11 @@ func connectionsEmptyState() templ.Component {
 	})
 }
 
-// newConnectionForm is the create-connection form. It is IAM-first: the
-// authentication method defaults to an IAM role / instance profile, so the
-// Access key and Secret key fields stay hidden (and unrequired) until the user
-// switches to explicit key auth.
-func newConnectionForm() templ.Component {
+// ConnectionForm is the create-connection form: three logically grouped
+// sections, an IAM-first authentication model, and a right-aligned action bar.
+// It is hidden until the user opens it, so the empty state and the form are
+// never visible simultaneously.
+func ConnectionForm() templ.Component {
 	return templruntime.GeneratedTemplate(func(templ_7745c5c3_Input templruntime.GeneratedComponentInput) (templ_7745c5c3_Err error) {
 		templ_7745c5c3_W, ctx := templ_7745c5c3_Input.Writer, templ_7745c5c3_Input.Context
 		if templ_7745c5c3_CtxErr := ctx.Err(); templ_7745c5c3_CtxErr != nil {
@@ -474,7 +470,7 @@ func newConnectionForm() templ.Component {
 			templ_7745c5c3_Var16 = templ.NopComponent
 		}
 		ctx = templ.ClearChildren(ctx)
-		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 30, "<form hx-post=\"/ui/connections\" hx-target=\"#toast-slot\" hx-swap=\"innerHTML\" class=\"mt-4 grid grid-cols-1 md:grid-cols-2 gap-4\"><div><label class=\"form-label\">Connection name</label> <input name=\"name\" required placeholder=\"e.g. Production S3\" class=\"input\"></div><div><label class=\"form-label\">Storage type</label> <select name=\"provider\" class=\"select\"><option value=\"aws\" selected>AWS S3</option> <option value=\"minio\">MinIO / S3-compatible</option> <option value=\"s3\">Other S3</option></select></div><div><label class=\"form-label\">Authentication</label> <select name=\"auth\" class=\"select\" onchange=\"apexionAuthToggle(this)\"><option value=\"iam\" selected>IAM role / instance profile</option> <option value=\"keys\">Access key &amp; secret</option></select></div><div><label class=\"form-label\">Region</label> <input name=\"region\" value=\"us-east-1\" class=\"input\"></div><div class=\"md:col-span-2\"><label class=\"form-label\">Endpoint</label> <input name=\"endpoint\" value=\"s3.amazonaws.com\" class=\"input\"><p class=\"form-help\">Editable. AWS uses <span class=\"font-mono\">s3.amazonaws.com</span>; set your MinIO / R2 / SeaweedFS host for other stores.</p></div><div id=\"conn-iam-hint\" class=\"md:col-span-2 rounded-lg border border-base-800 bg-base-900 px-3 py-2 text-xs text-slate-400 leading-snug\">If running on EC2 or another AWS environment with an IAM Role, Access Key and Secret Key can be left blank — Apexion uses the AWS credential chain (instance profile / ECS task role / IRSA, env vars, and <span class=\"font-mono\">~/.aws</span>).</div><div id=\"conn-credentials\" class=\"md:col-span-2 grid grid-cols-1 md:grid-cols-2 gap-4 hidden\"><div><label class=\"form-label\">Access key</label> <input name=\"access_key\" autocomplete=\"off\" class=\"input\"></div><div><label class=\"form-label\">Secret key</label> <input name=\"secret_key\" type=\"password\" autocomplete=\"new-password\" class=\"input\"></div></div><label class=\"check-row md:col-span-2\"><input type=\"checkbox\" name=\"use_ssl\" class=\"check\"> Use SSL (auto-enabled for AWS)</label> <label class=\"flex items-center gap-2 text-sm text-slate-300 md:col-span-2\"><input type=\"checkbox\" name=\"path_style\" class=\"check\"> <span>Force path-style addressing <span class=\"block text-xs text-slate-500\">For legacy bucket names with uppercase/underscores/dots (auto-applied when detected).</span></span></label>")
+		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 28, "<div id=\"conn-form\" class=\"hidden\" role=\"region\" aria-label=\"New connection\"><form id=\"conn-form-el\" hx-post=\"/ui/connections\" hx-target=\"#toast-slot\" hx-swap=\"innerHTML\" novalidate class=\"space-y-8\">")
 		if templ_7745c5c3_Err != nil {
 			return templ_7745c5c3_Err
 		}
@@ -490,29 +486,73 @@ func newConnectionForm() templ.Component {
 				}()
 			}
 			ctx = templ.InitializeContext(ctx)
-			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 31, "<button class=\"btn-primary\" type=\"submit\">")
+			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 29, "<div class=\"grid grid-cols-1 md:grid-cols-2 gap-x-5 gap-y-5\"><div><label class=\"field-label\" for=\"cf-name\">Connection name</label> <input id=\"cf-name\" name=\"name\" placeholder=\"Production data lake\" class=\"input\" aria-required=\"true\" aria-describedby=\"cf-name-err\"><p class=\"form-error hidden\" id=\"cf-name-err\" data-error-for=\"name\" role=\"alert\"></p></div><div><label class=\"field-label\" for=\"cf-provider\">Storage type</label> <select id=\"cf-provider\" name=\"provider\" class=\"select\"><option value=\"aws\" selected>AWS S3</option> <option value=\"minio\">MinIO / S3-compatible</option> <option value=\"s3\">Other S3-compatible</option></select></div><div><label class=\"field-label\" for=\"cf-region\">Region</label> <input id=\"cf-region\" name=\"region\" value=\"us-east-1\" class=\"input\" aria-required=\"true\" aria-describedby=\"cf-region-err\"><p class=\"form-error hidden\" id=\"cf-region-err\" data-error-for=\"region\" role=\"alert\"></p></div>")
 			if templ_7745c5c3_Err != nil {
 				return templ_7745c5c3_Err
 			}
-			templ_7745c5c3_Err = iconPlay().Render(ctx, templ_7745c5c3_Buffer)
+			templ_7745c5c3_Err = connectionEndpointField().Render(ctx, templ_7745c5c3_Buffer)
 			if templ_7745c5c3_Err != nil {
 				return templ_7745c5c3_Err
 			}
-			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 32, "Add connection</button>")
+			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 30, "</div>")
 			if templ_7745c5c3_Err != nil {
 				return templ_7745c5c3_Err
 			}
 			return nil
 		})
-		templ_7745c5c3_Err = ActionBar().Render(templ.WithChildren(ctx, templ_7745c5c3_Var17), templ_7745c5c3_Buffer)
+		templ_7745c5c3_Err = FormSection("Connection details", "Name the account and tell Apexion where it lives.").Render(templ.WithChildren(ctx, templ_7745c5c3_Var17), templ_7745c5c3_Buffer)
 		if templ_7745c5c3_Err != nil {
 			return templ_7745c5c3_Err
 		}
-		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 33, "</form>")
+		templ_7745c5c3_Var18 := templruntime.GeneratedTemplate(func(templ_7745c5c3_Input templruntime.GeneratedComponentInput) (templ_7745c5c3_Err error) {
+			templ_7745c5c3_W, ctx := templ_7745c5c3_Input.Writer, templ_7745c5c3_Input.Context
+			templ_7745c5c3_Buffer, templ_7745c5c3_IsBuffer := templruntime.GetBuffer(templ_7745c5c3_W)
+			if !templ_7745c5c3_IsBuffer {
+				defer func() {
+					templ_7745c5c3_BufErr := templruntime.ReleaseBuffer(templ_7745c5c3_Buffer)
+					if templ_7745c5c3_Err == nil {
+						templ_7745c5c3_Err = templ_7745c5c3_BufErr
+					}
+				}()
+			}
+			ctx = templ.InitializeContext(ctx)
+			templ_7745c5c3_Err = connectionAuthFields().Render(ctx, templ_7745c5c3_Buffer)
+			if templ_7745c5c3_Err != nil {
+				return templ_7745c5c3_Err
+			}
+			return nil
+		})
+		templ_7745c5c3_Err = FormSection("Authentication", "How Apexion signs requests to your object store.").Render(templ.WithChildren(ctx, templ_7745c5c3_Var18), templ_7745c5c3_Buffer)
 		if templ_7745c5c3_Err != nil {
 			return templ_7745c5c3_Err
 		}
-		templ_7745c5c3_Err = newConnectionScript().Render(ctx, templ_7745c5c3_Buffer)
+		templ_7745c5c3_Var19 := templruntime.GeneratedTemplate(func(templ_7745c5c3_Input templruntime.GeneratedComponentInput) (templ_7745c5c3_Err error) {
+			templ_7745c5c3_W, ctx := templ_7745c5c3_Input.Writer, templ_7745c5c3_Input.Context
+			templ_7745c5c3_Buffer, templ_7745c5c3_IsBuffer := templruntime.GetBuffer(templ_7745c5c3_W)
+			if !templ_7745c5c3_IsBuffer {
+				defer func() {
+					templ_7745c5c3_BufErr := templruntime.ReleaseBuffer(templ_7745c5c3_Buffer)
+					if templ_7745c5c3_Err == nil {
+						templ_7745c5c3_Err = templ_7745c5c3_BufErr
+					}
+				}()
+			}
+			ctx = templ.InitializeContext(ctx)
+			templ_7745c5c3_Err = connectionAdvancedOptions().Render(ctx, templ_7745c5c3_Buffer)
+			if templ_7745c5c3_Err != nil {
+				return templ_7745c5c3_Err
+			}
+			return nil
+		})
+		templ_7745c5c3_Err = FormSection("Advanced options", "").Render(templ.WithChildren(ctx, templ_7745c5c3_Var19), templ_7745c5c3_Buffer)
+		if templ_7745c5c3_Err != nil {
+			return templ_7745c5c3_Err
+		}
+		templ_7745c5c3_Err = connectionButtonBar().Render(ctx, templ_7745c5c3_Buffer)
+		if templ_7745c5c3_Err != nil {
+			return templ_7745c5c3_Err
+		}
+		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 31, "</form></div>")
 		if templ_7745c5c3_Err != nil {
 			return templ_7745c5c3_Err
 		}
@@ -520,11 +560,11 @@ func newConnectionForm() templ.Component {
 	})
 }
 
-// newConnectionScript shows or hides the Access key / Secret key fields based on
-// the selected authentication method, so credentials are only requested (and
-// only required) when explicit key auth is chosen. It runs on load so the
-// IAM-first default renders correctly.
-func newConnectionScript() templ.Component {
+// connectionEndpointField renders the endpoint input plus a "Custom endpoint"
+// toggle. For AWS the endpoint is prefilled and read-only (the toggle unlocks
+// it); for MinIO / R2 / other S3 stores it is editable immediately and the
+// toggle is hidden. The runtime behaviour is driven by connectionFormScript.
+func connectionEndpointField() templ.Component {
 	return templruntime.GeneratedTemplate(func(templ_7745c5c3_Input templruntime.GeneratedComponentInput) (templ_7745c5c3_Err error) {
 		templ_7745c5c3_W, ctx := templ_7745c5c3_Input.Writer, templ_7745c5c3_Input.Context
 		if templ_7745c5c3_CtxErr := ctx.Err(); templ_7745c5c3_CtxErr != nil {
@@ -540,12 +580,238 @@ func newConnectionScript() templ.Component {
 			}()
 		}
 		ctx = templ.InitializeContext(ctx)
-		templ_7745c5c3_Var18 := templ.GetChildren(ctx)
-		if templ_7745c5c3_Var18 == nil {
-			templ_7745c5c3_Var18 = templ.NopComponent
+		templ_7745c5c3_Var20 := templ.GetChildren(ctx)
+		if templ_7745c5c3_Var20 == nil {
+			templ_7745c5c3_Var20 = templ.NopComponent
 		}
 		ctx = templ.ClearChildren(ctx)
-		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 34, "<script>\n\t\tfunction apexionAuthToggle(sel) {\n\t\t\tvar keys = sel && sel.value === 'keys';\n\t\t\tvar creds = document.getElementById('conn-credentials');\n\t\t\tvar hint = document.getElementById('conn-iam-hint');\n\t\t\tif (creds) creds.classList.toggle('hidden', !keys);\n\t\t\tif (hint) hint.classList.toggle('hidden', keys);\n\t\t}\n\t\t(function () {\n\t\t\tvar sel = document.querySelector('#new-connection select[name=\"auth\"]');\n\t\t\tif (sel) apexionAuthToggle(sel);\n\t\t})();\n\t</script>")
+		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 32, "<div><div class=\"flex items-center justify-between gap-2 mb-1.5\"><label class=\"field-label !mb-0\" for=\"cf-endpoint\">Endpoint</label> <label id=\"cf-endpoint-custom-wrap\" class=\"inline-flex items-center gap-1.5 text-xs text-slate-400 cursor-pointer select-none\"><input type=\"checkbox\" id=\"cf-endpoint-custom\" class=\"check w-3.5 h-3.5\"> Custom endpoint</label></div><input id=\"cf-endpoint\" name=\"endpoint\" value=\"s3.amazonaws.com\" readonly autocomplete=\"off\" spellcheck=\"false\" class=\"input font-mono read-only:text-slate-400 read-only:cursor-not-allowed\" aria-required=\"true\" aria-describedby=\"cf-endpoint-hint cf-endpoint-err\"><p class=\"field-hint\" id=\"cf-endpoint-hint\" data-hint-for=\"endpoint\">Apexion uses the AWS regional endpoint. Enable “Custom endpoint” to override.</p><p class=\"form-error hidden\" id=\"cf-endpoint-err\" data-error-for=\"endpoint\" role=\"alert\"></p></div>")
+		if templ_7745c5c3_Err != nil {
+			return templ_7745c5c3_Err
+		}
+		return nil
+	})
+}
+
+// connectionAuthFields renders the authentication method selector, the IAM
+// info callout, and the collapsible credential fields (access key, secret key,
+// session token). Exactly one of the callout / credentials is expanded at a
+// time, animated by connectionFormScript.
+func connectionAuthFields() templ.Component {
+	return templruntime.GeneratedTemplate(func(templ_7745c5c3_Input templruntime.GeneratedComponentInput) (templ_7745c5c3_Err error) {
+		templ_7745c5c3_W, ctx := templ_7745c5c3_Input.Writer, templ_7745c5c3_Input.Context
+		if templ_7745c5c3_CtxErr := ctx.Err(); templ_7745c5c3_CtxErr != nil {
+			return templ_7745c5c3_CtxErr
+		}
+		templ_7745c5c3_Buffer, templ_7745c5c3_IsBuffer := templruntime.GetBuffer(templ_7745c5c3_W)
+		if !templ_7745c5c3_IsBuffer {
+			defer func() {
+				templ_7745c5c3_BufErr := templruntime.ReleaseBuffer(templ_7745c5c3_Buffer)
+				if templ_7745c5c3_Err == nil {
+					templ_7745c5c3_Err = templ_7745c5c3_BufErr
+				}
+			}()
+		}
+		ctx = templ.InitializeContext(ctx)
+		templ_7745c5c3_Var21 := templ.GetChildren(ctx)
+		if templ_7745c5c3_Var21 == nil {
+			templ_7745c5c3_Var21 = templ.NopComponent
+		}
+		ctx = templ.ClearChildren(ctx)
+		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 33, "<div><div class=\"max-w-sm\"><label class=\"field-label\" for=\"cf-auth\">Authentication method</label> <select id=\"cf-auth\" name=\"auth\" class=\"select\"><option value=\"iam\" selected>IAM role / instance profile</option> <option value=\"keys\">Access keys</option></select></div><div id=\"cf-auth-iam\" class=\"collapsible open\" data-auth-panel=\"iam\"><div class=\"collapsible-inner\"><div class=\"pt-4\"><div class=\"banner-info flex items-start gap-3\"><span class=\"text-brand-300 shrink-0 mt-0.5\">")
+		if templ_7745c5c3_Err != nil {
+			return templ_7745c5c3_Err
+		}
+		templ_7745c5c3_Err = iconShield().Render(ctx, templ_7745c5c3_Buffer)
+		if templ_7745c5c3_Err != nil {
+			return templ_7745c5c3_Err
+		}
+		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 34, "</span><div class=\"min-w-0\"><p class=\"text-sm font-medium text-slate-200\">Using the AWS credential provider chain</p><p class=\"mt-1 text-xs text-slate-400 leading-relaxed\">Running on EC2, ECS, EKS, Lambda, or another AWS environment? Apexion automatically resolves credentials from the attached IAM role — no keys to enter or store.</p></div></div></div></div></div><div id=\"cf-auth-keys\" class=\"collapsible\" data-auth-panel=\"keys\" inert aria-hidden=\"true\"><div class=\"collapsible-inner\"><div class=\"pt-4 grid grid-cols-1 md:grid-cols-2 gap-x-5 gap-y-5\"><div><label class=\"field-label\" for=\"cf-access\">Access key ID</label> <input id=\"cf-access\" name=\"access_key\" autocomplete=\"off\" spellcheck=\"false\" class=\"input font-mono\" aria-describedby=\"cf-access-err\"><p class=\"form-error hidden\" id=\"cf-access-err\" data-error-for=\"access_key\" role=\"alert\"></p></div><div><label class=\"field-label\" for=\"cf-secret\">Secret access key</label> <input id=\"cf-secret\" name=\"secret_key\" type=\"password\" autocomplete=\"new-password\" class=\"input font-mono\" aria-describedby=\"cf-secret-err\"><p class=\"form-error hidden\" id=\"cf-secret-err\" data-error-for=\"secret_key\" role=\"alert\"></p></div><div class=\"md:col-span-2\"><label class=\"field-label\" for=\"cf-session\">Session token <span class=\"field-optional\">optional</span></label> <input id=\"cf-session\" name=\"session_token\" type=\"password\" autocomplete=\"off\" class=\"input font-mono\" aria-describedby=\"cf-session-hint\"><p class=\"field-hint\" id=\"cf-session-hint\">Only for temporary/STS credentials — AssumeRole, SSO, or federated access.</p></div></div></div></div></div>")
+		if templ_7745c5c3_Err != nil {
+			return templ_7745c5c3_Err
+		}
+		return nil
+	})
+}
+
+// connectionAdvancedOptions renders the boolean connection flags as bordered
+// toggle rows so they read as deliberate settings rather than loose checkboxes.
+func connectionAdvancedOptions() templ.Component {
+	return templruntime.GeneratedTemplate(func(templ_7745c5c3_Input templruntime.GeneratedComponentInput) (templ_7745c5c3_Err error) {
+		templ_7745c5c3_W, ctx := templ_7745c5c3_Input.Writer, templ_7745c5c3_Input.Context
+		if templ_7745c5c3_CtxErr := ctx.Err(); templ_7745c5c3_CtxErr != nil {
+			return templ_7745c5c3_CtxErr
+		}
+		templ_7745c5c3_Buffer, templ_7745c5c3_IsBuffer := templruntime.GetBuffer(templ_7745c5c3_W)
+		if !templ_7745c5c3_IsBuffer {
+			defer func() {
+				templ_7745c5c3_BufErr := templruntime.ReleaseBuffer(templ_7745c5c3_Buffer)
+				if templ_7745c5c3_Err == nil {
+					templ_7745c5c3_Err = templ_7745c5c3_BufErr
+				}
+			}()
+		}
+		ctx = templ.InitializeContext(ctx)
+		templ_7745c5c3_Var22 := templ.GetChildren(ctx)
+		if templ_7745c5c3_Var22 == nil {
+			templ_7745c5c3_Var22 = templ.NopComponent
+		}
+		ctx = templ.ClearChildren(ctx)
+		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 35, "<div class=\"space-y-2.5\">")
+		if templ_7745c5c3_Err != nil {
+			return templ_7745c5c3_Err
+		}
+		templ_7745c5c3_Err = toggleRow("cf-ssl", "use_ssl", "Use SSL / TLS", "Encrypt traffic to the endpoint. Automatically enabled for AWS S3.").Render(ctx, templ_7745c5c3_Buffer)
+		if templ_7745c5c3_Err != nil {
+			return templ_7745c5c3_Err
+		}
+		templ_7745c5c3_Err = toggleRow("cf-pathstyle", "path_style", "Force path-style addressing", "Use s3.host/bucket instead of bucket.s3.host. Needed for legacy or non-DNS-safe bucket names; auto-applied when detected.").Render(ctx, templ_7745c5c3_Buffer)
+		if templ_7745c5c3_Err != nil {
+			return templ_7745c5c3_Err
+		}
+		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 36, "</div>")
+		if templ_7745c5c3_Err != nil {
+			return templ_7745c5c3_Err
+		}
+		return nil
+	})
+}
+
+// connectionButtonBar is the form footer: a top rule with the primary action
+// pinned bottom-right and a secondary Cancel, never centered.
+func connectionButtonBar() templ.Component {
+	return templruntime.GeneratedTemplate(func(templ_7745c5c3_Input templruntime.GeneratedComponentInput) (templ_7745c5c3_Err error) {
+		templ_7745c5c3_W, ctx := templ_7745c5c3_Input.Writer, templ_7745c5c3_Input.Context
+		if templ_7745c5c3_CtxErr := ctx.Err(); templ_7745c5c3_CtxErr != nil {
+			return templ_7745c5c3_CtxErr
+		}
+		templ_7745c5c3_Buffer, templ_7745c5c3_IsBuffer := templruntime.GetBuffer(templ_7745c5c3_W)
+		if !templ_7745c5c3_IsBuffer {
+			defer func() {
+				templ_7745c5c3_BufErr := templruntime.ReleaseBuffer(templ_7745c5c3_Buffer)
+				if templ_7745c5c3_Err == nil {
+					templ_7745c5c3_Err = templ_7745c5c3_BufErr
+				}
+			}()
+		}
+		ctx = templ.InitializeContext(ctx)
+		templ_7745c5c3_Var23 := templ.GetChildren(ctx)
+		if templ_7745c5c3_Var23 == nil {
+			templ_7745c5c3_Var23 = templ.NopComponent
+		}
+		ctx = templ.ClearChildren(ctx)
+		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 37, "<div class=\"action-bar\"><button type=\"button\" class=\"btn-ghost\" data-conn-cancel>Cancel</button> <button type=\"submit\" id=\"cf-submit\" class=\"btn-primary\" disabled aria-disabled=\"true\"><span data-submit-idle class=\"inline-flex items-center gap-2\">")
+		if templ_7745c5c3_Err != nil {
+			return templ_7745c5c3_Err
+		}
+		templ_7745c5c3_Err = iconPlus().Render(ctx, templ_7745c5c3_Buffer)
+		if templ_7745c5c3_Err != nil {
+			return templ_7745c5c3_Err
+		}
+		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 38, "Create connection</span> <span data-submit-busy class=\"hidden items-center gap-2\">")
+		if templ_7745c5c3_Err != nil {
+			return templ_7745c5c3_Err
+		}
+		templ_7745c5c3_Err = iconSpinner().Render(ctx, templ_7745c5c3_Buffer)
+		if templ_7745c5c3_Err != nil {
+			return templ_7745c5c3_Err
+		}
+		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 39, "Creating…</span></button></div>")
+		if templ_7745c5c3_Err != nil {
+			return templ_7745c5c3_Err
+		}
+		return nil
+	})
+}
+
+// toggleRow is a bordered, hoverable boolean setting row.
+func toggleRow(id, name, title, desc string) templ.Component {
+	return templruntime.GeneratedTemplate(func(templ_7745c5c3_Input templruntime.GeneratedComponentInput) (templ_7745c5c3_Err error) {
+		templ_7745c5c3_W, ctx := templ_7745c5c3_Input.Writer, templ_7745c5c3_Input.Context
+		if templ_7745c5c3_CtxErr := ctx.Err(); templ_7745c5c3_CtxErr != nil {
+			return templ_7745c5c3_CtxErr
+		}
+		templ_7745c5c3_Buffer, templ_7745c5c3_IsBuffer := templruntime.GetBuffer(templ_7745c5c3_W)
+		if !templ_7745c5c3_IsBuffer {
+			defer func() {
+				templ_7745c5c3_BufErr := templruntime.ReleaseBuffer(templ_7745c5c3_Buffer)
+				if templ_7745c5c3_Err == nil {
+					templ_7745c5c3_Err = templ_7745c5c3_BufErr
+				}
+			}()
+		}
+		ctx = templ.InitializeContext(ctx)
+		templ_7745c5c3_Var24 := templ.GetChildren(ctx)
+		if templ_7745c5c3_Var24 == nil {
+			templ_7745c5c3_Var24 = templ.NopComponent
+		}
+		ctx = templ.ClearChildren(ctx)
+		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 40, "<label class=\"toggle-row\" for=\"")
+		if templ_7745c5c3_Err != nil {
+			return templ_7745c5c3_Err
+		}
+		var templ_7745c5c3_Var25 string
+		templ_7745c5c3_Var25, templ_7745c5c3_Err = templ.ResolveAttributeValue(id)
+		if templ_7745c5c3_Err != nil {
+			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/ui/settings.templ`, Line: 270, Col: 35}
+		}
+		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ_7745c5c3_Var25)
+		if templ_7745c5c3_Err != nil {
+			return templ_7745c5c3_Err
+		}
+		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 41, "\"><input type=\"checkbox\" id=\"")
+		if templ_7745c5c3_Err != nil {
+			return templ_7745c5c3_Err
+		}
+		var templ_7745c5c3_Var26 string
+		templ_7745c5c3_Var26, templ_7745c5c3_Err = templ.ResolveAttributeValue(id)
+		if templ_7745c5c3_Err != nil {
+			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/ui/settings.templ`, Line: 271, Col: 32}
+		}
+		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ_7745c5c3_Var26)
+		if templ_7745c5c3_Err != nil {
+			return templ_7745c5c3_Err
+		}
+		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 42, "\" name=\"")
+		if templ_7745c5c3_Err != nil {
+			return templ_7745c5c3_Err
+		}
+		var templ_7745c5c3_Var27 string
+		templ_7745c5c3_Var27, templ_7745c5c3_Err = templ.ResolveAttributeValue(name)
+		if templ_7745c5c3_Err != nil {
+			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/ui/settings.templ`, Line: 271, Col: 46}
+		}
+		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ_7745c5c3_Var27)
+		if templ_7745c5c3_Err != nil {
+			return templ_7745c5c3_Err
+		}
+		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 43, "\" class=\"check mt-0.5 shrink-0\"> <span class=\"min-w-0\"><span class=\"block text-sm font-medium text-slate-200\">")
+		if templ_7745c5c3_Err != nil {
+			return templ_7745c5c3_Err
+		}
+		var templ_7745c5c3_Var28 string
+		templ_7745c5c3_Var28, templ_7745c5c3_Err = templ.JoinStringErrs(title)
+		if templ_7745c5c3_Err != nil {
+			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/ui/settings.templ`, Line: 273, Col: 65}
+		}
+		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var28))
+		if templ_7745c5c3_Err != nil {
+			return templ_7745c5c3_Err
+		}
+		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 44, "</span> <span class=\"block mt-0.5 text-xs text-slate-500 leading-relaxed\">")
+		if templ_7745c5c3_Err != nil {
+			return templ_7745c5c3_Err
+		}
+		var templ_7745c5c3_Var29 string
+		templ_7745c5c3_Var29, templ_7745c5c3_Err = templ.JoinStringErrs(desc)
+		if templ_7745c5c3_Err != nil {
+			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/ui/settings.templ`, Line: 274, Col: 75}
+		}
+		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var29))
+		if templ_7745c5c3_Err != nil {
+			return templ_7745c5c3_Err
+		}
+		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 45, "</span></span></label>")
 		if templ_7745c5c3_Err != nil {
 			return templ_7745c5c3_Err
 		}
@@ -569,30 +835,30 @@ func connectionRow(c model.Connection, active bool) templ.Component {
 			}()
 		}
 		ctx = templ.InitializeContext(ctx)
-		templ_7745c5c3_Var19 := templ.GetChildren(ctx)
-		if templ_7745c5c3_Var19 == nil {
-			templ_7745c5c3_Var19 = templ.NopComponent
+		templ_7745c5c3_Var30 := templ.GetChildren(ctx)
+		if templ_7745c5c3_Var30 == nil {
+			templ_7745c5c3_Var30 = templ.NopComponent
 		}
 		ctx = templ.ClearChildren(ctx)
-		var templ_7745c5c3_Var20 = []any{"flex items-center gap-4 px-4 py-3 rounded-lg border", templ.KV("border-brand-500/40 bg-brand-500/5", active), templ.KV("border-base-800 bg-base-850", !active)}
-		templ_7745c5c3_Err = templ.RenderCSSItems(ctx, templ_7745c5c3_Buffer, templ_7745c5c3_Var20...)
+		var templ_7745c5c3_Var31 = []any{"flex items-center gap-4 px-4 py-3 rounded-xl border transition-colors", templ.KV("border-brand-500/40 bg-brand-500/5", active), templ.KV("border-base-800 bg-base-850 hover:border-base-700", !active)}
+		templ_7745c5c3_Err = templ.RenderCSSItems(ctx, templ_7745c5c3_Buffer, templ_7745c5c3_Var31...)
 		if templ_7745c5c3_Err != nil {
 			return templ_7745c5c3_Err
 		}
-		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 35, "<div class=\"")
+		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 46, "<div class=\"")
 		if templ_7745c5c3_Err != nil {
 			return templ_7745c5c3_Err
 		}
-		var templ_7745c5c3_Var21 string
-		templ_7745c5c3_Var21, templ_7745c5c3_Err = templ.ResolveAttributeValue(templ.CSSClasses(templ_7745c5c3_Var20).String())
+		var templ_7745c5c3_Var32 string
+		templ_7745c5c3_Var32, templ_7745c5c3_Err = templ.ResolveAttributeValue(templ.CSSClasses(templ_7745c5c3_Var31).String())
 		if templ_7745c5c3_Err != nil {
 			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/ui/settings.templ`, Line: 1, Col: 0}
 		}
-		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ_7745c5c3_Var21)
+		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ_7745c5c3_Var32)
 		if templ_7745c5c3_Err != nil {
 			return templ_7745c5c3_Err
 		}
-		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 36, "\"><div class=\"grid place-items-center w-9 h-9 rounded-lg bg-base-800 text-slate-400\">")
+		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 47, "\"><div class=\"grid place-items-center w-9 h-9 rounded-lg bg-base-800 text-slate-400 shrink-0\">")
 		if templ_7745c5c3_Err != nil {
 			return templ_7745c5c3_Err
 		}
@@ -600,122 +866,135 @@ func connectionRow(c model.Connection, active bool) templ.Component {
 		if templ_7745c5c3_Err != nil {
 			return templ_7745c5c3_Err
 		}
-		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 37, "</div><div class=\"flex-1 min-w-0\"><div class=\"flex items-center gap-2\"><span class=\"font-medium text-slate-100\">")
+		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 48, "</div><div class=\"flex-1 min-w-0\"><div class=\"flex items-center gap-2 flex-wrap\"><span class=\"font-medium text-slate-100 truncate\">")
 		if templ_7745c5c3_Err != nil {
 			return templ_7745c5c3_Err
 		}
-		var templ_7745c5c3_Var22 string
-		templ_7745c5c3_Var22, templ_7745c5c3_Err = templ.JoinStringErrs(c.Name)
+		var templ_7745c5c3_Var33 string
+		templ_7745c5c3_Var33, templ_7745c5c3_Err = templ.JoinStringErrs(c.Name)
 		if templ_7745c5c3_Err != nil {
-			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/ui/settings.templ`, Line: 198, Col: 53}
+			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/ui/settings.templ`, Line: 286, Col: 62}
 		}
-		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var22))
-		if templ_7745c5c3_Err != nil {
-			return templ_7745c5c3_Err
-		}
-		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 38, "</span> <span class=\"badge bg-base-700 text-slate-400\">")
+		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var33))
 		if templ_7745c5c3_Err != nil {
 			return templ_7745c5c3_Err
 		}
-		var templ_7745c5c3_Var23 string
-		templ_7745c5c3_Var23, templ_7745c5c3_Err = templ.JoinStringErrs(c.Provider)
-		if templ_7745c5c3_Err != nil {
-			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/ui/settings.templ`, Line: 199, Col: 63}
-		}
-		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var23))
+		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 49, "</span> <span class=\"badge bg-base-700 text-slate-400\">")
 		if templ_7745c5c3_Err != nil {
 			return templ_7745c5c3_Err
 		}
-		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 39, "</span> ")
+		var templ_7745c5c3_Var34 string
+		templ_7745c5c3_Var34, templ_7745c5c3_Err = templ.JoinStringErrs(storageLabel(c.Provider))
+		if templ_7745c5c3_Err != nil {
+			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/ui/settings.templ`, Line: 287, Col: 77}
+		}
+		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var34))
+		if templ_7745c5c3_Err != nil {
+			return templ_7745c5c3_Err
+		}
+		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 50, "</span> ")
 		if templ_7745c5c3_Err != nil {
 			return templ_7745c5c3_Err
 		}
 		if c.UseRole {
-			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 40, "<span class=\"badge bg-accent-violet/15 text-accent-violet\">IAM role</span> ")
+			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 51, "<span class=\"badge bg-accent-violet/15 text-accent-violet\">IAM role</span> ")
 			if templ_7745c5c3_Err != nil {
 				return templ_7745c5c3_Err
 			}
 		}
 		if c.PathStyle {
-			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 41, "<span class=\"badge bg-base-700 text-slate-400\">path-style</span> ")
+			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 52, "<span class=\"badge bg-base-700 text-slate-400\">path-style</span> ")
 			if templ_7745c5c3_Err != nil {
 				return templ_7745c5c3_Err
 			}
 		}
 		if active {
-			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 42, "<span class=\"badge bg-accent-emerald/15 text-accent-emerald\">active</span>")
+			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 53, "<span class=\"badge bg-accent-emerald/15 text-accent-emerald\">active</span>")
 			if templ_7745c5c3_Err != nil {
 				return templ_7745c5c3_Err
 			}
 		}
-		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 43, "</div><div class=\"text-xs text-slate-500 font-mono truncate\">")
+		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 54, "</div><div class=\"text-xs text-slate-500 font-mono truncate mt-0.5\">")
 		if templ_7745c5c3_Err != nil {
 			return templ_7745c5c3_Err
 		}
-		var templ_7745c5c3_Var24 string
-		templ_7745c5c3_Var24, templ_7745c5c3_Err = templ.JoinStringErrs(connEndpoint(c))
+		var templ_7745c5c3_Var35 string
+		templ_7745c5c3_Var35, templ_7745c5c3_Err = templ.JoinStringErrs(connEndpoint(c))
 		if templ_7745c5c3_Err != nil {
-			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/ui/settings.templ`, Line: 210, Col: 75}
+			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/ui/settings.templ`, Line: 298, Col: 82}
 		}
-		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var24))
-		if templ_7745c5c3_Err != nil {
-			return templ_7745c5c3_Err
-		}
-		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 44, " · ")
+		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var35))
 		if templ_7745c5c3_Err != nil {
 			return templ_7745c5c3_Err
 		}
-		var templ_7745c5c3_Var25 string
-		templ_7745c5c3_Var25, templ_7745c5c3_Err = templ.JoinStringErrs(c.Region)
-		if templ_7745c5c3_Err != nil {
-			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/ui/settings.templ`, Line: 210, Col: 91}
-		}
-		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var25))
+		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 55, " · ")
 		if templ_7745c5c3_Err != nil {
 			return templ_7745c5c3_Err
 		}
-		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 45, "</div></div>")
+		var templ_7745c5c3_Var36 string
+		templ_7745c5c3_Var36, templ_7745c5c3_Err = templ.JoinStringErrs(c.Region)
+		if templ_7745c5c3_Err != nil {
+			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/ui/settings.templ`, Line: 298, Col: 98}
+		}
+		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var36))
+		if templ_7745c5c3_Err != nil {
+			return templ_7745c5c3_Err
+		}
+		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 56, "</div></div>")
 		if templ_7745c5c3_Err != nil {
 			return templ_7745c5c3_Err
 		}
 		if !active {
-			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 46, "<button class=\"btn-ghost text-xs\" hx-post=\"")
+			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 57, "<button class=\"btn-ghost text-xs\" hx-post=\"")
 			if templ_7745c5c3_Err != nil {
 				return templ_7745c5c3_Err
 			}
-			var templ_7745c5c3_Var26 string
-			templ_7745c5c3_Var26, templ_7745c5c3_Err = templ.ResolveAttributeValue("/ui/connections/" + c.ID + "/activate")
+			var templ_7745c5c3_Var37 string
+			templ_7745c5c3_Var37, templ_7745c5c3_Err = templ.ResolveAttributeValue("/ui/connections/" + c.ID + "/activate")
 			if templ_7745c5c3_Err != nil {
-				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/ui/settings.templ`, Line: 213, Col: 86}
+				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/ui/settings.templ`, Line: 301, Col: 86}
 			}
-			_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ_7745c5c3_Var26)
+			_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ_7745c5c3_Var37)
 			if templ_7745c5c3_Err != nil {
 				return templ_7745c5c3_Err
 			}
-			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 47, "\" hx-target=\"#toast-slot\" hx-swap=\"innerHTML\">Activate</button> ")
+			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 58, "\" hx-target=\"#toast-slot\" hx-swap=\"innerHTML\">Activate</button> ")
 			if templ_7745c5c3_Err != nil {
 				return templ_7745c5c3_Err
 			}
 		} else {
-			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 48, "<a class=\"btn-ghost text-xs\" href=\"/explorer\">Explore →</a> ")
+			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 59, "<a class=\"btn-ghost text-xs\" href=\"/explorer\">Explore →</a> ")
 			if templ_7745c5c3_Err != nil {
 				return templ_7745c5c3_Err
 			}
 		}
-		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 49, "<button class=\"btn-danger !px-2 !py-1\" title=\"Delete\" hx-delete=\"")
+		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 60, "<button class=\"btn-danger !px-2 !py-1\" title=\"Delete connection\" aria-label=\"")
 		if templ_7745c5c3_Err != nil {
 			return templ_7745c5c3_Err
 		}
-		var templ_7745c5c3_Var27 string
-		templ_7745c5c3_Var27, templ_7745c5c3_Err = templ.ResolveAttributeValue("/ui/connections/" + c.ID)
+		var templ_7745c5c3_Var38 string
+		templ_7745c5c3_Var38, templ_7745c5c3_Err = templ.ResolveAttributeValue("Delete connection " + c.Name)
 		if templ_7745c5c3_Err != nil {
-			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/ui/settings.templ`, Line: 220, Col: 40}
+			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/ui/settings.templ`, Line: 308, Col: 45}
 		}
-		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ_7745c5c3_Var27)
+		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ_7745c5c3_Var38)
 		if templ_7745c5c3_Err != nil {
 			return templ_7745c5c3_Err
 		}
-		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 50, "\" hx-confirm=\"Delete this connection?\" hx-target=\"#toast-slot\" hx-swap=\"innerHTML\">")
+		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 61, "\" hx-delete=\"")
+		if templ_7745c5c3_Err != nil {
+			return templ_7745c5c3_Err
+		}
+		var templ_7745c5c3_Var39 string
+		templ_7745c5c3_Var39, templ_7745c5c3_Err = templ.ResolveAttributeValue("/ui/connections/" + c.ID)
+		if templ_7745c5c3_Err != nil {
+			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/ui/settings.templ`, Line: 309, Col: 40}
+		}
+		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ_7745c5c3_Var39)
+		if templ_7745c5c3_Err != nil {
+			return templ_7745c5c3_Err
+		}
+		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 62, "\" hx-confirm=\"Delete this connection?\" hx-target=\"#toast-slot\" hx-swap=\"innerHTML\">")
 		if templ_7745c5c3_Err != nil {
 			return templ_7745c5c3_Err
 		}
@@ -723,7 +1002,7 @@ func connectionRow(c model.Connection, active bool) templ.Component {
 		if templ_7745c5c3_Err != nil {
 			return templ_7745c5c3_Err
 		}
-		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 51, "</button></div>")
+		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 63, "</button></div>")
 		if templ_7745c5c3_Err != nil {
 			return templ_7745c5c3_Err
 		}
@@ -747,38 +1026,72 @@ func settingRow(label, value string) templ.Component {
 			}()
 		}
 		ctx = templ.InitializeContext(ctx)
-		templ_7745c5c3_Var28 := templ.GetChildren(ctx)
-		if templ_7745c5c3_Var28 == nil {
-			templ_7745c5c3_Var28 = templ.NopComponent
+		templ_7745c5c3_Var40 := templ.GetChildren(ctx)
+		if templ_7745c5c3_Var40 == nil {
+			templ_7745c5c3_Var40 = templ.NopComponent
 		}
 		ctx = templ.ClearChildren(ctx)
-		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 52, "<div class=\"flex items-center justify-between\"><dt class=\"text-slate-500\">")
+		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 64, "<div class=\"flex items-center justify-between\"><dt class=\"text-slate-500\">")
 		if templ_7745c5c3_Err != nil {
 			return templ_7745c5c3_Err
 		}
-		var templ_7745c5c3_Var29 string
-		templ_7745c5c3_Var29, templ_7745c5c3_Err = templ.JoinStringErrs(label)
+		var templ_7745c5c3_Var41 string
+		templ_7745c5c3_Var41, templ_7745c5c3_Err = templ.JoinStringErrs(label)
 		if templ_7745c5c3_Err != nil {
-			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/ui/settings.templ`, Line: 230, Col: 36}
+			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/ui/settings.templ`, Line: 319, Col: 36}
 		}
-		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var29))
-		if templ_7745c5c3_Err != nil {
-			return templ_7745c5c3_Err
-		}
-		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 53, "</dt><dd class=\"text-slate-200 font-mono text-xs\">")
+		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var41))
 		if templ_7745c5c3_Err != nil {
 			return templ_7745c5c3_Err
 		}
-		var templ_7745c5c3_Var30 string
-		templ_7745c5c3_Var30, templ_7745c5c3_Err = templ.JoinStringErrs(value)
-		if templ_7745c5c3_Err != nil {
-			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/ui/settings.templ`, Line: 231, Col: 54}
-		}
-		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var30))
+		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 65, "</dt><dd class=\"text-slate-200 font-mono text-xs\">")
 		if templ_7745c5c3_Err != nil {
 			return templ_7745c5c3_Err
 		}
-		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 54, "</dd></div>")
+		var templ_7745c5c3_Var42 string
+		templ_7745c5c3_Var42, templ_7745c5c3_Err = templ.JoinStringErrs(value)
+		if templ_7745c5c3_Err != nil {
+			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/ui/settings.templ`, Line: 320, Col: 54}
+		}
+		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var42))
+		if templ_7745c5c3_Err != nil {
+			return templ_7745c5c3_Err
+		}
+		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 66, "</dd></div>")
+		if templ_7745c5c3_Err != nil {
+			return templ_7745c5c3_Err
+		}
+		return nil
+	})
+}
+
+// connectionFormScript wires all connection-form interactivity with no
+// framework: open/close toggling (empty state ⇄ form), storage-type-driven
+// endpoint behaviour, the custom-endpoint toggle, authentication method
+// reveal/collapse, live inline validation (Create stays disabled until valid),
+// and the submit loading state. It is idempotent and self-initialising.
+func connectionFormScript() templ.Component {
+	return templruntime.GeneratedTemplate(func(templ_7745c5c3_Input templruntime.GeneratedComponentInput) (templ_7745c5c3_Err error) {
+		templ_7745c5c3_W, ctx := templ_7745c5c3_Input.Writer, templ_7745c5c3_Input.Context
+		if templ_7745c5c3_CtxErr := ctx.Err(); templ_7745c5c3_CtxErr != nil {
+			return templ_7745c5c3_CtxErr
+		}
+		templ_7745c5c3_Buffer, templ_7745c5c3_IsBuffer := templruntime.GetBuffer(templ_7745c5c3_W)
+		if !templ_7745c5c3_IsBuffer {
+			defer func() {
+				templ_7745c5c3_BufErr := templruntime.ReleaseBuffer(templ_7745c5c3_Buffer)
+				if templ_7745c5c3_Err == nil {
+					templ_7745c5c3_Err = templ_7745c5c3_BufErr
+				}
+			}()
+		}
+		ctx = templ.InitializeContext(ctx)
+		templ_7745c5c3_Var43 := templ.GetChildren(ctx)
+		if templ_7745c5c3_Var43 == nil {
+			templ_7745c5c3_Var43 = templ.NopComponent
+		}
+		ctx = templ.ClearChildren(ctx)
+		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 67, "<script>\n\t\t(function () {\n\t\t\tif (window.__apxConnInit) return;\n\t\t\twindow.__apxConnInit = true;\n\n\t\t\tvar REQUIRED = ['name', 'region', 'endpoint'];\n\n\t\t\tfunction ready(fn) {\n\t\t\t\tif (document.readyState !== 'loading') fn();\n\t\t\t\telse document.addEventListener('DOMContentLoaded', fn);\n\t\t\t}\n\n\t\t\tready(function () {\n\t\t\t\tvar form = document.getElementById('conn-form-el');\n\t\t\t\tif (!form) return;\n\n\t\t\t\tvar panel = document.getElementById('conn-form');\n\t\t\t\tvar empty = document.getElementById('conn-empty');\n\t\t\t\tvar headerBtn = document.querySelector('.card-header [data-conn-open]');\n\t\t\t\tvar submit = document.getElementById('cf-submit');\n\t\t\t\tvar prov = document.getElementById('cf-provider');\n\t\t\t\tvar auth = document.getElementById('cf-auth');\n\t\t\t\tvar endpoint = document.getElementById('cf-endpoint');\n\t\t\t\tvar endpointCustom = document.getElementById('cf-endpoint-custom');\n\t\t\t\tvar endpointCustomWrap = document.getElementById('cf-endpoint-custom-wrap');\n\t\t\t\tvar iamPanel = document.getElementById('cf-auth-iam');\n\t\t\t\tvar keysPanel = document.getElementById('cf-auth-keys');\n\n\t\t\t\tvar touched = {};\n\t\t\t\tvar submitted = false;\n\t\t\t\tvar lastTrigger = null;\n\n\t\t\t\t// ---- open / close -------------------------------------------\n\t\t\t\tfunction open(trigger) {\n\t\t\t\t\tlastTrigger = trigger || headerBtn || null;\n\t\t\t\t\tif (empty) empty.classList.add('hidden');\n\t\t\t\t\tif (headerBtn) headerBtn.classList.add('hidden');\n\t\t\t\t\tpanel.classList.remove('hidden');\n\t\t\t\t\tpanel.classList.add('form-fade-in');\n\t\t\t\t\tvar name = form.querySelector('[name=\"name\"]');\n\t\t\t\t\tif (name) name.focus();\n\t\t\t\t\tvalidate();\n\t\t\t\t}\n\t\t\t\tfunction close() {\n\t\t\t\t\tpanel.classList.add('hidden');\n\t\t\t\t\tpanel.classList.remove('form-fade-in');\n\t\t\t\t\tif (empty) empty.classList.remove('hidden');\n\t\t\t\t\tif (headerBtn) headerBtn.classList.remove('hidden');\n\t\t\t\t\treset();\n\t\t\t\t\tif (lastTrigger && lastTrigger.focus) lastTrigger.focus();\n\t\t\t\t}\n\t\t\t\tfunction reset() {\n\t\t\t\t\tform.reset();\n\t\t\t\t\ttouched = {};\n\t\t\t\t\tsubmitted = false;\n\t\t\t\t\tclearErrors();\n\t\t\t\t\tsyncProvider();\n\t\t\t\t\tsyncAuth();\n\t\t\t\t\tvalidate();\n\t\t\t\t}\n\t\t\t\twindow.apxConn = { open: open, close: close };\n\n\t\t\t\t// ---- storage type ⇒ endpoint --------------------------------\n\t\t\t\tfunction syncProvider() {\n\t\t\t\t\tvar p = prov.value;\n\t\t\t\t\tif (p === 'aws') {\n\t\t\t\t\t\tendpoint.value = 's3.amazonaws.com';\n\t\t\t\t\t\tendpoint.readOnly = true;\n\t\t\t\t\t\tendpoint.removeAttribute('placeholder');\n\t\t\t\t\t\tendpointCustom.checked = false;\n\t\t\t\t\t\tif (endpointCustomWrap) endpointCustomWrap.classList.remove('hidden');\n\t\t\t\t\t\tsetHint('endpoint', 'Apexion uses the AWS regional endpoint. Enable “Custom endpoint” to override.');\n\t\t\t\t\t} else {\n\t\t\t\t\t\tendpoint.readOnly = false;\n\t\t\t\t\t\tif (endpoint.value === 's3.amazonaws.com') endpoint.value = '';\n\t\t\t\t\t\tif (endpointCustomWrap) endpointCustomWrap.classList.add('hidden');\n\t\t\t\t\t\tif (p === 'minio') {\n\t\t\t\t\t\t\tendpoint.placeholder = 'localhost:9000';\n\t\t\t\t\t\t\tsetHint('endpoint', 'Host and port of your MinIO / R2 / SeaweedFS server (no scheme).');\n\t\t\t\t\t\t} else {\n\t\t\t\t\t\t\tendpoint.placeholder = 's3.example.com';\n\t\t\t\t\t\t\tsetHint('endpoint', 'Host of your S3-compatible endpoint (no scheme).');\n\t\t\t\t\t\t}\n\t\t\t\t\t}\n\t\t\t\t\tvalidate();\n\t\t\t\t}\n\t\t\t\tfunction onCustomEndpoint() {\n\t\t\t\t\tendpoint.readOnly = !endpointCustom.checked;\n\t\t\t\t\tif (endpointCustom.checked) {\n\t\t\t\t\t\tendpoint.focus();\n\t\t\t\t\t} else {\n\t\t\t\t\t\tendpoint.value = 's3.amazonaws.com';\n\t\t\t\t\t}\n\t\t\t\t\tvalidate();\n\t\t\t\t}\n\n\t\t\t\t// ---- authentication method ----------------------------------\n\t\t\t\tfunction setCollapse(el, isOpen) {\n\t\t\t\t\tif (!el) return;\n\t\t\t\t\tel.classList.toggle('open', isOpen);\n\t\t\t\t\tif (isOpen) {\n\t\t\t\t\t\tel.removeAttribute('inert');\n\t\t\t\t\t\tel.removeAttribute('aria-hidden');\n\t\t\t\t\t} else {\n\t\t\t\t\t\tel.setAttribute('inert', '');\n\t\t\t\t\t\tel.setAttribute('aria-hidden', 'true');\n\t\t\t\t\t}\n\t\t\t\t}\n\t\t\t\tfunction syncAuth() {\n\t\t\t\t\tvar keys = auth.value === 'keys';\n\t\t\t\t\tsetCollapse(iamPanel, !keys);\n\t\t\t\t\tsetCollapse(keysPanel, keys);\n\t\t\t\t\tvalidate();\n\t\t\t\t}\n\n\t\t\t\t// ---- validation ---------------------------------------------\n\t\t\t\tfunction errorsFor() {\n\t\t\t\t\tvar errs = {};\n\t\t\t\t\tif (!val('name')) errs.name = 'Connection name is required.';\n\t\t\t\t\tif (!val('region')) errs.region = 'Region is required.';\n\t\t\t\t\tif (!val('endpoint')) errs.endpoint = 'Endpoint is required.';\n\t\t\t\t\tif (auth.value === 'keys') {\n\t\t\t\t\t\tif (!val('access_key')) errs.access_key = 'Access key ID is required.';\n\t\t\t\t\t\tif (!val('secret_key')) errs.secret_key = 'Secret access key is required.';\n\t\t\t\t\t}\n\t\t\t\t\treturn errs;\n\t\t\t\t}\n\t\t\t\tfunction validate() {\n\t\t\t\t\tvar errs = errorsFor();\n\t\t\t\t\t['name', 'region', 'endpoint', 'access_key', 'secret_key'].forEach(function (f) {\n\t\t\t\t\t\trenderError(f, (touched[f] || submitted) ? (errs[f] || '') : '');\n\t\t\t\t\t});\n\t\t\t\t\tvar valid = Object.keys(errs).length === 0;\n\t\t\t\t\tsubmit.disabled = !valid;\n\t\t\t\t\tsubmit.setAttribute('aria-disabled', String(!valid));\n\t\t\t\t\treturn valid;\n\t\t\t\t}\n\t\t\t\tfunction val(name) {\n\t\t\t\t\tvar el = form.querySelector('[name=\"' + name + '\"]');\n\t\t\t\t\treturn el ? el.value.trim() : '';\n\t\t\t\t}\n\t\t\t\tfunction renderError(field, msg) {\n\t\t\t\t\tvar slot = form.querySelector('[data-error-for=\"' + field + '\"]');\n\t\t\t\t\tvar input = form.querySelector('[name=\"' + field + '\"]');\n\t\t\t\t\tif (!slot) return;\n\t\t\t\t\tif (msg) {\n\t\t\t\t\t\tslot.textContent = msg;\n\t\t\t\t\t\tslot.classList.remove('hidden');\n\t\t\t\t\t\tif (input) { input.setAttribute('aria-invalid', 'true'); input.classList.add('input-error'); }\n\t\t\t\t\t} else {\n\t\t\t\t\t\tslot.textContent = '';\n\t\t\t\t\t\tslot.classList.add('hidden');\n\t\t\t\t\t\tif (input) { input.removeAttribute('aria-invalid'); input.classList.remove('input-error'); }\n\t\t\t\t\t}\n\t\t\t\t}\n\t\t\t\tfunction clearErrors() {\n\t\t\t\t\t['name', 'region', 'endpoint', 'access_key', 'secret_key'].forEach(function (f) { renderError(f, ''); });\n\t\t\t\t}\n\t\t\t\tfunction setHint(field, text) {\n\t\t\t\t\tvar el = form.querySelector('[data-hint-for=\"' + field + '\"]');\n\t\t\t\t\tif (el) el.textContent = text;\n\t\t\t\t}\n\n\t\t\t\t// ---- submit loading state -----------------------------------\n\t\t\t\tfunction setLoading(on) {\n\t\t\t\t\tvar idle = submit.querySelector('[data-submit-idle]');\n\t\t\t\t\tvar busy = submit.querySelector('[data-submit-busy]');\n\t\t\t\t\tif (idle) idle.classList.toggle('hidden', on);\n\t\t\t\t\tif (busy) { busy.classList.toggle('hidden', !on); busy.classList.toggle('inline-flex', on); }\n\t\t\t\t\tsubmit.setAttribute('aria-busy', String(on));\n\t\t\t\t\tif (on) submit.disabled = true;\n\t\t\t\t}\n\n\t\t\t\t// ---- events -------------------------------------------------\n\t\t\t\tdocument.addEventListener('click', function (e) {\n\t\t\t\t\tvar opener = e.target.closest('[data-conn-open]');\n\t\t\t\t\tif (opener) { e.preventDefault(); open(opener); return; }\n\t\t\t\t\tif (e.target.closest('[data-conn-cancel]')) { e.preventDefault(); close(); }\n\t\t\t\t});\n\t\t\t\tform.addEventListener('input', function (e) {\n\t\t\t\t\tif (e.target.name) touched[e.target.name] = true;\n\t\t\t\t\tvalidate();\n\t\t\t\t});\n\t\t\t\tform.addEventListener('blur', function (e) {\n\t\t\t\t\tif (e.target.name) { touched[e.target.name] = true; validate(); }\n\t\t\t\t}, true);\n\t\t\t\tprov.addEventListener('change', syncProvider);\n\t\t\t\tauth.addEventListener('change', syncAuth);\n\t\t\t\tendpointCustom.addEventListener('change', onCustomEndpoint);\n\t\t\t\tform.addEventListener('submit', function (e) {\n\t\t\t\t\tsubmitted = true;\n\t\t\t\t\tif (!validate()) { e.preventDefault(); e.stopPropagation(); focusFirstError(); }\n\t\t\t\t});\n\t\t\t\tform.addEventListener('htmx:beforeRequest', function () { setLoading(true); });\n\t\t\t\tform.addEventListener('htmx:afterRequest', function () { setLoading(false); validate(); });\n\t\t\t\tdocument.addEventListener('keydown', function (e) {\n\t\t\t\t\tif (e.key === 'Escape' && !panel.classList.contains('hidden')) close();\n\t\t\t\t});\n\t\t\t\tfunction focusFirstError() {\n\t\t\t\t\tvar errs = errorsFor();\n\t\t\t\t\tvar first = ['name', 'region', 'endpoint', 'access_key', 'secret_key'].find(function (f) { return errs[f]; });\n\t\t\t\t\tif (first) { var el = form.querySelector('[name=\"' + first + '\"]'); if (el && !el.readOnly) el.focus(); }\n\t\t\t\t}\n\n\t\t\t\t// ---- init ---------------------------------------------------\n\t\t\t\tsyncProvider();\n\t\t\t\tsyncAuth();\n\t\t\t\tvalidate();\n\t\t\t});\n\t\t})();\n\t</script>")
 		if templ_7745c5c3_Err != nil {
 			return templ_7745c5c3_Err
 		}

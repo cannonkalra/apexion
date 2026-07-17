@@ -48,7 +48,7 @@ func New(cfg objstore.Config) (*Client, error) {
 			&credentials.IAM{Client: &http.Client{Timeout: 10 * time.Second}},
 		})
 	} else {
-		creds = credentials.NewStaticV4(cfg.AccessKey, cfg.SecretKey, "")
+		creds = credentials.NewStaticV4(cfg.AccessKey, cfg.SecretKey, cfg.SessionToken)
 	}
 	opts := &minio.Options{
 		Creds:  creds,

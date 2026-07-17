@@ -34,6 +34,28 @@ Point Apexion at an S3-compatible bucket and it lets you:
 Everything runs from one process. Drop the binary on an EC2 box next to your data
 and open the web UI — no heavyweight infrastructure required.
 
+## Usage
+
+Start the server, then create your first connection from the UI — Apexion ships
+with **zero connections configured**, so nothing is assumed about your storage:
+
+```bash
+apexion serve            # web UI + REST API on http://localhost:8080
+apexion crawl warehouse  # or crawl a bucket straight from the CLI
+```
+
+1. **Create a connection** — **Settings → New connection**. The form defaults to
+   **AWS S3** with **IAM** authentication, so on EC2 (or any host with an IAM
+   role) you set only a name, region, and endpoint — no keys. For MinIO,
+   Cloudflare R2, or SeaweedFS, switch **Authentication** to *Access keys*
+   (a session token is available for temporary/STS credentials).
+2. **Crawl a bucket** to discover datasets and infer their schemas.
+3. **Preview and register** datasets as DuckDB tables, then **query** them with
+   read-only SQL — all in the browser.
+
+See the [Quick start](#quick-start) for a full walkthrough and
+[Running on EC2](#running-on-ec2) for the minimum IAM policy.
+
 ## Features
 
 - 🧊 **Single self-contained binary** — one file, no runtime dependencies
@@ -177,14 +199,16 @@ Apexion listens on **http://localhost:8080** by default. Configuration comes fro
 ### A five-minute tour
 
 1. **Create your first connection.** Apexion starts with **zero configured
-   connections** — you create one explicitly. Open **Settings → Connections →
-   New connection**. The form defaults to **AWS S3** with **IAM** authentication,
-   so on EC2 (or any host with an attached IAM role) you only set a **name**,
-   **region**, and **endpoint** and leave the keys blank. For MinIO or another
-   S3-compatible store, switch **Authentication** to *Access key & secret* and
-   enter your credentials. Then **Test** and **Activate**. For headless/CLI runs
-   you can instead export `APEXION_MINIO_ENDPOINT`, `APEXION_MINIO_ACCESS_KEY`,
-   and `APEXION_MINIO_SECRET_KEY` (see [Running on EC2](#running-on-ec2)).
+   connections** — you create one explicitly. Open **Settings → New connection**.
+   The form is grouped into *Connection details*, *Authentication*, and *Advanced
+   options*, and defaults to **AWS S3** with **IAM** authentication — so on EC2
+   (or any host with an attached IAM role) you only set a **name**, **region**,
+   and **endpoint** and leave the keys blank. For MinIO or another S3-compatible
+   store, switch **Authentication** to *Access keys* and enter your credentials
+   (with an optional **session token** for temporary/STS credentials). Then
+   **Activate** it. For headless/CLI runs you can instead export
+   `APEXION_MINIO_ENDPOINT`, `APEXION_MINIO_ACCESS_KEY`, and
+   `APEXION_MINIO_SECRET_KEY` (see [Running on EC2](#running-on-ec2)).
 
 2. **Crawl a bucket.** From the UI wizard, or the CLI:
    ```bash

@@ -120,6 +120,44 @@
   .check { @apply rounded bg-base-950 border-base-700 text-brand-600 focus:ring-brand-500/40; }
   .check-row { @apply flex items-center gap-2 text-sm text-slate-300; }
 
+  /*
+   * ---- Connection form vocabulary ---------------------------------------
+   * A stronger field label than the uppercase micro-label (.form-label), plus
+   * hints, an "optional" chip, an invalid-input state, bordered toggle rows,
+   * and a smooth grid-rows collapse. Used by the create-connection flow; safe
+   * to reuse anywhere a high-contrast form is wanted.
+   */
+  .field-label    { @apply block text-sm font-medium text-slate-200 mb-1.5; }
+  .field-hint     { @apply mt-1.5 text-xs text-slate-500 leading-relaxed; }
+  .field-optional { @apply ml-1.5 align-middle text-[11px] font-normal normal-case tracking-normal text-slate-500; }
+  .input-error    { @apply border-accent-rose/60 focus:ring-accent-rose/30 focus:border-accent-rose/60; }
+
+  .toggle-row {
+    @apply flex items-start gap-3 rounded-lg border border-base-800 bg-base-950 px-4 py-3
+           cursor-pointer transition-colors hover:border-base-700;
+  }
+
+  /* Smooth expand/collapse with no JS height measurement (grid-rows 0fr⇄1fr). */
+  .collapsible {
+    display: grid;
+    grid-template-rows: 0fr;
+    opacity: 0;
+    transition: grid-template-rows 0.25s ease, opacity 0.2s ease;
+  }
+  .collapsible > .collapsible-inner { overflow: hidden; min-height: 0; }
+  .collapsible.open { grid-template-rows: 1fr; opacity: 1; }
+
+  /* Form entrance animation. */
+  .form-fade-in { animation: apxFade 0.25s ease both; }
+  @keyframes apxFade {
+    from { opacity: 0; transform: translateY(4px); }
+    to   { opacity: 1; transform: none; }
+  }
+  @media (prefers-reduced-motion: reduce) {
+    .collapsible { transition: none; }
+    .form-fade-in { animation: none; }
+  }
+
   /* Typography scale. */
   .page-title    { @apply text-xl font-semibold text-white; }
   .section-title { @apply text-base font-semibold text-white; }

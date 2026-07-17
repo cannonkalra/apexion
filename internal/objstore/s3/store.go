@@ -167,6 +167,7 @@ func (s *store) PreviewConfig() objstore.PreviewConfig {
 	}
 	return objstore.PreviewConfig{
 		Endpoint: endpoint, Region: region, AccessKey: s.cfg.AccessKey,
-		SecretKey: s.cfg.SecretKey, UseSSL: useSSL, URLStyle: urlStyle, UseRole: useRole,
+		SecretKey: s.cfg.SecretKey, SessionToken: s.cfg.SessionToken,
+		UseSSL: useSSL, URLStyle: urlStyle, UseRole: useRole,
 	}
 }

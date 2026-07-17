@@ -4,24 +4,27 @@ import "github.com/apexion/apexion/internal/model"
 
 templ SettingsPage(vm SettingsVM) {
 	@Layout("settings", "Settings") {
-		<div class="max-w-5xl mx-auto space-y-6">
+		<div class="max-w-4xl mx-auto space-y-6">
 			@Card() {
-				@CardHeader("Connections", "Connect one or more AWS / MinIO / S3 accounts. Activate one, then browse it in the Explorer.") {
+				@CardHeader("Connections", "Object storage accounts Apexion can crawl, catalog, and query.") {
+					if len(vm.Connections) > 0 {
+						<button type="button" class="btn-primary" data-conn-open aria-controls="conn-form">
+							@iconPlus()
+							New connection
+						</button>
+					}
 				}
 				@CardBody() {
-					if len(vm.Connections) == 0 {
-						@connectionsEmptyState()
-					} else {
-						<div class="space-y-2 mb-5">
+					if len(vm.Connections) > 0 {
+						<div id="conn-list" class="space-y-2.5">
 							for _, c := range vm.Connections {
 								@connectionRow(c, c.ID == vm.ActiveConnID)
 							}
 						</div>
+					} else {
+						@ConnectionEmptyState()
 					}
-					<details id="new-connection" class="rounded-lg border border-base-800 bg-base-850 p-4" open?={ len(vm.Connections) == 0 }>
-						<summary class="text-sm font-medium text-slate-200 cursor-pointer flex items-center gap-2">@iconDatabase() New connection</summary>
-						@newConnectionForm()
-					</details>
+					@ConnectionForm()
 				}
 			}
 
@@ -80,123 +83,208 @@ templ SettingsPage(vm SettingsVM) {
 			}
 		</div>
 		<div id="toast-slot"></div>
+		@connectionFormScript()
 	}
 }
 
-// connectionsEmptyState is shown on a fresh install (or after every connection
-// is deleted). No connection is created automatically — this guides the user to
-// create their first one instead.
-templ connectionsEmptyState() {
-	<div class="rounded-lg border border-dashed border-base-700 bg-base-900 px-6 py-8 text-center mb-4">
-		<div class="grid place-items-center w-11 h-11 rounded-lg bg-base-800 text-slate-400 mx-auto mb-3">
+// ConnectionEmptyState is the single, compact zero-state shown when no
+// connections exist. It explains what a connection is and offers exactly one
+// call to action, which swaps this state for the form (never both at once).
+templ ConnectionEmptyState() {
+	<div id="conn-empty" class="flex flex-col items-center text-center px-6 py-8">
+		<div class="grid place-items-center w-11 h-11 rounded-xl bg-base-800 text-slate-400 ring-1 ring-inset ring-base-700">
 			@iconDatabase()
 		</div>
-		<p class="text-sm font-medium text-slate-200">No storage connections configured.</p>
-		<p class="text-sm text-slate-500 mt-1 max-w-md mx-auto">
-			Create your first object storage connection to begin exploring your data lake.
+		<h3 class="mt-3.5 text-sm font-semibold text-slate-100">No storage connections</h3>
+		<p class="mt-1.5 max-w-md text-sm text-slate-500 leading-relaxed">
+			Connect an S3-compatible bucket — AWS S3, MinIO, Cloudflare R2, or SeaweedFS — so Apexion can crawl, catalog, and query your data lake.
 		</p>
-		<button
-			type="button"
-			class="btn-primary mt-4 inline-flex"
-			onclick="var d=document.getElementById('new-connection'); if(d){d.open=true; d.scrollIntoView({behavior:'smooth'});}"
-		>@iconPlay() New connection</button>
+		<button type="button" class="btn-primary mt-5" data-conn-open aria-controls="conn-form">
+			@iconPlus()
+			Create connection
+		</button>
 	</div>
 }
 
-// newConnectionForm is the create-connection form. It is IAM-first: the
-// authentication method defaults to an IAM role / instance profile, so the
-// Access key and Secret key fields stay hidden (and unrequired) until the user
-// switches to explicit key auth.
-templ newConnectionForm() {
-	<form hx-post="/ui/connections" hx-target="#toast-slot" hx-swap="innerHTML" class="mt-4 grid grid-cols-1 md:grid-cols-2 gap-4">
-		<div>
-			<label class="form-label">Connection name</label>
-			<input name="name" required placeholder="e.g. Production S3" class="input"/>
-		</div>
-		<div>
-			<label class="form-label">Storage type</label>
-			<select name="provider" class="select">
-				<option value="aws" selected>AWS S3</option>
-				<option value="minio">MinIO / S3-compatible</option>
-				<option value="s3">Other S3</option>
-			</select>
-		</div>
-		<div>
-			<label class="form-label">Authentication</label>
-			<select name="auth" class="select" onchange="apexionAuthToggle(this)">
-				<option value="iam" selected>IAM role / instance profile</option>
-				<option value="keys">Access key &amp; secret</option>
-			</select>
-		</div>
-		<div>
-			<label class="form-label">Region</label>
-			<input name="region" value="us-east-1" class="input"/>
-		</div>
-		<div class="md:col-span-2">
-			<label class="form-label">Endpoint</label>
-			<input name="endpoint" value="s3.amazonaws.com" class="input"/>
-			<p class="form-help">Editable. AWS uses <span class="font-mono">s3.amazonaws.com</span>; set your MinIO / R2 / SeaweedFS host for other stores.</p>
-		</div>
-		<div id="conn-iam-hint" class="md:col-span-2 rounded-lg border border-base-800 bg-base-900 px-3 py-2 text-xs text-slate-400 leading-snug">
-			If running on EC2 or another AWS environment with an IAM Role, Access Key and Secret Key can be left blank — Apexion uses the AWS credential chain (instance profile / ECS task role / IRSA, env vars, and <span class="font-mono">~/.aws</span>).
-		</div>
-		<div id="conn-credentials" class="md:col-span-2 grid grid-cols-1 md:grid-cols-2 gap-4 hidden">
-			<div>
-				<label class="form-label">Access key</label>
-				<input name="access_key" autocomplete="off" class="input"/>
-			</div>
-			<div>
-				<label class="form-label">Secret key</label>
-				<input name="secret_key" type="password" autocomplete="new-password" class="input"/>
-			</div>
-		</div>
-		<label class="check-row md:col-span-2">
-			<input type="checkbox" name="use_ssl" class="check"/>
-			Use SSL (auto-enabled for AWS)
-		</label>
-		<label class="flex items-center gap-2 text-sm text-slate-300 md:col-span-2">
-			<input type="checkbox" name="path_style" class="check"/>
-			<span>
-				Force path-style addressing
-				<span class="block text-xs text-slate-500">For legacy bucket names with uppercase/underscores/dots (auto-applied when detected).</span>
-			</span>
-		</label>
-		@ActionBar() {
-			<button class="btn-primary" type="submit">@iconPlay() Add connection</button>
-		}
-	</form>
-	@newConnectionScript()
+// ConnectionForm is the create-connection form: three logically grouped
+// sections, an IAM-first authentication model, and a right-aligned action bar.
+// It is hidden until the user opens it, so the empty state and the form are
+// never visible simultaneously.
+templ ConnectionForm() {
+	<div id="conn-form" class="hidden" role="region" aria-label="New connection">
+		<form
+			id="conn-form-el"
+			hx-post="/ui/connections"
+			hx-target="#toast-slot"
+			hx-swap="innerHTML"
+			novalidate
+			class="space-y-8"
+		>
+			@FormSection("Connection details", "Name the account and tell Apexion where it lives.") {
+				<div class="grid grid-cols-1 md:grid-cols-2 gap-x-5 gap-y-5">
+					<div>
+						<label class="field-label" for="cf-name">Connection name</label>
+						<input id="cf-name" name="name" placeholder="Production data lake" class="input" aria-required="true" aria-describedby="cf-name-err"/>
+						<p class="form-error hidden" id="cf-name-err" data-error-for="name" role="alert"></p>
+					</div>
+					<div>
+						<label class="field-label" for="cf-provider">Storage type</label>
+						<select id="cf-provider" name="provider" class="select">
+							<option value="aws" selected>AWS S3</option>
+							<option value="minio">MinIO / S3-compatible</option>
+							<option value="s3">Other S3-compatible</option>
+						</select>
+					</div>
+					<div>
+						<label class="field-label" for="cf-region">Region</label>
+						<input id="cf-region" name="region" value="us-east-1" class="input" aria-required="true" aria-describedby="cf-region-err"/>
+						<p class="form-error hidden" id="cf-region-err" data-error-for="region" role="alert"></p>
+					</div>
+					@connectionEndpointField()
+				</div>
+			}
+			@FormSection("Authentication", "How Apexion signs requests to your object store.") {
+				@connectionAuthFields()
+			}
+			@FormSection("Advanced options", "") {
+				@connectionAdvancedOptions()
+			}
+			@connectionButtonBar()
+		</form>
+	</div>
 }
 
-// newConnectionScript shows or hides the Access key / Secret key fields based on
-// the selected authentication method, so credentials are only requested (and
-// only required) when explicit key auth is chosen. It runs on load so the
-// IAM-first default renders correctly.
-templ newConnectionScript() {
-	<script>
-		function apexionAuthToggle(sel) {
-			var keys = sel && sel.value === 'keys';
-			var creds = document.getElementById('conn-credentials');
-			var hint = document.getElementById('conn-iam-hint');
-			if (creds) creds.classList.toggle('hidden', !keys);
-			if (hint) hint.classList.toggle('hidden', keys);
-		}
-		(function () {
-			var sel = document.querySelector('#new-connection select[name="auth"]');
-			if (sel) apexionAuthToggle(sel);
-		})();
-	</script>
+// connectionEndpointField renders the endpoint input plus a "Custom endpoint"
+// toggle. For AWS the endpoint is prefilled and read-only (the toggle unlocks
+// it); for MinIO / R2 / other S3 stores it is editable immediately and the
+// toggle is hidden. The runtime behaviour is driven by connectionFormScript.
+templ connectionEndpointField() {
+	<div>
+		<div class="flex items-center justify-between gap-2 mb-1.5">
+			<label class="field-label !mb-0" for="cf-endpoint">Endpoint</label>
+			<label id="cf-endpoint-custom-wrap" class="inline-flex items-center gap-1.5 text-xs text-slate-400 cursor-pointer select-none">
+				<input type="checkbox" id="cf-endpoint-custom" class="check w-3.5 h-3.5"/>
+				Custom endpoint
+			</label>
+		</div>
+		<input
+			id="cf-endpoint"
+			name="endpoint"
+			value="s3.amazonaws.com"
+			readonly
+			autocomplete="off"
+			spellcheck="false"
+			class="input font-mono read-only:text-slate-400 read-only:cursor-not-allowed"
+			aria-required="true"
+			aria-describedby="cf-endpoint-hint cf-endpoint-err"
+		/>
+		<p class="field-hint" id="cf-endpoint-hint" data-hint-for="endpoint">Apexion uses the AWS regional endpoint. Enable “Custom endpoint” to override.</p>
+		<p class="form-error hidden" id="cf-endpoint-err" data-error-for="endpoint" role="alert"></p>
+	</div>
+}
+
+// connectionAuthFields renders the authentication method selector, the IAM
+// info callout, and the collapsible credential fields (access key, secret key,
+// session token). Exactly one of the callout / credentials is expanded at a
+// time, animated by connectionFormScript.
+templ connectionAuthFields() {
+	<div>
+		<div class="max-w-sm">
+			<label class="field-label" for="cf-auth">Authentication method</label>
+			<select id="cf-auth" name="auth" class="select">
+				<option value="iam" selected>IAM role / instance profile</option>
+				<option value="keys">Access keys</option>
+			</select>
+		</div>
+		<div id="cf-auth-iam" class="collapsible open" data-auth-panel="iam">
+			<div class="collapsible-inner">
+				<div class="pt-4">
+					<div class="banner-info flex items-start gap-3">
+						<span class="text-brand-300 shrink-0 mt-0.5">@iconShield()</span>
+						<div class="min-w-0">
+							<p class="text-sm font-medium text-slate-200">Using the AWS credential provider chain</p>
+							<p class="mt-1 text-xs text-slate-400 leading-relaxed">
+								Running on EC2, ECS, EKS, Lambda, or another AWS environment? Apexion automatically resolves credentials from the attached IAM role — no keys to enter or store.
+							</p>
+						</div>
+					</div>
+				</div>
+			</div>
+		</div>
+		<div id="cf-auth-keys" class="collapsible" data-auth-panel="keys" inert aria-hidden="true">
+			<div class="collapsible-inner">
+				<div class="pt-4 grid grid-cols-1 md:grid-cols-2 gap-x-5 gap-y-5">
+					<div>
+						<label class="field-label" for="cf-access">Access key ID</label>
+						<input id="cf-access" name="access_key" autocomplete="off" spellcheck="false" class="input font-mono" aria-describedby="cf-access-err"/>
+						<p class="form-error hidden" id="cf-access-err" data-error-for="access_key" role="alert"></p>
+					</div>
+					<div>
+						<label class="field-label" for="cf-secret">Secret access key</label>
+						<input id="cf-secret" name="secret_key" type="password" autocomplete="new-password" class="input font-mono" aria-describedby="cf-secret-err"/>
+						<p class="form-error hidden" id="cf-secret-err" data-error-for="secret_key" role="alert"></p>
+					</div>
+					<div class="md:col-span-2">
+						<label class="field-label" for="cf-session">
+							Session token
+							<span class="field-optional">optional</span>
+						</label>
+						<input id="cf-session" name="session_token" type="password" autocomplete="off" class="input font-mono" aria-describedby="cf-session-hint"/>
+						<p class="field-hint" id="cf-session-hint">Only for temporary/STS credentials — AssumeRole, SSO, or federated access.</p>
+					</div>
+				</div>
+			</div>
+		</div>
+	</div>
+}
+
+// connectionAdvancedOptions renders the boolean connection flags as bordered
+// toggle rows so they read as deliberate settings rather than loose checkboxes.
+templ connectionAdvancedOptions() {
+	<div class="space-y-2.5">
+		@toggleRow("cf-ssl", "use_ssl", "Use SSL / TLS", "Encrypt traffic to the endpoint. Automatically enabled for AWS S3.")
+		@toggleRow("cf-pathstyle", "path_style", "Force path-style addressing", "Use s3.host/bucket instead of bucket.s3.host. Needed for legacy or non-DNS-safe bucket names; auto-applied when detected.")
+	</div>
+}
+
+// connectionButtonBar is the form footer: a top rule with the primary action
+// pinned bottom-right and a secondary Cancel, never centered.
+templ connectionButtonBar() {
+	<div class="action-bar">
+		<button type="button" class="btn-ghost" data-conn-cancel>Cancel</button>
+		<button type="submit" id="cf-submit" class="btn-primary" disabled aria-disabled="true">
+			<span data-submit-idle class="inline-flex items-center gap-2">
+				@iconPlus()
+				Create connection
+			</span>
+			<span data-submit-busy class="hidden items-center gap-2">
+				@iconSpinner()
+				Creating…
+			</span>
+		</button>
+	</div>
+}
+
+// toggleRow is a bordered, hoverable boolean setting row.
+templ toggleRow(id, name, title, desc string) {
+	<label class="toggle-row" for={ id }>
+		<input type="checkbox" id={ id } name={ name } class="check mt-0.5 shrink-0"/>
+		<span class="min-w-0">
+			<span class="block text-sm font-medium text-slate-200">{ title }</span>
+			<span class="block mt-0.5 text-xs text-slate-500 leading-relaxed">{ desc }</span>
+		</span>
+	</label>
 }
 
 templ connectionRow(c model.Connection, active bool) {
-	<div class={ "flex items-center gap-4 px-4 py-3 rounded-lg border", templ.KV("border-brand-500/40 bg-brand-500/5", active), templ.KV("border-base-800 bg-base-850", !active) }>
-		<div class="grid place-items-center w-9 h-9 rounded-lg bg-base-800 text-slate-400">
+	<div class={ "flex items-center gap-4 px-4 py-3 rounded-xl border transition-colors", templ.KV("border-brand-500/40 bg-brand-500/5", active), templ.KV("border-base-800 bg-base-850 hover:border-base-700", !active) }>
+		<div class="grid place-items-center w-9 h-9 rounded-lg bg-base-800 text-slate-400 shrink-0">
 			@iconDatabase()
 		</div>
 		<div class="flex-1 min-w-0">
-			<div class="flex items-center gap-2">
-				<span class="font-medium text-slate-100">{ c.Name }</span>
-				<span class="badge bg-base-700 text-slate-400">{ c.Provider }</span>
+			<div class="flex items-center gap-2 flex-wrap">
+				<span class="font-medium text-slate-100 truncate">{ c.Name }</span>
+				<span class="badge bg-base-700 text-slate-400">{ storageLabel(c.Provider) }</span>
 				if c.UseRole {
 					<span class="badge bg-accent-violet/15 text-accent-violet">IAM role</span>
 				}
@@ -207,7 +295,7 @@ templ connectionRow(c model.Connection, active bool) {
 					<span class="badge bg-accent-emerald/15 text-accent-emerald">active</span>
 				}
 			</div>
-			<div class="text-xs text-slate-500 font-mono truncate">{ connEndpoint(c) } · { c.Region }</div>
+			<div class="text-xs text-slate-500 font-mono truncate mt-0.5">{ connEndpoint(c) } · { c.Region }</div>
 		</div>
 		if !active {
 			<button class="btn-ghost text-xs" hx-post={ "/ui/connections/" + c.ID + "/activate" } hx-target="#toast-slot" hx-swap="innerHTML">Activate</button>
@@ -216,7 +304,8 @@ templ connectionRow(c model.Connection, active bool) {
 		}
 		<button
 			class="btn-danger !px-2 !py-1"
-			title="Delete"
+			title="Delete connection"
+			aria-label={ "Delete connection " + c.Name }
 			hx-delete={ "/ui/connections/" + c.ID }
 			hx-confirm="Delete this connection?"
 			hx-target="#toast-slot"
@@ -230,4 +319,223 @@ templ settingRow(label, value string) {
 		<dt class="text-slate-500">{ label }</dt>
 		<dd class="text-slate-200 font-mono text-xs">{ value }</dd>
 	</div>
+}
+
+// connectionFormScript wires all connection-form interactivity with no
+// framework: open/close toggling (empty state ⇄ form), storage-type-driven
+// endpoint behaviour, the custom-endpoint toggle, authentication method
+// reveal/collapse, live inline validation (Create stays disabled until valid),
+// and the submit loading state. It is idempotent and self-initialising.
+templ connectionFormScript() {
+	<script>
+		(function () {
+			if (window.__apxConnInit) return;
+			window.__apxConnInit = true;
+
+			var REQUIRED = ['name', 'region', 'endpoint'];
+
+			function ready(fn) {
+				if (document.readyState !== 'loading') fn();
+				else document.addEventListener('DOMContentLoaded', fn);
+			}
+
+			ready(function () {
+				var form = document.getElementById('conn-form-el');
+				if (!form) return;
+
+				var panel = document.getElementById('conn-form');
+				var empty = document.getElementById('conn-empty');
+				var headerBtn = document.querySelector('.card-header [data-conn-open]');
+				var submit = document.getElementById('cf-submit');
+				var prov = document.getElementById('cf-provider');
+				var auth = document.getElementById('cf-auth');
+				var endpoint = document.getElementById('cf-endpoint');
+				var endpointCustom = document.getElementById('cf-endpoint-custom');
+				var endpointCustomWrap = document.getElementById('cf-endpoint-custom-wrap');
+				var iamPanel = document.getElementById('cf-auth-iam');
+				var keysPanel = document.getElementById('cf-auth-keys');
+
+				var touched = {};
+				var submitted = false;
+				var lastTrigger = null;
+
+				// ---- open / close -------------------------------------------
+				function open(trigger) {
+					lastTrigger = trigger || headerBtn || null;
+					if (empty) empty.classList.add('hidden');
+					if (headerBtn) headerBtn.classList.add('hidden');
+					panel.classList.remove('hidden');
+					panel.classList.add('form-fade-in');
+					var name = form.querySelector('[name="name"]');
+					if (name) name.focus();
+					validate();
+				}
+				function close() {
+					panel.classList.add('hidden');
+					panel.classList.remove('form-fade-in');
+					if (empty) empty.classList.remove('hidden');
+					if (headerBtn) headerBtn.classList.remove('hidden');
+					reset();
+					if (lastTrigger && lastTrigger.focus) lastTrigger.focus();
+				}
+				function reset() {
+					form.reset();
+					touched = {};
+					submitted = false;
+					clearErrors();
+					syncProvider();
+					syncAuth();
+					validate();
+				}
+				window.apxConn = { open: open, close: close };
+
+				// ---- storage type ⇒ endpoint --------------------------------
+				function syncProvider() {
+					var p = prov.value;
+					if (p === 'aws') {
+						endpoint.value = 's3.amazonaws.com';
+						endpoint.readOnly = true;
+						endpoint.removeAttribute('placeholder');
+						endpointCustom.checked = false;
+						if (endpointCustomWrap) endpointCustomWrap.classList.remove('hidden');
+						setHint('endpoint', 'Apexion uses the AWS regional endpoint. Enable “Custom endpoint” to override.');
+					} else {
+						endpoint.readOnly = false;
+						if (endpoint.value === 's3.amazonaws.com') endpoint.value = '';
+						if (endpointCustomWrap) endpointCustomWrap.classList.add('hidden');
+						if (p === 'minio') {
+							endpoint.placeholder = 'localhost:9000';
+							setHint('endpoint', 'Host and port of your MinIO / R2 / SeaweedFS server (no scheme).');
+						} else {
+							endpoint.placeholder = 's3.example.com';
+							setHint('endpoint', 'Host of your S3-compatible endpoint (no scheme).');
+						}
+					}
+					validate();
+				}
+				function onCustomEndpoint() {
+					endpoint.readOnly = !endpointCustom.checked;
+					if (endpointCustom.checked) {
+						endpoint.focus();
+					} else {
+						endpoint.value = 's3.amazonaws.com';
+					}
+					validate();
+				}
+
+				// ---- authentication method ----------------------------------
+				function setCollapse(el, isOpen) {
+					if (!el) return;
+					el.classList.toggle('open', isOpen);
+					if (isOpen) {
+						el.removeAttribute('inert');
+						el.removeAttribute('aria-hidden');
+					} else {
+						el.setAttribute('inert', '');
+						el.setAttribute('aria-hidden', 'true');
+					}
+				}
+				function syncAuth() {
+					var keys = auth.value === 'keys';
+					setCollapse(iamPanel, !keys);
+					setCollapse(keysPanel, keys);
+					validate();
+				}
+
+				// ---- validation ---------------------------------------------
+				function errorsFor() {
+					var errs = {};
+					if (!val('name')) errs.name = 'Connection name is required.';
+					if (!val('region')) errs.region = 'Region is required.';
+					if (!val('endpoint')) errs.endpoint = 'Endpoint is required.';
+					if (auth.value === 'keys') {
+						if (!val('access_key')) errs.access_key = 'Access key ID is required.';
+						if (!val('secret_key')) errs.secret_key = 'Secret access key is required.';
+					}
+					return errs;
+				}
+				function validate() {
+					var errs = errorsFor();
+					['name', 'region', 'endpoint', 'access_key', 'secret_key'].forEach(function (f) {
+						renderError(f, (touched[f] || submitted) ? (errs[f] || '') : '');
+					});
+					var valid = Object.keys(errs).length === 0;
+					submit.disabled = !valid;
+					submit.setAttribute('aria-disabled', String(!valid));
+					return valid;
+				}
+				function val(name) {
+					var el = form.querySelector('[name="' + name + '"]');
+					return el ? el.value.trim() : '';
+				}
+				function renderError(field, msg) {
+					var slot = form.querySelector('[data-error-for="' + field + '"]');
+					var input = form.querySelector('[name="' + field + '"]');
+					if (!slot) return;
+					if (msg) {
+						slot.textContent = msg;
+						slot.classList.remove('hidden');
+						if (input) { input.setAttribute('aria-invalid', 'true'); input.classList.add('input-error'); }
+					} else {
+						slot.textContent = '';
+						slot.classList.add('hidden');
+						if (input) { input.removeAttribute('aria-invalid'); input.classList.remove('input-error'); }
+					}
+				}
+				function clearErrors() {
+					['name', 'region', 'endpoint', 'access_key', 'secret_key'].forEach(function (f) { renderError(f, ''); });
+				}
+				function setHint(field, text) {
+					var el = form.querySelector('[data-hint-for="' + field + '"]');
+					if (el) el.textContent = text;
+				}
+
+				// ---- submit loading state -----------------------------------
+				function setLoading(on) {
+					var idle = submit.querySelector('[data-submit-idle]');
+					var busy = submit.querySelector('[data-submit-busy]');
+					if (idle) idle.classList.toggle('hidden', on);
+					if (busy) { busy.classList.toggle('hidden', !on); busy.classList.toggle('inline-flex', on); }
+					submit.setAttribute('aria-busy', String(on));
+					if (on) submit.disabled = true;
+				}
+
+				// ---- events -------------------------------------------------
+				document.addEventListener('click', function (e) {
+					var opener = e.target.closest('[data-conn-open]');
+					if (opener) { e.preventDefault(); open(opener); return; }
+					if (e.target.closest('[data-conn-cancel]')) { e.preventDefault(); close(); }
+				});
+				form.addEventListener('input', function (e) {
+					if (e.target.name) touched[e.target.name] = true;
+					validate();
+				});
+				form.addEventListener('blur', function (e) {
+					if (e.target.name) { touched[e.target.name] = true; validate(); }
+				}, true);
+				prov.addEventListener('change', syncProvider);
+				auth.addEventListener('change', syncAuth);
+				endpointCustom.addEventListener('change', onCustomEndpoint);
+				form.addEventListener('submit', function (e) {
+					submitted = true;
+					if (!validate()) { e.preventDefault(); e.stopPropagation(); focusFirstError(); }
+				});
+				form.addEventListener('htmx:beforeRequest', function () { setLoading(true); });
+				form.addEventListener('htmx:afterRequest', function () { setLoading(false); validate(); });
+				document.addEventListener('keydown', function (e) {
+					if (e.key === 'Escape' && !panel.classList.contains('hidden')) close();
+				});
+				function focusFirstError() {
+					var errs = errorsFor();
+					var first = ['name', 'region', 'endpoint', 'access_key', 'secret_key'].find(function (f) { return errs[f]; });
+					if (first) { var el = form.querySelector('[name="' + first + '"]'); if (el && !el.readOnly) el.focus(); }
+				}
+
+				// ---- init ---------------------------------------------------
+				syncProvider();
+				syncAuth();
+				validate();
+			});
+		})();
+	</script>
 }
