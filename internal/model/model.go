@@ -335,19 +335,20 @@ type Job struct {
 // Connection is a stored object-store connection profile (one AWS/MinIO/S3
 // account). Exactly one connection is active at a time.
 type Connection struct {
-	ID        string    `json:"id"`
-	Name      string    `json:"name"`
-	Provider  string    `json:"provider"` // minio | aws | s3
-	Endpoint  string    `json:"endpoint"`
-	Region    string    `json:"region"`
-	AccessKey string    `json:"access_key"`
-	SecretKey string    `json:"secret_key"`
-	UseSSL    bool      `json:"use_ssl"`
-	UseRole   bool      `json:"use_role"`   // use the AWS credential chain (IAM role), no keys
-	PathStyle bool      `json:"path_style"` // force path-style addressing (legacy bucket names)
-	IsActive  bool      `json:"is_active"`
-	CreatedAt time.Time `json:"created_at"`
-	UpdatedAt time.Time `json:"updated_at"`
+	ID           string    `json:"id"`
+	Name         string    `json:"name"`
+	Provider     string    `json:"provider"` // minio | aws | s3
+	Endpoint     string    `json:"endpoint"`
+	Region       string    `json:"region"`
+	AccessKey    string    `json:"access_key"`
+	SecretKey    string    `json:"secret_key"`
+	SessionToken string    `json:"session_token"` // optional STS/temporary-credential token
+	UseSSL       bool      `json:"use_ssl"`
+	UseRole      bool      `json:"use_role"`   // use the AWS credential chain (IAM role), no keys
+	PathStyle    bool      `json:"path_style"` // force path-style addressing (legacy bucket names)
+	IsActive     bool      `json:"is_active"`
+	CreatedAt    time.Time `json:"created_at"`
+	UpdatedAt    time.Time `json:"updated_at"`
 }
 
 // Event is a persisted, structured domain event (see internal/events).

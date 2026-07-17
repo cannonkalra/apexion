@@ -274,7 +274,7 @@ func buildClient(c *model.Connection) (objstore.ObjectStore, error) {
 	}
 	return conn.Connect(objstore.Config{
 		Provider: c.Provider, Endpoint: c.Endpoint, AccessKey: c.AccessKey,
-		SecretKey: c.SecretKey, UseSSL: c.UseSSL, Region: c.Region,
+		SecretKey: c.SecretKey, SessionToken: c.SessionToken, UseSSL: c.UseSSL, Region: c.Region,
 		UseRole: c.UseRole, PathStyle: c.PathStyle,
 	})
 }

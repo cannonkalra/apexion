@@ -118,14 +118,15 @@ type Provider interface {
 // policy (e.g. the s3 provider treats "aws" specially) without the caller
 // knowing anything about it.
 type Config struct {
-	Provider  string
-	Endpoint  string
-	AccessKey string
-	SecretKey string
-	UseSSL    bool
-	Region    string
-	UseRole   bool
-	PathStyle bool
+	Provider     string
+	Endpoint     string
+	AccessKey    string
+	SecretKey    string
+	SessionToken string // optional STS/temporary-credential token
+	UseSSL       bool
+	Region       string
+	UseRole      bool
+	PathStyle    bool
 }
 
 // Connector builds a connected ObjectStore from a Config. Each provider
@@ -140,13 +141,14 @@ type Connector interface {
 // backend-specific normalization); the preview engine just applies it. All
 // fields are pre-normalized — the consumer performs no provider-specific logic.
 type PreviewConfig struct {
-	Endpoint  string
-	Region    string
-	AccessKey string
-	SecretKey string
-	UseSSL    bool
-	URLStyle  string // "path" or "vhost"
-	UseRole   bool
+	Endpoint     string
+	Region       string
+	AccessKey    string
+	SecretKey    string
+	SessionToken string // optional STS/temporary-credential token
+	UseSSL       bool
+	URLStyle     string // "path" or "vhost"
+	UseRole      bool
 }
 
 // QueryConfigurer is implemented by stores that can describe themselves to the

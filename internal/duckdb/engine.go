@@ -146,6 +146,11 @@ func (e *Engine) Reconfigure(c objstore.PreviewConfig) error {
 		env["AWS_ACCESS_KEY_ID"] = c.AccessKey
 		env["AWS_SECRET_ACCESS_KEY"] = c.SecretKey
 		env["AWS_EC2_METADATA_DISABLED"] = "true"
+		if c.SessionToken != "" {
+			env["AWS_SESSION_TOKEN"] = c.SessionToken
+		} else {
+			_ = os.Unsetenv("AWS_SESSION_TOKEN")
+		}
 	}
 	for k, v := range env {
 		_ = os.Setenv(k, v)
@@ -163,6 +168,9 @@ func (e *Engine) Reconfigure(c objstore.PreviewConfig) error {
 		setup = append(setup,
 			fmt.Sprintf("SET s3_access_key_id='%s'", esc(c.AccessKey)),
 			fmt.Sprintf("SET s3_secret_access_key='%s'", esc(c.SecretKey)))
+		if c.SessionToken != "" {
+			setup = append(setup, fmt.Sprintf("SET s3_session_token='%s'", esc(c.SessionToken)))
+		}
 	}
 	for _, q := range setup {
 		if _, err := e.db.ExecContext(ctx, q); err != nil {
@@ -185,10 +193,14 @@ func (e *Engine) Reconfigure(c objstore.PreviewConfig) error {
 			URL_STYLE '%s', USE_SSL %s, REGION '%s')`,
 			endpointClause, esc(urlStyle), useSSL, esc(region))
 	} else {
+		sessionClause := ""
+		if c.SessionToken != "" {
+			sessionClause = fmt.Sprintf(", SESSION_TOKEN '%s'", esc(c.SessionToken))
+		}
 		secret = fmt.Sprintf(`CREATE OR REPLACE SECRET apexion_s3 (
-			TYPE S3, KEY_ID '%s', SECRET '%s'%s,
+			TYPE S3, KEY_ID '%s', SECRET '%s'%s%s,
 			URL_STYLE '%s', USE_SSL %s, REGION '%s')`,
-			esc(c.AccessKey), esc(c.SecretKey), endpointClause, esc(urlStyle), useSSL, esc(region))
+			esc(c.AccessKey), esc(c.SecretKey), sessionClause, endpointClause, esc(urlStyle), useSSL, esc(region))
 	}
 	if _, err := e.db.ExecContext(ctx, secret); err != nil {
 		e.log.Debug().Err(err).Msg("create s3 secret failed (table-format preview may be limited)")

@@ -86,22 +86,23 @@ func (a *API) Routes() http.Handler {
 
 // connectionInput is the create/test payload (secret_key omitted from reads).
 type connectionInput struct {
-	Name      string `json:"name"`
-	Provider  string `json:"provider"`
-	Endpoint  string `json:"endpoint"`
-	Region    string `json:"region"`
-	AccessKey string `json:"access_key"`
-	SecretKey string `json:"secret_key"`
-	UseSSL    bool   `json:"use_ssl"`
-	UseRole   bool   `json:"use_role"`
-	PathStyle bool   `json:"path_style"`
+	Name         string `json:"name"`
+	Provider     string `json:"provider"`
+	Endpoint     string `json:"endpoint"`
+	Region       string `json:"region"`
+	AccessKey    string `json:"access_key"`
+	SecretKey    string `json:"secret_key"`
+	SessionToken string `json:"session_token"`
+	UseSSL       bool   `json:"use_ssl"`
+	UseRole      bool   `json:"use_role"`
+	PathStyle    bool   `json:"path_style"`
 }
 
 func (in connectionInput) toModel() *model.Connection {
 	return &model.Connection{
 		Name: in.Name, Provider: in.Provider, Endpoint: in.Endpoint, Region: in.Region,
-		AccessKey: in.AccessKey, SecretKey: in.SecretKey, UseSSL: in.UseSSL,
-		UseRole: in.UseRole, PathStyle: in.PathStyle,
+		AccessKey: in.AccessKey, SecretKey: in.SecretKey, SessionToken: in.SessionToken,
+		UseSSL: in.UseSSL, UseRole: in.UseRole, PathStyle: in.PathStyle,
 	}
 }
 
@@ -115,6 +116,9 @@ func (a *API) listConnections(w http.ResponseWriter, r *http.Request) {
 	for i := range conns {
 		if conns[i].SecretKey != "" {
 			conns[i].SecretKey = "••••••••"
+		}
+		if conns[i].SessionToken != "" {
+			conns[i].SessionToken = "••••••••"
 		}
 	}
 	writeJSON(w, http.StatusOK, conns)
@@ -132,6 +136,7 @@ func (a *API) createConnection(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	c.SecretKey = ""
+	c.SessionToken = ""
 	writeJSON(w, http.StatusCreated, c)
 }
 

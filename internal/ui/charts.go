@@ -23,6 +23,24 @@ func connEndpoint(c model.Connection) string {
 	return "—"
 }
 
+// storageLabel maps a stored provider id to a human-readable storage-type name
+// for connection listings.
+func storageLabel(provider string) string {
+	switch provider {
+	case "aws":
+		return "AWS S3"
+	case "minio":
+		return "MinIO / S3"
+	case "s3":
+		return "S3-compatible"
+	default:
+		if provider == "" {
+			return "S3-compatible"
+		}
+		return provider
+	}
+}
+
 func typeAt(types []string, i int) string {
 	if i >= 0 && i < len(types) {
 		return types[i]

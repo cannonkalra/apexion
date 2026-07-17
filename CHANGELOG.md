@@ -7,6 +7,23 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.0.3] - 2026-07-18
+
+### Added
+- **Session token support** for connections — temporary/STS credentials
+  (AssumeRole, SSO, federated access) are now honored across the S3 client and
+  the DuckDB preview engine (migration `0010`).
+- **Usage** section near the top of the README.
+
+### Changed
+- **Redesigned Connection Settings UI.** Enterprise-grade create-connection
+  flow: a single compact empty state (never shown alongside the form), a
+  sectioned form (*Connection details* / *Authentication* / *Advanced options*),
+  an IAM-first authentication model with an info callout, storage-type-aware
+  endpoint handling with a custom-endpoint toggle, live inline validation
+  (Create stays disabled until valid), a submit loading state, smooth
+  reveal/collapse animations, and full keyboard/ARIA accessibility.
+
 ## [0.0.2] - 2026-07-17
 
 ### Changed
@@ -50,7 +67,8 @@ First public release.
 - Cross-platform release binaries for linux/amd64, linux/arm64, darwin/arm64, and
   windows/amd64, published with SHA256 checksums.
 
-[Unreleased]: https://github.com/cannonkalra/apexion/compare/v0.0.2...HEAD
+[Unreleased]: https://github.com/cannonkalra/apexion/compare/v0.0.3...HEAD
+[0.0.3]: https://github.com/cannonkalra/apexion/compare/v0.0.2...v0.0.3
 [0.0.2]: https://github.com/cannonkalra/apexion/compare/v0.0.1...v0.0.2
 [0.1.0]: https://github.com/cannonkalra/apexion/releases/tag/v0.1.0
 [0.0.1]: https://github.com/cannonkalra/apexion/releases/tag/v0.0.1

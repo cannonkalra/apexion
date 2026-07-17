@@ -374,15 +374,16 @@ func (h *Handler) actionCreateConnection(w http.ResponseWriter, r *http.Request)
 	auth := r.FormValue("auth")
 	useRole := auth == "iam" || (auth == "" && checked("use_role"))
 	c := &model.Connection{
-		Name:      r.FormValue("name"),
-		Provider:  r.FormValue("provider"),
-		Endpoint:  r.FormValue("endpoint"),
-		Region:    r.FormValue("region"),
-		AccessKey: r.FormValue("access_key"),
-		SecretKey: r.FormValue("secret_key"),
-		UseSSL:    checked("use_ssl"),
-		UseRole:   useRole,
-		PathStyle: checked("path_style"),
+		Name:         r.FormValue("name"),
+		Provider:     r.FormValue("provider"),
+		Endpoint:     r.FormValue("endpoint"),
+		Region:       r.FormValue("region"),
+		AccessKey:    r.FormValue("access_key"),
+		SecretKey:    r.FormValue("secret_key"),
+		SessionToken: r.FormValue("session_token"),
+		UseSSL:       checked("use_ssl"),
+		UseRole:      useRole,
+		PathStyle:    checked("path_style"),
 	}
 	if c.Name == "" {
 		h.render(w, r, Toast("Connection name is required", "error"))
@@ -398,6 +399,7 @@ func (h *Handler) actionCreateConnection(w http.ResponseWriter, r *http.Request)
 	if useRole {
 		c.AccessKey = ""
 		c.SecretKey = ""
+		c.SessionToken = ""
 	}
 	if err := h.connections.Create(r.Context(), c); err != nil {
 		h.render(w, r, Toast("Failed to add connection: "+err.Error(), "error"))
