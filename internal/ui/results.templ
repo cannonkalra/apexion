@@ -2,13 +2,23 @@ package ui
 
 import (
 	"fmt"
-	"github.com/apexion/apexion/internal/preview"
+	"github.com/apexion/apexion/internal/dataviewer"
+	"github.com/apexion/apexion/internal/dataviewer/components"
+	"github.com/apexion/apexion/internal/duckdb"
 )
 
 // ResultTable renders a DuckDB query result (used by preview, dataset preview,
-// and the SQL scratchpad).
-templ ResultTable(res *preview.Result) {
-	<div class="flex items-center justify-between text-xs text-slate-500 mb-2">
+// and the SQL scratchpad). It delegates to ResultTableWith with insights off, so
+// every existing caller renders exactly as before.
+templ ResultTable(res *duckdb.Result) {
+	@ResultTableWith(res, "")
+}
+
+// ResultTableWith renders a result and, when insightsURL is non-empty, a second
+// header row that lazy-loads per-column insights via HTMX and swaps itself in
+// place — the data rows below render immediately and are never re-fetched.
+templ ResultTableWith(res *duckdb.Result, insightsURL string) {
+	<div class="flex flex-wrap items-center justify-between gap-2 text-xs text-slate-500 mb-3">
 		<span>
 			{ fmt.Sprintf("%d rows · %d columns", res.RowCount, len(res.Columns)) }
 			if res.Truncated {
@@ -17,7 +27,7 @@ templ ResultTable(res *preview.Result) {
 		</span>
 		<span>{ res.Elapsed }</span>
 	</div>
-	<div class="overflow-auto rounded-lg border border-base-800 max-h-[65vh]">
+	<div class="overflow-x-auto overflow-y-auto rounded-lg border border-base-800 max-h-[65vh]">
 		<table class="w-full text-sm">
 			<thead class="sticky top-0 bg-base-850">
 				<tr class="border-b border-base-800">
@@ -29,6 +39,20 @@ templ ResultTable(res *preview.Result) {
 						</th>
 					}
 				</tr>
+				if insightsURL != "" {
+					<tr
+						id="insight-row"
+						class="border-b border-base-800 bg-base-900/40"
+						hx-get={ insightsURL }
+						hx-trigger="load delay:200ms"
+						hx-swap="outerHTML"
+					>
+						<th class="th"></th>
+						for range res.Columns {
+							@components.InsightSkeleton()
+						}
+					</tr>
+				}
 			</thead>
 			<tbody class="divide-y divide-base-800 font-mono text-xs">
 				for ri, row := range res.Rows {
@@ -44,9 +68,19 @@ templ ResultTable(res *preview.Result) {
 	</div>
 }
 
+// InsightsRow is the populated insight header row returned by /ui/insights; it
+// replaces the skeleton row (same id) via an outerHTML swap and carries no
+// hx-trigger, so it never re-fires.
+templ InsightsRow(profiles []dataviewer.ColumnProfile) {
+	<tr id="insight-row" class="border-b border-base-800 bg-base-900/40">
+		<th class="th"></th>
+		for _, p := range profiles {
+			@components.InsightCell(p)
+		}
+	</tr>
+}
+
 // QueryError renders a query error box.
 templ QueryError(msg string) {
-	<div class="rounded-lg border border-accent-rose/40 bg-accent-rose/5 p-3 text-sm text-accent-rose font-mono">
-		{ msg }
-	</div>
+	<div class="banner-error font-mono">{ msg }</div>
 }

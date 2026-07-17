@@ -8,6 +8,8 @@ import (
 	"encoding/json"
 	"fmt"
 	"io/fs"
+	"os"
+	"path/filepath"
 	"sort"
 	"strings"
 	"time"
@@ -26,7 +28,16 @@ type Store struct {
 }
 
 // Open opens (or creates) the DuckDB database at path and configures the pool.
+// The parent directory is created if it does not already exist.
 func Open(path string, maxOpenConns int, log zerolog.Logger) (*Store, error) {
+	if path != "" && path != ":memory:" {
+		if dir := filepath.Dir(path); dir != "" && dir != "." {
+			if err := os.MkdirAll(dir, 0o755); err != nil {
+				return nil, fmt.Errorf("create data dir %q: %w", dir, err)
+			}
+		}
+	}
+
 	db, err := sql.Open("duckdb", path)
 	if err != nil {
 		return nil, fmt.Errorf("open duckdb: %w", err)
@@ -66,12 +77,12 @@ func (s *Store) Migrate(ctx context.Context) error {
 	for rows.Next() {
 		var v string
 		if err := rows.Scan(&v); err != nil {
-			rows.Close()
+			_ = rows.Close()
 			return err
 		}
 		applied[v] = true
 	}
-	rows.Close()
+	_ = rows.Close()
 
 	entries, err := fs.ReadDir(migrations.FS, ".")
 	if err != nil {

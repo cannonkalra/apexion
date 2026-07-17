@@ -2,7 +2,6 @@ package ui
 
 import (
 	"fmt"
-	"math"
 	"strings"
 	"time"
 
@@ -145,13 +144,6 @@ func progressPct(f float64) string {
 	return fmt.Sprintf("%.0f%%", f*100)
 }
 
-func title(s string) string {
-	if s == "" {
-		return ""
-	}
-	return strings.ToUpper(s[:1]) + s[1:]
-}
-
 func join(ss []string, sep string) string { return strings.Join(ss, sep) }
 
 func truncate(s string, n int) string {
@@ -159,37 +151,4 @@ func truncate(s string, n int) string {
 		return s
 	}
 	return s[:n-1] + "…"
-}
-
-func eventLabel(t string) string {
-	// Insert spaces before capitals: DatasetDiscovered -> Dataset Discovered.
-	var b strings.Builder
-	for i, r := range t {
-		if i > 0 && r >= 'A' && r <= 'Z' {
-			b.WriteByte(' ')
-		}
-		b.WriteRune(r)
-	}
-	return b.String()
-}
-
-func eventDot(t string) string {
-	switch {
-	case strings.Contains(t, "Schema"):
-		return "bg-accent-amber"
-	case strings.Contains(t, "Dataset"):
-		return "bg-brand-400"
-	case strings.Contains(t, "Inference"):
-		return "bg-accent-violet"
-	case strings.Contains(t, "Partition"):
-		return "bg-accent-emerald"
-	case strings.Contains(t, "Completed"):
-		return "bg-accent-emerald"
-	default:
-		return "bg-base-500"
-	}
-}
-
-func maxInt(a, b int) int {
-	return int(math.Max(float64(a), float64(b)))
 }

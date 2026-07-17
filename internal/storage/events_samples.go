@@ -15,33 +15,6 @@ func (s *Store) SaveEvent(ctx context.Context, e *model.Event) error {
 }
 
 // ListEvents lists recent events (optionally by type).
-func (s *Store) ListEvents(ctx context.Context, eventType string, limit int) ([]model.Event, error) {
-	q := `SELECT id, type, subject, payload, created_at FROM events`
-	var args []any
-	if eventType != "" {
-		q += " WHERE type = ?"
-		args = append(args, eventType)
-	}
-	q += " ORDER BY created_at DESC"
-	if limit > 0 {
-		q += " LIMIT ?"
-		args = append(args, limit)
-	}
-	rows, err := s.db.QueryContext(ctx, q, args...)
-	if err != nil {
-		return nil, err
-	}
-	defer rows.Close()
-	var out []model.Event
-	for rows.Next() {
-		var e model.Event
-		if err := rows.Scan(&e.ID, &e.Type, &e.Subject, &e.Payload, &e.CreatedAt); err != nil {
-			return nil, err
-		}
-		out = append(out, e)
-	}
-	return out, rows.Err()
-}
 
 // SaveSample stores a data sample for a dataset (replacing any prior sample).
 func (s *Store) SaveSample(ctx context.Context, sm *model.DataSample) error {

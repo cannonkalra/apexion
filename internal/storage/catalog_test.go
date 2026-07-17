@@ -1,0 +1,106 @@
+package storage
+
+import (
+	"context"
+	"testing"
+
+	"github.com/rs/zerolog"
+
+	"github.com/apexion/apexion/internal/model"
+)
+
+func memStore(t *testing.T) *Store {
+	t.Helper()
+	s, err := Open(":memory:", 1, zerolog.Nop())
+	if err != nil {
+		t.Fatalf("open: %v", err)
+	}
+	if err := s.Migrate(context.Background()); err != nil {
+		t.Fatalf("migrate: %v", err)
+	}
+	t.Cleanup(func() { _ = s.Close() })
+	return s
+}
+
+func TestCatalogEntryCRUD(t *testing.T) {
+	ctx := context.Background()
+	s := memStore(t)
+
+	e := &model.CatalogEntry{
+		ID: "c1", Name: "events", DatasetID: "d1",
+		BucketName: "logs", RootPath: "events", Format: model.FormatParquet,
+		URI: "s3://logs/events", Enabled: true,
+		RefreshMode: model.RefreshManual, SchemaStrategy: model.SchemaUnion,
+		PartitionCols: []string{"year", "month"},
+	}
+	if err := s.UpsertCatalogEntry(ctx, e); err != nil {
+		t.Fatalf("upsert: %v", err)
+	}
+
+	got, err := s.GetCatalogEntry(ctx, "c1")
+	if err != nil || got == nil {
+		t.Fatalf("get: %v (nil=%v)", err, got == nil)
+	}
+	if got.Name != "events" || got.Format != model.FormatParquet {
+		t.Errorf("roundtrip mismatch: %+v", got)
+	}
+	if len(got.PartitionCols) != 2 || got.PartitionCols[0] != "year" {
+		t.Errorf("partition cols not preserved: %v", got.PartitionCols)
+	}
+
+	byName, _ := s.GetCatalogEntryByName(ctx, "events")
+	if byName == nil || byName.ID != "c1" {
+		t.Errorf("get by name failed: %+v", byName)
+	}
+
+	list, err := s.ListCatalogEntries(ctx)
+	if err != nil || len(list) != 1 {
+		t.Fatalf("list: %v len=%d", err, len(list))
+	}
+
+	if err := s.DeleteCatalogEntry(ctx, "c1"); err != nil {
+		t.Fatalf("delete: %v", err)
+	}
+	gone, _ := s.GetCatalogEntry(ctx, "c1")
+	if gone != nil {
+		t.Error("entry not deleted")
+	}
+}
+
+func TestCatalogByDatasetAndCounts(t *testing.T) {
+	ctx := context.Background()
+	s := memStore(t)
+	// One dataset backing two tables, plus another dataset with one.
+	for _, e := range []*model.CatalogEntry{
+		{ID: "a", Name: "logs", DatasetID: "d1", Format: model.FormatParquet, RefreshMode: "manual", SchemaStrategy: "union"},
+		{ID: "b", Name: "logs_recent", DatasetID: "d1", Format: model.FormatParquet, RefreshMode: "manual", SchemaStrategy: "union"},
+		{ID: "c", Name: "events", DatasetID: "d2", Format: model.FormatCSV, RefreshMode: "manual", SchemaStrategy: "union"},
+	} {
+		if err := s.UpsertCatalogEntry(ctx, e); err != nil {
+			t.Fatalf("upsert %s: %v", e.ID, err)
+		}
+	}
+
+	byD1, err := s.ListCatalogEntriesByDataset(ctx, "d1")
+	if err != nil || len(byD1) != 2 {
+		t.Fatalf("by dataset d1: %v len=%d", err, len(byD1))
+	}
+
+	counts, err := s.DatasetRegistrationCounts(ctx)
+	if err != nil {
+		t.Fatalf("counts: %v", err)
+	}
+	if counts["d1"] != 2 || counts["d2"] != 1 || counts["d3"] != 0 {
+		t.Errorf("unexpected counts: %v", counts)
+	}
+}
+
+func TestCatalogEntryMissingIsNil(t *testing.T) {
+	got, err := memStore(t).GetCatalogEntry(context.Background(), "nope")
+	if err != nil {
+		t.Fatalf("err: %v", err)
+	}
+	if got != nil {
+		t.Errorf("expected nil for missing entry, got %+v", got)
+	}
+}

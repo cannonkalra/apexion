@@ -4,8 +4,8 @@ import (
 	"sort"
 	"strings"
 
-	"github.com/apexion/apexion/internal/crawler/s3"
 	"github.com/apexion/apexion/internal/model"
+	"github.com/apexion/apexion/internal/objstore"
 )
 
 // aggregate accumulates per-dataset state during the object walk. Its memory is
@@ -32,11 +32,11 @@ type partAgg struct {
 
 type dsAgg struct {
 	root        string
+	strategy    string // discovery strategy: hive | positional | legacy
 	tableFormat model.Format
 	formatVotes map[model.Format]int
 	fileCount   int64
 	totalSize   int64
-	rowEstimate int64
 	partKeySet  map[string]bool
 	partKeys    []string
 	partitions  map[string]*partAgg
@@ -69,8 +69,11 @@ func (a *aggregate) markTable(root string, f model.Format) {
 	d.tableFormat = f
 }
 
-func (a *aggregate) add(pi partitionInfo, f model.Format, om s3.ObjectMeta, changed bool) {
+func (a *aggregate) add(pi partitionInfo, f model.Format, om objstore.ObjectMeta, changed bool) {
 	d := a.get(pi.root)
+	if pi.strategy != "" {
+		d.strategy = pi.strategy
+	}
 	d.formatVotes[f]++
 	d.fileCount++
 	d.totalSize += om.Size

@@ -8,8 +8,8 @@ import (
 
 	"github.com/google/uuid"
 
-	"github.com/apexion/apexion/internal/crawler/format"
 	"github.com/apexion/apexion/internal/events"
+	"github.com/apexion/apexion/internal/format"
 	"github.com/apexion/apexion/internal/model"
 )
 
@@ -28,20 +28,22 @@ func (c *Crawler) processOne(ctx context.Context, bucket *model.Bucket, d *dsAgg
 	// Reuse an existing dataset record (preserve id + created_at).
 	existing, _ := c.store.GetDatasetByPath(ctx, bucket.ID, d.root)
 	ds := &model.Dataset{
-		ID:            uuid.NewString(),
-		BucketID:      bucket.ID,
-		BucketName:    bucket.Name,
-		Name:          d.name(bucket.Name),
-		Path:          d.root,
-		Format:        f,
-		Compression:   result.Compression,
-		FileCount:     d.fileCount,
-		TotalSize:     d.totalSize,
-		RowCount:      estimateDatasetRows(result, d.fileCount),
-		PartitionKeys: partKeys,
-		CreatedAt:     now,
-		UpdatedAt:     now,
-		LastScanAt:    &now,
+		ID:                uuid.NewString(),
+		BucketID:          bucket.ID,
+		BucketName:        bucket.Name,
+		Name:              d.name(bucket.Name),
+		Path:              d.root,
+		Format:            f,
+		Compression:       result.Compression,
+		FileCount:         d.fileCount,
+		TotalSize:         d.totalSize,
+		RowCount:          estimateDatasetRows(result, d.fileCount),
+		PartitionKeys:     partKeys,
+		PartitionDepth:    len(partKeys),
+		DiscoveryStrategy: d.strategy,
+		CreatedAt:         now,
+		UpdatedAt:         now,
+		LastScanAt:        &now,
 	}
 	if existing != nil {
 		ds.ID = existing.ID
@@ -119,7 +121,7 @@ func (c *Crawler) processOne(ctx context.Context, bucket *model.Bucket, d *dsAgg
 // resolveSchema reads the schema either via a table resolver or a file reader.
 func (c *Crawler) resolveSchema(ctx context.Context, bucket *model.Bucket, d *dsAgg, f model.Format) (*format.Result, error) {
 	if resolver, ok := c.resolvers[f]; ok {
-		res, ok, err := resolver.Detect(ctx, c.clientFor(bucket.Name).Catalog(bucket.Name), d.root)
+		res, ok, err := resolver.Detect(ctx, c.storeFor(bucket.Name).Catalog(bucket.Name), d.root)
 		if err != nil {
 			c.log.Warn().Err(err).Str("root", d.root).Msg("table resolver failed")
 		}
@@ -137,7 +139,7 @@ func (c *Crawler) resolveSchema(ctx context.Context, bucket *model.Bucket, d *ds
 	if !ok {
 		return &format.Result{Format: f}, nil
 	}
-	src := c.clientFor(bucket.Name).NewSource(bucket.Name, rep.key, rep.size)
+	src := c.storeFor(bucket.Name).NewSource(bucket.Name, rep.key, rep.size)
 	opts := format.Options{
 		SampleRows:  1000,
 		SampleBytes: c.cfg.SampleBytes,

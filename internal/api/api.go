@@ -6,26 +6,24 @@ import (
 	"encoding/json"
 	"net/http"
 	"strconv"
+	"strings"
+	"time"
 
 	"github.com/go-chi/chi/v5"
 	"github.com/rs/zerolog"
 
-	"github.com/apexion/apexion/internal/agents"
 	"github.com/apexion/apexion/internal/catalog"
 	"github.com/apexion/apexion/internal/connections"
+	"github.com/apexion/apexion/internal/duckdb"
 	"github.com/apexion/apexion/internal/explorer"
-	"github.com/apexion/apexion/internal/lineage"
 	"github.com/apexion/apexion/internal/model"
-	"github.com/apexion/apexion/internal/preview"
 	"github.com/apexion/apexion/internal/storage"
 )
 
 // API holds the REST handler dependencies.
 type API struct {
 	catalog     *catalog.Service
-	lineage     *lineage.Service
-	agents      *agents.Registry
-	preview     *preview.Engine
+	preview     *duckdb.Engine
 	explorer    *explorer.Service
 	connections *connections.Manager
 	store       *storage.Store
@@ -33,10 +31,10 @@ type API struct {
 }
 
 // New builds the API.
-func New(cat *catalog.Service, lin *lineage.Service, ag *agents.Registry,
-	prev *preview.Engine, expl *explorer.Service, conns *connections.Manager, log zerolog.Logger) *API {
+func New(cat *catalog.Service, prev *duckdb.Engine, expl *explorer.Service,
+	conns *connections.Manager, log zerolog.Logger) *API {
 	return &API{
-		catalog: cat, lineage: lin, agents: ag, preview: prev, explorer: expl,
+		catalog: cat, preview: prev, explorer: expl,
 		connections: conns, store: cat.Store(), log: log,
 	}
 }
@@ -51,33 +49,31 @@ func (a *API) Routes() http.Handler {
 	r.Post("/buckets/{name}/crawl", a.crawlBucket)
 
 	r.Get("/datasets", a.listDatasets)
+	r.Post("/datasets/crawl", a.crawlDirectory)
 	r.Get("/datasets/{id}", a.getDataset)
+	r.Post("/datasets/{id}/register", a.registerDataset)
+	r.Post("/datasets/{id}/refresh", a.refreshDataset)
 	r.Delete("/datasets/{id}", a.deleteDataset)
-	r.Post("/datasets/{id}/infer", a.inferDataset)
 
-	r.Get("/tables", a.listTables)
+	r.Get("/catalog", a.listCatalog)
+	r.Post("/catalog", a.registerCatalog)
+	r.Get("/catalog/{id}", a.getCatalog)
+	r.Post("/catalog/{id}/refresh", a.refreshCatalog)
+	r.Delete("/catalog/{id}", a.deleteCatalog)
+	r.Post("/query", a.runQuery)
+
 	r.Get("/schema", a.getSchema)
 	r.Get("/columns", a.getColumns)
 
 	r.Get("/jobs", a.listJobs)
 	r.Get("/jobs/{id}", a.getJob)
 	r.Post("/jobs/{id}/cancel", a.cancelJob)
-	r.Get("/runs", a.listRuns)
 
 	r.Get("/explorer", a.explore)
+	r.Get("/explorer/list", a.exploreList)
 	r.Post("/directories/crawl", a.crawlDirectory)
 	r.Get("/preview/file", a.previewFile)
 	r.Get("/preview/dataset/{id}", a.previewDataset)
-	r.Post("/sql", a.runSQL)
-
-	r.Get("/lineage", a.getLineage)
-	r.Post("/infer", a.inferBody)
-	r.Get("/infer/{dataset_id}", a.getInference)
-
-	r.Get("/search", a.search)
-	r.Get("/statistics", a.statistics)
-	r.Get("/events", a.listEvents)
-	r.Get("/agents", a.listAgents)
 
 	r.Get("/connections", a.listConnections)
 	r.Post("/connections", a.createConnection)
@@ -247,62 +243,6 @@ func (a *API) deleteDataset(w http.ResponseWriter, r *http.Request) {
 	writeJSON(w, http.StatusOK, map[string]string{"status": "deleted"})
 }
 
-func (a *API) inferDataset(w http.ResponseWriter, r *http.Request) {
-	job, err := a.catalog.StartInference(chi.URLParam(r, "id"))
-	if err != nil {
-		writeErr(w, http.StatusBadRequest, err.Error())
-		return
-	}
-	writeJSON(w, http.StatusAccepted, job)
-}
-
-func (a *API) inferBody(w http.ResponseWriter, r *http.Request) {
-	var body struct {
-		DatasetID string `json:"dataset_id"`
-	}
-	if err := json.NewDecoder(r.Body).Decode(&body); err != nil || body.DatasetID == "" {
-		writeErr(w, http.StatusBadRequest, "dataset_id required")
-		return
-	}
-	job, err := a.catalog.StartInference(body.DatasetID)
-	if err != nil {
-		writeErr(w, http.StatusBadRequest, err.Error())
-		return
-	}
-	writeJSON(w, http.StatusAccepted, job)
-}
-
-func (a *API) getInference(w http.ResponseWriter, r *http.Request) {
-	run, err := a.store.LatestInferenceRun(r.Context(), chi.URLParam(r, "dataset_id"))
-	writeOrErr(w, run, err)
-}
-
-func (a *API) listTables(w http.ResponseWriter, r *http.Request) {
-	ds, err := a.store.ListDatasets(r.Context(), storage.DatasetFilter{Limit: 500})
-	if err != nil {
-		writeErr(w, http.StatusInternalServerError, err.Error())
-		return
-	}
-	type table struct {
-		DatasetID string       `json:"dataset_id"`
-		Name      string       `json:"name"`
-		Format    model.Format `json:"format"`
-		Columns   int          `json:"columns"`
-		Version   int          `json:"version"`
-	}
-	out := make([]table, 0, len(ds))
-	for _, d := range ds {
-		sc, _ := a.store.LatestSchema(r.Context(), d.ID)
-		t := table{DatasetID: d.ID, Name: d.Name, Format: d.Format}
-		if sc != nil {
-			t.Columns = len(sc.Columns)
-			t.Version = sc.Version
-		}
-		out = append(out, t)
-	}
-	writeJSON(w, http.StatusOK, out)
-}
-
 func (a *API) getSchema(w http.ResponseWriter, r *http.Request) {
 	datasetID := r.URL.Query().Get("dataset_id")
 	if datasetID == "" {
@@ -359,8 +299,100 @@ func (a *API) explore(w http.ResponseWriter, r *http.Request) {
 	}
 	listing, err := a.explorer.ListDir(r.Context(), bucket,
 		r.URL.Query().Get("prefix"), r.URL.Query().Get("search"), r.URL.Query().Get("sort"),
-		intParam(r, "limit", explorer.DefaultPageSize))
+		r.URL.Query().Get("cursor"), intParam(r, "limit", explorer.DefaultPageSize))
 	writeOrErr(w, listing, err)
+}
+
+// exploreList is the JSON cursor-paginated directory listing endpoint. It
+// mirrors the UI explorer but returns a stable machine-readable page: immediate
+// folders/files under a prefix plus an opaque cursor to resume. totalKnown is
+// always null — we never full-scan a bucket to count children.
+func (a *API) exploreList(w http.ResponseWriter, r *http.Request) {
+	q := r.URL.Query()
+	bucket := q.Get("bucket")
+	prefix := q.Get("prefix")
+	// Fallback: `path`=<bucket>/<prefix> when bucket not given explicitly.
+	if bucket == "" {
+		if p := strings.TrimPrefix(q.Get("path"), "/"); p != "" {
+			if i := strings.IndexByte(p, '/'); i >= 0 {
+				bucket, prefix = p[:i], p[i+1:]
+			} else {
+				bucket = p
+			}
+		}
+	}
+	if bucket == "" {
+		writeErr(w, http.StatusBadRequest, "bucket required")
+		return
+	}
+
+	// Sort: a bare field ("name"|"size"|"modified"|"type") is combined with
+	// `direction` (asc|desc) into the explorer.Sort* form. A value already
+	// carrying an _asc/_desc suffix passes through; empty stays empty (the
+	// service defaults to name asc).
+	sort := q.Get("sort")
+	if sort != "" && !strings.HasSuffix(sort, "_asc") && !strings.HasSuffix(sort, "_desc") {
+		dir := q.Get("direction")
+		if dir == "" {
+			dir = "asc"
+		}
+		sort = sort + "_" + dir
+	}
+
+	listing, err := a.explorer.ListDir(r.Context(), bucket, prefix,
+		q.Get("search"), sort, q.Get("cursor"), intParam(r, "limit", explorer.DefaultPageSize))
+	if err != nil {
+		writeErr(w, http.StatusInternalServerError, err.Error())
+		return
+	}
+
+	type folderJSON struct {
+		Name string `json:"name"`
+		Path string `json:"path"`
+	}
+	type fileJSON struct {
+		Name        string `json:"name"`
+		Key         string `json:"key"`
+		Size        int64  `json:"size"`
+		Modified    string `json:"modified"`
+		Format      string `json:"format"`
+		Compression string `json:"compression"`
+	}
+	type listResponse struct {
+		Bucket     string       `json:"bucket"`
+		Prefix     string       `json:"prefix"`
+		Folders    []folderJSON `json:"folders"`
+		Files      []fileJSON   `json:"files"`
+		Cursor     string       `json:"cursor"`
+		NextCursor string       `json:"nextCursor"`
+		HasMore    bool         `json:"hasMore"`
+		TotalKnown *int64       `json:"totalKnown"`
+	}
+
+	resp := listResponse{
+		Bucket:     listing.Bucket,
+		Prefix:     listing.Prefix,
+		Folders:    make([]folderJSON, 0, len(listing.Folders)),
+		Files:      make([]fileJSON, 0, len(listing.Files)),
+		Cursor:     listing.Cursor,
+		NextCursor: listing.NextCursor,
+		HasMore:    listing.HasMore,
+		TotalKnown: nil,
+	}
+	for _, f := range listing.Folders {
+		resp.Folders = append(resp.Folders, folderJSON{Name: f.Name, Path: f.Path})
+	}
+	for _, f := range listing.Files {
+		resp.Files = append(resp.Files, fileJSON{
+			Name:        f.Name,
+			Key:         f.Key,
+			Size:        f.Size,
+			Modified:    f.Modified.Format(time.RFC3339),
+			Format:      string(f.Format),
+			Compression: string(f.Compression),
+		})
+	}
+	writeJSON(w, http.StatusOK, resp)
 }
 
 func (a *API) crawlDirectory(w http.ResponseWriter, r *http.Request) {
@@ -403,67 +435,12 @@ func (a *API) previewDataset(w http.ResponseWriter, r *http.Request) {
 		writeErr(w, http.StatusNotFound, "dataset not found")
 		return
 	}
-	res, err := a.preview.PreviewDataset(r.Context(), ds.BucketName, ds.Path, ds.Format, intParam(r, "limit", 100))
+	res, err := a.preview.PreviewDataset(r.Context(), ds.BucketName, ds.Path, ds.Format, a.store.SampleObjectKey(r.Context(), ds), intParam(r, "limit", 100))
 	if err != nil {
 		writeErr(w, http.StatusBadRequest, err.Error())
 		return
 	}
 	writeJSON(w, http.StatusOK, res)
-}
-
-func (a *API) runSQL(w http.ResponseWriter, r *http.Request) {
-	var body struct {
-		SQL   string `json:"sql"`
-		Limit int    `json:"limit"`
-	}
-	if err := json.NewDecoder(r.Body).Decode(&body); err != nil || body.SQL == "" {
-		writeErr(w, http.StatusBadRequest, "sql required")
-		return
-	}
-	res, err := a.preview.RunSQL(r.Context(), body.SQL, body.Limit)
-	if err != nil {
-		writeErr(w, http.StatusBadRequest, err.Error())
-		return
-	}
-	writeJSON(w, http.StatusOK, res)
-}
-
-func (a *API) listRuns(w http.ResponseWriter, r *http.Request) {
-	runs, err := a.store.ListCrawlerRuns(r.Context(), r.URL.Query().Get("bucket_id"), intParam(r, "limit", 50))
-	writeOrErr(w, runs, err)
-}
-
-func (a *API) getLineage(w http.ResponseWriter, r *http.Request) {
-	nodes, edges, err := a.lineage.Graph(r.Context())
-	if err != nil {
-		writeErr(w, http.StatusInternalServerError, err.Error())
-		return
-	}
-	writeJSON(w, http.StatusOK, map[string]any{"nodes": nodes, "edges": edges})
-}
-
-func (a *API) search(w http.ResponseWriter, r *http.Request) {
-	res, err := a.store.Search(r.Context(), r.URL.Query().Get("q"), intParam(r, "limit", 20))
-	writeOrErr(w, res, err)
-}
-
-func (a *API) statistics(w http.ResponseWriter, r *http.Request) {
-	dash, err := a.store.Dashboard(r.Context())
-	if err != nil {
-		writeErr(w, http.StatusInternalServerError, err.Error())
-		return
-	}
-	formats, _ := a.store.FormatBreakdown(r.Context())
-	writeJSON(w, http.StatusOK, map[string]any{"dashboard": dash, "formats": formats})
-}
-
-func (a *API) listEvents(w http.ResponseWriter, r *http.Request) {
-	evs, err := a.store.ListEvents(r.Context(), r.URL.Query().Get("type"), intParam(r, "limit", 100))
-	writeOrErr(w, evs, err)
-}
-
-func (a *API) listAgents(w http.ResponseWriter, r *http.Request) {
-	writeJSON(w, http.StatusOK, a.agents.Info())
 }
 
 // ---- helpers -------------------------------------------------------------

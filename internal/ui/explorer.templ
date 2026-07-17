@@ -5,43 +5,73 @@ import "github.com/apexion/apexion/internal/explorer"
 templ ExplorerPage(vm ExplorerVM) {
 	@Layout("explorer", "Explorer") {
 		<div class="grid grid-cols-1 lg:grid-cols-4 gap-4">
-			<div class="card p-3 lg:col-span-1 h-fit">
-				@connectionSwitcher(vm)
-				<div class="text-xs uppercase tracking-wider text-slate-500 px-2 mb-2 mt-3">Open a bucket</div>
-				<form method="get" action="/explorer" class="px-1 mb-3">
-					<div class="flex gap-1.5">
-						<input
-							name="bucket"
-							value={ vm.Bucket }
-							placeholder="bucket name…"
-							class="flex-1 min-w-0 px-2.5 py-1.5 rounded-lg bg-base-950 border border-base-800 text-sm text-slate-200 placeholder-slate-500 focus:outline-none focus:ring-2 focus:ring-brand-500/40"
-						/>
-						<button type="submit" class="btn-primary !px-2.5" title="Open">→</button>
-					</div>
-				</form>
-				<div class="flex items-center justify-between px-2 mb-2">
-					<span class="text-xs uppercase tracking-wider text-slate-500">Buckets</span>
-					if !vm.ServerListOK {
-						<span class="badge bg-accent-amber/15 text-accent-amber" title="ListAllMyBuckets is not permitted for these credentials">restricted</span>
-					}
+			// Collapsible bucket sidebar. Collapsed state is persisted in
+			// localStorage (key "explorer.sidebar.collapsed") and re-applied on
+			// load by the inline script below, so it survives navigation.
+			<div id="explorer-sidebar" class="card p-3 lg:col-span-1 h-fit" data-collapsible>
+				<div class="flex items-center justify-between px-1 mb-3">
+					<span class="eyebrow">Explorer</span>
+					<button
+						type="button"
+						data-sidebar-toggle
+						aria-controls="explorer-sidebar-body"
+						aria-expanded="true"
+						title="Collapse sidebar"
+						class="grid place-items-center w-6 h-6 rounded text-slate-500 hover:bg-base-800 hover:text-slate-200"
+					>
+						<span data-sidebar-caret>«</span>
+					</button>
 				</div>
-				if !vm.ServerListOK {
-					<p class="text-[11px] text-slate-500 px-2 mb-2 leading-snug">
-						Can't list all buckets (missing <span class="font-mono">s3:ListAllMyBuckets</span>). Type a bucket name above to browse one you have access to.
-					</p>
-				}
-				<div class="space-y-0.5">
-					if len(vm.Buckets) == 0 {
-						<p class="text-sm text-slate-500 px-2">No buckets to show yet — open one by name above.</p>
+				<div id="explorer-sidebar-body">
+					@connectionSwitcher(vm)
+					<div class="eyebrow px-2 mb-2 mt-4">Open a bucket</div>
+					<form method="get" action="/explorer" class="px-1 mb-3">
+						<div class="flex gap-1.5">
+							<input
+								name="bucket"
+								value={ vm.Bucket }
+								placeholder="bucket name…"
+								class="flex-1 min-w-0 px-2.5 py-1.5 rounded-lg bg-base-950 border border-base-800 text-sm text-slate-200 placeholder-slate-500 focus:outline-none focus:ring-2 focus:ring-brand-500/40"
+							/>
+							<button type="submit" class="btn-primary !px-2.5" title="Open">→</button>
+						</div>
+					</form>
+					<div class="flex items-center justify-between px-2 mb-2">
+						<span class="eyebrow">Buckets</span>
+						if !vm.ServerListOK {
+							<span class="badge bg-accent-amber/15 text-accent-amber" title="ListAllMyBuckets is not permitted for these credentials">restricted</span>
+						}
+					</div>
+					if !vm.ServerListOK {
+						<p class="text-[11px] text-slate-500 px-2 mb-2 leading-snug">
+							Can't list all buckets (missing <span class="font-mono">s3:ListAllMyBuckets</span>). Type a bucket name above to browse one you have access to.
+						</p>
 					}
-					for _, b := range vm.Buckets {
+					<div class="space-y-0.5">
+						if len(vm.Buckets) == 0 {
+							<p class="text-sm text-slate-500 px-2">No buckets to show yet — open one by name above.</p>
+						}
+						for _, b := range vm.Buckets {
+							<a
+								href={ templ.SafeURL("/explorer?bucket=" + b) }
+								class={ "flex items-center gap-2 px-2 py-2 rounded-lg text-sm", templ.KV("bg-base-800 text-white", b == vm.Bucket), templ.KV("text-slate-300 hover:bg-base-850", b != vm.Bucket) }
+							>
+								@iconBucket()
+								<span class="truncate flex-1">{ b }</span>
+							</a>
+						}
+					</div>
+					// Bucket paging: the handler caps the rendered rail at
+					// explorer.DefaultBucketPageSize. The full bucket set is already
+					// assembled server-side, so rather than a second round-trip we
+					// link back to /explorer with a larger bucket cap to reveal the
+					// rest — the initial DOM stays capped either way.
+					if vm.TotalBuckets > len(vm.Buckets) {
+						<p class="px-2 mt-1 text-[11px] text-slate-600">Showing { itoa(len(vm.Buckets)) } of { itoa(vm.TotalBuckets) } buckets</p>
 						<a
-							href={ templ.SafeURL("/explorer?bucket=" + b) }
-							class={ "flex items-center gap-2 px-2 py-2 rounded-lg text-sm", templ.KV("bg-base-800 text-white", b == vm.Bucket), templ.KV("text-slate-300 hover:bg-base-850", b != vm.Bucket) }
-						>
-							@iconBucket()
-							<span class="truncate flex-1">{ b }</span>
-						</a>
+							href={ templ.SafeURL(moreBucketsURL(vm)) }
+							class="block mt-1 px-2 py-2 rounded-lg text-xs text-brand-300 hover:bg-base-800 text-center"
+						>Load more buckets ({ itoa(vm.TotalBuckets - len(vm.Buckets)) } more)</a>
 					}
 				</div>
 			</div>
@@ -55,12 +85,258 @@ templ ExplorerPage(vm ExplorerVM) {
 					@breadcrumbs(vm.Bucket, vm.Crumbs)
 					@explorerToolbar(vm.Listing)
 					@explorerFilters(vm.Listing)
-					@DirListing(vm.Listing)
+					@selectionOptionsBar()
+					@DirListing(vm.Listing, vm.Infinite)
 				}
 			</div>
 		</div>
 		<div id="toast-slot"></div>
+		// Footer selection bar (populated by the selection script when files are
+		// picked). Reserve bottom space so the fixed bar never covers the last row.
+		<div id="selection-bar"></div>
+		<div id="selection-spacer" class="h-0"></div>
+		@explorerSidebarScript()
+		@selectionScript()
 	}
+}
+
+// selectionScript implements multi-file selection entirely client-side (only
+// htmx.min.js is loaded). A JS Set of composite keys is the source of truth, so
+// selection survives HTMX load-more row swaps; every change is debounced and
+// POSTed to /ui/selection, which starts background schema discovery and returns
+// the footer bar. Keyboard: Escape clears, Cmd/Ctrl+A selects the visible files,
+// double-click still opens the single-file preview.
+templ selectionScript() {
+	// Checkboxes are hidden until multi-select mode is on (the "Select files"
+	// toolbar button); the row link is disabled in that mode so a click selects.
+	<style>
+		#explorer-rows .sel-check { display: none; }
+		#explorer-rows.select-mode .sel-check { display: inline-block; }
+		#explorer-rows.select-mode [data-file-row] a { pointer-events: none; }
+		#explorer-rows.select-mode [data-file-row] { cursor: pointer; }
+	</style>
+	<script>
+		(function () {
+			var sel = new Map();          // key -> {bucket,key,format,size}
+			var token = "";               // server session token
+			var rows = document.getElementById("explorer-rows");
+			if (!rows) return;
+			var bar = document.getElementById("selection-bar");
+			var spacer = document.getElementById("selection-spacer");
+			var timer = null;
+
+			// ---- multi-select mode ------------------------------------------
+			function setMode(on) {
+				rows.classList.toggle("select-mode", on);
+				var opts = document.getElementById("selection-opts");
+				if (opts) opts.classList.toggle("hidden", !on);
+				var btn = document.querySelector("[data-multiselect-toggle]");
+				if (btn) {
+					btn.setAttribute("aria-pressed", on ? "true" : "false");
+					btn.classList.toggle("btn-primary", on);
+					btn.classList.toggle("btn-ghost", !on);
+					var lbl = btn.querySelector("[data-multiselect-label]");
+					if (lbl) lbl.textContent = on ? "Selecting…" : "Select files";
+				}
+				if (!on) clearSelection();
+			}
+			function clearSelection() {
+				sel.clear();
+				visibleChecks().forEach(function (cb) { cb.checked = false; });
+				reflectSpacer();
+				if (token) {
+					htmx.ajax("POST", "/ui/selection/clear", { target: "#selection-bar", swap: "outerHTML", values: { token: token } });
+					token = "";
+				}
+			}
+
+			// readOpts gathers the multi-file reader options from the explorer
+			// options strip so they ride along with every selection POST and drive
+			// the background schema discovery (e.g. header=false).
+			function readOpts() {
+				var o = {};
+				document.querySelectorAll("#selection-opts [data-sel-opt]").forEach(function (cb) {
+					o[cb.getAttribute("data-sel-opt")] = cb.checked ? "on" : "";
+				});
+				return o;
+			}
+			function post() {
+				var files = [];
+				sel.forEach(function (v) { files.push(v); });
+				var vals = { token: token, files: JSON.stringify(files) };
+				var o = readOpts();
+				for (var k in o) vals[k] = o[k];
+				htmx.ajax("POST", "/ui/selection", {
+					target: "#selection-bar",
+					swap: "outerHTML",
+					values: vals
+				});
+			}
+			function schedule() {
+				if (timer) clearTimeout(timer);
+				timer = setTimeout(post, 250);
+			}
+			function reflectSpacer() {
+				if (spacer) spacer.style.height = sel.size > 0 ? "72px" : "0px";
+			}
+			function setChecked(cb, on) {
+				cb.checked = on;
+				var k = cb.getAttribute("data-file");
+				if (on) {
+					sel.set(k, {
+						bucket: cb.getAttribute("data-bucket"),
+						key: cb.getAttribute("data-key"),
+						format: cb.getAttribute("data-format"),
+						size: parseInt(cb.getAttribute("data-size") || "0", 10)
+					});
+				} else {
+					sel.delete(k);
+				}
+			}
+			function visibleChecks() { return rows.querySelectorAll("input.sel-check"); }
+
+			// Re-apply the Set to any freshly swapped-in rows (load more / filter).
+			function restore() {
+				visibleChecks().forEach(function (cb) {
+					cb.checked = sel.has(cb.getAttribute("data-file"));
+				});
+			}
+
+			// Delegated change: a checkbox toggled.
+			rows.addEventListener("change", function (e) {
+				var cb = e.target.closest("input.sel-check");
+				if (!cb) return;
+				setChecked(cb, cb.checked);
+				reflectSpacer();
+				schedule();
+			});
+			// Changing a reader option re-runs discovery with the new options.
+			var optsEl = document.getElementById("selection-opts");
+			if (optsEl) optsEl.addEventListener("change", function () {
+				if (sel.size > 0) post();
+			});
+			// Double-click a row → open single preview (the <a> handles it; just
+			// don't let a stray text selection interfere).
+			// Shift-click range selection between two checkboxes.
+			var lastIdx = -1;
+			rows.addEventListener("click", function (e) {
+				var cb = e.target.closest("input.sel-check");
+				if (!cb) return;
+				var checks = Array.prototype.slice.call(visibleChecks());
+				var idx = checks.indexOf(cb);
+				if (e.shiftKey && lastIdx >= 0 && idx >= 0) {
+					var lo = Math.min(lastIdx, idx), hi = Math.max(lastIdx, idx);
+					for (var i = lo; i <= hi; i++) setChecked(checks[i], cb.checked);
+					reflectSpacer();
+					schedule();
+				}
+				lastIdx = idx;
+			});
+
+			document.addEventListener("click", function (e) {
+				// Toolbar "Select files" toggle.
+				var mt = e.target.closest("[data-multiselect-toggle]");
+				if (mt) {
+					e.preventDefault();
+					setMode(!rows.classList.contains("select-mode"));
+					return;
+				}
+				// In select mode, a click anywhere on a row toggles its checkbox
+				// (the row link is disabled via CSS). Checkbox clicks fall through to
+				// the native change handler.
+				if (rows.classList.contains("select-mode") && !e.target.closest("input.sel-check")) {
+					var row = e.target.closest("[data-file-row]");
+					if (row && rows.contains(row)) {
+						var rcb = row.querySelector("input.sel-check");
+						if (rcb) {
+							setChecked(rcb, !rcb.checked);
+							reflectSpacer();
+							schedule();
+							return;
+						}
+					}
+				}
+				// Remove-from-details (dialog lives in the bar).
+				var btn = e.target.closest("[data-sel-remove]");
+				if (btn) {
+					var k = btn.getAttribute("data-sel-remove");
+					sel.delete(k);
+					visibleChecks().forEach(function (cb) {
+						if (cb.getAttribute("data-file") === k) cb.checked = false;
+					});
+					reflectSpacer();
+					post();
+					return;
+				}
+				// Open the floating preview dialog and lazy-load its body.
+				var pv = e.target.closest("[data-sel-preview-open]");
+				if (pv) {
+					var t = pv.getAttribute("data-sel-preview-open");
+					var dlg = document.getElementById("sel-preview");
+					if (dlg) {
+						dlg.showModal();
+						htmx.ajax("GET", "/ui/selection/preview?token=" + encodeURIComponent(t), { target: "#sel-preview-body", swap: "innerHTML" });
+					}
+				}
+			});
+
+			// After any HTMX swap into the rows (load more) re-apply checkboxes; and
+			// capture the token the bar reports so the next POST reuses the session.
+			document.body.addEventListener("htmx:afterSwap", function (e) {
+				if (e.target && e.target.id === "explorer-rows") restore();
+				if (rows.contains(e.target)) restore();
+				// #selection-bar is replaced by outerHTML swaps, so re-query by id.
+				var b = document.getElementById("selection-bar");
+				var holder = b && b.querySelector("[data-sel-token]");
+				if (holder) token = holder.getAttribute("data-sel-token");
+			});
+
+			// Keyboard shortcuts (ignore when typing in an input/textarea).
+			document.addEventListener("keydown", function (e) {
+				var tag = (e.target.tagName || "").toLowerCase();
+				var typing = tag === "input" || tag === "textarea" || tag === "select";
+				if (e.key === "Escape" && rows.classList.contains("select-mode")) {
+					setMode(false); // exit multi-select and clear
+					return;
+				}
+				if ((e.metaKey || e.ctrlKey) && (e.key === "a" || e.key === "A") && !typing && rows.classList.contains("select-mode")) {
+					e.preventDefault();
+					visibleChecks().forEach(function (cb) { setChecked(cb, true); });
+					reflectSpacer();
+					schedule();
+				}
+			});
+		})();
+	</script>
+}
+
+// explorerSidebarScript toggles the bucket sidebar and persists the collapsed
+// state in localStorage so it survives full-page navigation.
+templ explorerSidebarScript() {
+	<script>
+		(function () {
+			var KEY = "explorer.sidebar.collapsed";
+			var root = document.getElementById("explorer-sidebar");
+			if (!root) return;
+			var body = document.getElementById("explorer-sidebar-body");
+			var btn = root.querySelector("[data-sidebar-toggle]");
+			var caret = root.querySelector("[data-sidebar-caret]");
+			function apply(collapsed) {
+				if (body) body.style.display = collapsed ? "none" : "";
+				if (caret) caret.textContent = collapsed ? "»" : "«";
+				if (btn) {
+					btn.setAttribute("aria-expanded", collapsed ? "false" : "true");
+					btn.setAttribute("title", collapsed ? "Expand sidebar" : "Collapse sidebar");
+				}
+			}
+			apply(localStorage.getItem(KEY) === "1");
+			if (btn) btn.addEventListener("click", function () {
+				var next = localStorage.getItem(KEY) !== "1";
+				localStorage.setItem(KEY, next ? "1" : "0");
+				apply(next);
+			});
+		})();
+	</script>
 }
 
 // connectionSwitcher lets the user pick the active account without leaving the
@@ -108,11 +384,11 @@ templ connectionSwitcher(vm ExplorerVM) {
 }
 
 templ breadcrumbs(bucket string, crumbs []explorer.Crumb) {
-	<div class="flex items-center gap-1.5 text-sm mb-3 flex-wrap">
-		<a href={ templ.SafeURL("/explorer?bucket=" + bucket) } class="text-brand-300 hover:underline font-medium">{ bucket }</a>
+	<div class="flex items-center gap-1.5 text-sm mb-4 flex-wrap">
+		<a href={ templ.SafeURL("/explorer?bucket=" + bucket) } class="text-brand-300 hover:underline font-medium break-all">{ bucket }</a>
 		for _, c := range crumbs {
 			<span class="text-slate-600">/</span>
-			<a href={ templ.SafeURL("/explorer?bucket=" + bucket + "&prefix=" + c.Path) } class="text-slate-300 hover:text-brand-300">{ c.Name }</a>
+			<a href={ templ.SafeURL("/explorer?bucket=" + bucket + "&prefix=" + c.Path) } class="text-slate-300 hover:text-brand-300 break-all">{ c.Name }</a>
 		}
 	</div>
 }
@@ -131,33 +407,45 @@ templ explorerToolbar(l *explorer.DirListing) {
 				<span class="w-1.5 h-1.5 rounded-full bg-brand-400 animate-pulse"></span> Calculating folder stats…
 			</span>
 		</div>
-		<button
-			class="btn-primary"
-			hx-post="/ui/directories/crawl"
-			hx-vals={ crawlVals(l.Bucket, l.Prefix) }
-			hx-target="#toast-slot"
-			hx-swap="innerHTML"
-		>@iconPlay() Crawl Directory</button>
+		<div class="flex items-center gap-2">
+			<button
+				class="btn-ghost"
+				hx-post="/ui/directories/crawl"
+				hx-vals={ crawlVals(l.Bucket, l.Prefix) }
+				hx-target="#toast-slot"
+				hx-swap="innerHTML"
+			>@iconPlay() Quick crawl</button>
+			<a class="btn-primary" href={ templ.SafeURL("/wizard?bucket=" + l.Bucket + "&prefix=" + l.Prefix) }>@iconInbox() Crawl Dataset</a>
+		</div>
 	</div>
 }
 
 // explorerFilters is a GET form: filter the current folder by name prefix
 // (server-side) and choose the sort order.
 templ explorerFilters(l *explorer.DirListing) {
-	<form method="get" action="/explorer" class="flex flex-wrap items-center gap-2 mb-3">
+	<form method="get" action="/explorer" class="flex flex-wrap items-center gap-2 mb-4">
 		<input type="hidden" name="bucket" value={ l.Bucket }/>
 		<input type="hidden" name="prefix" value={ l.Prefix }/>
 		<div class="relative flex-1 min-w-[200px]">
-			<div class="absolute left-2.5 top-1/2 -translate-y-1/2 text-slate-500">@iconSearch()</div>
+			<div class="absolute left-2.5 top-1/2 -translate-y-1/2 text-slate-500 pointer-events-none">@iconSearch()</div>
 			<input
 				name="search"
 				value={ l.Search }
 				placeholder="filter this folder by name prefix…"
-				class="w-full pl-8 pr-3 py-1.5 rounded-lg bg-base-950 border border-base-800 text-sm text-slate-200 placeholder-slate-500 focus:outline-none focus:ring-2 focus:ring-brand-500/40"
+				class="input !pl-8"
 			/>
 		</div>
-		<select name="sort" onchange="this.form.submit()" class="px-3 py-1.5 rounded-lg bg-base-950 border border-base-800 text-sm text-slate-200 focus:outline-none focus:ring-2 focus:ring-brand-500/40">
+		<select name="sort" onchange="this.form.submit()" class="select !w-auto" aria-label="Sort">
 			for _, o := range sortOptions(l.Sort) {
+				if o.Selected {
+					<option value={ o.Value } selected>{ o.Label }</option>
+				} else {
+					<option value={ o.Value }>{ o.Label }</option>
+				}
+			}
+		</select>
+		<select name="limit" onchange="this.form.submit()" class="select !w-auto" aria-label="Items per page">
+			for _, o := range pageSizeOptions(l.Limit) {
 				if o.Selected {
 					<option value={ o.Value } selected>{ o.Label }</option>
 				} else {
@@ -169,7 +457,37 @@ templ explorerFilters(l *explorer.DirListing) {
 		if l.Search != "" {
 			<a href={ templ.SafeURL("/explorer?bucket=" + l.Bucket + "&prefix=" + l.Prefix) } class="btn-ghost text-sm">Clear</a>
 		}
+		// Toggle multi-select mode: reveals per-row checkboxes so several files can
+		// be opened together. type=button so it never submits the filter form.
+		<button type="button" data-multiselect-toggle aria-pressed="false" class="btn-ghost text-sm inline-flex items-center gap-1.5">
+			@iconCheckSquare()
+			<span data-multiselect-label>Select files</span>
+		</button>
 	</form>
+}
+
+// selectionOptionsBar is the multi-file reader-options strip on the Explorer
+// screen. It is hidden until multi-select mode is on (toggled by the script) and
+// its values are sent with every selection POST, so background schema discovery
+// uses them from the first file — e.g. tick "No header row" to read headerless
+// CSVs with header=false instead of DuckDB auto-detecting (and mis-reading) one.
+templ selectionOptionsBar() {
+	<div id="selection-opts" class="hidden card px-4 py-2.5 mb-4 flex flex-wrap items-center gap-x-5 gap-y-2 text-sm">
+		<span class="eyebrow">Multi-file reader</span>
+		<label class="flex items-center gap-2 cursor-pointer select-none text-slate-300">
+			<input type="checkbox" data-sel-opt="no_header" class="w-4 h-4 rounded accent-brand-500 cursor-pointer"/>
+			No header row <span class="text-slate-500 font-mono text-xs">(header=false)</span>
+		</label>
+		<label class="flex items-center gap-2 cursor-pointer select-none text-slate-300">
+			<input type="checkbox" data-sel-opt="union_by_name" checked class="w-4 h-4 rounded accent-brand-500 cursor-pointer"/>
+			Union by name
+		</label>
+		<label class="flex items-center gap-2 cursor-pointer select-none text-slate-300">
+			<input type="checkbox" data-sel-opt="ignore_errors" class="w-4 h-4 rounded accent-brand-500 cursor-pointer"/>
+			Ignore errors
+		</label>
+		<span class="text-xs text-slate-500 ml-auto">Applies to every selected file</span>
+	</div>
 }
 
 // FolderStats renders the recursive folder summary (HTMX target).
@@ -194,33 +512,93 @@ templ FolderStatsError() {
 	<span class="text-sm text-slate-500">Folder stats unavailable</span>
 }
 
-// DirListing renders folders and files for a prefix (paginated).
-templ DirListing(l *explorer.DirListing) {
-	<div class="card overflow-hidden divide-y divide-base-800">
-		if len(l.Folders) == 0 && len(l.Files) == 0 {
-			<div class="p-8 text-center text-sm text-slate-500">Empty folder.</div>
-		}
-		for _, f := range l.Folders {
-			<a href={ templ.SafeURL("/explorer?bucket=" + l.Bucket + "&prefix=" + f.Path) } class="flex items-center gap-3 px-4 py-2.5 hover:bg-base-850/60">
-				<span class="text-accent-amber">@iconFolder()</span>
-				<span class="text-sm text-slate-200 flex-1 truncate">{ f.Name }</span>
-				<span class="text-xs text-slate-600">folder</span>
-			</a>
-		}
-		for _, file := range l.Files {
-			<a href={ templ.SafeURL(previewURL(l.Bucket, file)) } class="flex items-center gap-3 px-4 py-2.5 hover:bg-base-850/60">
+// DirListing renders folders and files for a prefix (paginated). The rows live
+// inside #explorer-rows; cursor-based "load more" fragments are appended into
+// this same container so the divide styling flows across pages.
+templ DirListing(l *explorer.DirListing, infinite bool) {
+	<div class="card overflow-hidden">
+		<div id="explorer-rows" class="divide-y divide-base-800">
+			if len(l.Folders) == 0 && len(l.Files) == 0 {
+				<div class="p-8 text-center text-sm text-slate-500">Empty folder.</div>
+			}
+			@explorerPageFragment(l, infinite)
+		</div>
+	</div>
+}
+
+// dirRows renders just the folder + file <a> rows for one page. Shared by the
+// initial page and the load-more fragment so appended rows are identical.
+templ dirRows(l *explorer.DirListing) {
+	for _, f := range l.Folders {
+		<a href={ templ.SafeURL("/explorer?bucket=" + l.Bucket + "&prefix=" + f.Path) } class="flex items-center gap-3 px-4 py-2.5 hover:bg-base-850/60">
+			<span class="text-accent-amber">@iconFolder()</span>
+			<span class="text-sm text-slate-200 flex-1 truncate">{ f.Name }</span>
+			<span class="text-xs text-slate-600">folder</span>
+		</a>
+	}
+	for _, file := range l.Files {
+		// A file row: a selection checkbox, the preview link (single-click nav /
+		// double-click preview preserved), the format pill, an out-of-band
+		// compatibility-badge slot, and size/modified. Selection state is tracked
+		// client-side in a JS Set (see selectionScript) so it survives load-more
+		// swaps; the checkbox carries the data the POST needs.
+		<div class="group flex items-center gap-3 px-4 py-2.5 hover:bg-base-850/60 has-[:checked]:bg-brand-500/5" data-file-row>
+			<input
+				type="checkbox"
+				class="sel-check w-4 h-4 rounded accent-brand-500 shrink-0 cursor-pointer"
+				aria-label="Select file"
+				data-file={ selKey(l.Bucket, file.Key, string(file.Format)) }
+				data-bucket={ l.Bucket }
+				data-key={ file.Key }
+				data-format={ string(file.Format) }
+				data-size={ itoa64(file.Size) }
+			/>
+			<a href={ templ.SafeURL(previewURL(l.Bucket, file)) } class="flex items-center gap-3 flex-1 min-w-0">
 				<span class="text-slate-500">@iconFile()</span>
 				<span class="text-sm text-slate-200 flex-1 truncate">{ file.Name }</span>
-				@FormatPill(file.Format)
-				<span class="text-xs text-slate-500 w-20 text-right">{ humanBytes(file.Size) }</span>
-				<span class="text-xs text-slate-600 w-24 text-right hidden sm:block">{ timeAgo(file.Modified) }</span>
 			</a>
-		}
-		if l.Truncated {
-			<div class="flex items-center justify-between px-4 py-3 bg-base-850/50 text-sm">
-				<span class="text-slate-500">Showing first { itoa(len(l.Folders) + len(l.Files)) } items in this folder.</span>
-				<a class="btn-ghost text-xs" href={ templ.SafeURL(loadMoreURL(l)) }>Load more</a>
+			@FormatPill(file.Format)
+			<span id={ rowBadgeID(l.Bucket, file.Key, string(file.Format)) } class="w-4 grid place-items-center"></span>
+			<span class="text-xs text-slate-500 w-20 text-right">{ humanBytes(file.Size) }</span>
+			<span class="text-xs text-slate-600 w-24 text-right hidden sm:block">{ timeAgo(file.Modified) }</span>
+		</div>
+	}
+}
+
+// explorerPageFragment is the unit returned by the /ui/partials/explorer-page
+// route: the rows for a freshly fetched page PLUS a new #load-more sentinel that
+// carries the next cursor. Swapped via hx-swap="outerHTML" onto the OLD
+// #load-more, so the new rows + sentinel replace only the sentinel — existing
+// DOM rows are never re-rendered, which is why scroll position and any in-page
+// selection are inherently preserved across load-more.
+templ explorerPageFragment(l *explorer.DirListing, infinite bool) {
+	@dirRows(l)
+	if l.HasMore {
+		if infinite {
+			// Infinite scroll: fetch the next page automatically once the sentinel
+			// scrolls into view.
+			<div
+				id="load-more"
+				hx-get={ explorerPageURL(l, true) }
+				hx-target="#load-more"
+				hx-swap="outerHTML"
+				hx-trigger="revealed"
+				class="px-4 py-3 bg-base-850/50 text-sm text-slate-500 text-center"
+			>
+				<span class="inline-flex items-center gap-2">
+					<span class="w-1.5 h-1.5 rounded-full bg-brand-400 animate-pulse"></span> Loading more…
+				</span>
+			</div>
+		} else {
+			// Default UX: a Load More button (hx-trigger defaults to click).
+			<div id="load-more" class="flex items-center justify-center px-4 py-3 bg-base-850/50 text-sm">
+				<button
+					class="btn-ghost text-xs"
+					hx-get={ explorerPageURL(l, false) }
+					hx-target="#load-more"
+					hx-swap="outerHTML"
+				>Load more</button>
 			</div>
 		}
-	</div>
+	}
 }

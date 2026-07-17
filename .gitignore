@@ -1,12 +1,19 @@
-# Binaries & tools
+# Build output
 /bin/
-apexion
-seed
+/dist/
+/apexion
+/seed
 
 # Local catalog / data
 /data/*.duckdb
 *.duckdb
 *.duckdb.wal
+
+# Local environment overrides
+/.env
+
+# Scratch
+/tmp/
 
 # OS / editor
 .DS_Store
@@ -16,4 +23,3 @@ seed
 
 # Note: generated *_templ.go and assets/css/app.css ARE committed so the
 # project builds without the templ/tailwind toolchains.
-tmp/

@@ -9,20 +9,24 @@ import (
 
 	"github.com/rs/zerolog"
 
-	"github.com/apexion/apexion/internal/agents"
 	"github.com/apexion/apexion/internal/api"
 	"github.com/apexion/apexion/internal/catalog"
+	"github.com/apexion/apexion/internal/catalog/discovery"
+	"github.com/apexion/apexion/internal/catalog/virtualpath"
 	"github.com/apexion/apexion/internal/config"
 	"github.com/apexion/apexion/internal/connections"
 	"github.com/apexion/apexion/internal/crawler"
 	"github.com/apexion/apexion/internal/events"
 	"github.com/apexion/apexion/internal/explorer"
 	"github.com/apexion/apexion/internal/httpserver"
-	"github.com/apexion/apexion/internal/inference"
 	"github.com/apexion/apexion/internal/jobs"
-	"github.com/apexion/apexion/internal/lineage"
 	"github.com/apexion/apexion/internal/model"
-	"github.com/apexion/apexion/internal/preview"
+	// plugins blank-imports every capability compiled into this binary so it
+	// self-registers with package features before the graph is built. Build
+	// tags on that package decide which optional readers/resolvers are present.
+	"github.com/apexion/apexion/internal/duckdb"
+	_ "github.com/apexion/apexion/internal/plugins"
+	"github.com/apexion/apexion/internal/selection"
 	"github.com/apexion/apexion/internal/storage"
 	"github.com/apexion/apexion/internal/ui"
 	"github.com/apexion/apexion/pkg/logger"
@@ -37,17 +41,16 @@ type App struct {
 	Connections *connections.Manager
 	Crawler     *crawler.Crawler
 	Catalog     *catalog.Service
-	Lineage     *lineage.Service
 	Jobs        *jobs.Manager
 	Scheduler   *jobs.Scheduler
-	Agents      *agents.Registry
-	Preview     *preview.Engine
+	Preview     *duckdb.Engine
 	Explorer    *explorer.Service
+	Selection   *selection.SelectionService
 	Server      *httpserver.Server
 }
 
-// Build constructs the full application graph from configuration.
-func Build(ctx context.Context, cfg *config.Config) (*App, error) {
+// New constructs the full application graph from configuration.
+func New(ctx context.Context, cfg *config.Config) (*App, error) {
 	log := logger.New(cfg.Log.Level, cfg.Log.Pretty)
 
 	store, err := storage.Open(cfg.Storage.Path, cfg.Storage.MaxOpenConns, log)
@@ -64,7 +67,7 @@ func Build(ctx context.Context, cfg *config.Config) (*App, error) {
 	// seeds a default connection (from static config), tracks the active one,
 	// hands out the active S3 client, and reconfigures the preview engine on
 	// switch. Everything downstream depends on the active connection.
-	prev, err := preview.New(cfg.MinIO, log)
+	prev, err := duckdb.New(cfg.MinIO, log)
 	if err != nil {
 		return nil, err
 	}
@@ -75,45 +78,35 @@ func Build(ctx context.Context, cfg *config.Config) (*App, error) {
 
 	registry := crawler.DefaultRegistry()
 	resolvers := crawler.DefaultResolvers()
-	cr := crawler.New(store, conns, registry, resolvers, bus, cfg.Crawler, log)
+	disp := discovery.New(cfg.Catalog.Discovery.Strategy, cfg.Catalog.VirtualPartitionPrefix, cfg.Catalog.VirtualPartitionSeparator)
+	cr := crawler.New(store, conns, registry, resolvers, disp, bus, cfg.Crawler, log)
 
-	engine := inference.NewEngine()
 	jobMgr := jobs.NewManager(store, log, cfg.Crawler.Workers)
 
-	cat := catalog.New(store, conns, cr, engine, jobMgr, bus, cfg.Inference, log)
+	vpath := virtualpath.New(cfg.Catalog.VirtualPartitionPrefix, cfg.Catalog.VirtualPartitionSeparator)
+	cat := catalog.New(store, conns, cr, jobMgr, bus, prev, vpath, log)
 	cat.PersistEvents(bus)
-
-	lin := lineage.New(store, log)
-	lin.Subscribe(bus)
-
-	provider := buildProvider(cfg)
-	agentReg := agents.NewRegistry(provider, store, bus, log)
+	// Recreate registered catalog views in the (in-memory) query engine.
+	cat.RecreateViews(ctx)
 
 	sched := jobs.NewScheduler(store, cat, log)
 
 	expl := explorer.New(conns)
 
-	apiH := api.New(cat, lin, agentReg, prev, expl, conns, log)
-	uiH := ui.New(cat, lin, agentReg, prev, expl, conns, cfg, log)
+	// The selection service backs the multi-file "smart preview": it runs
+	// background schema discovery over the preview engine and lives for the
+	// process (ctx is the signal-scoped root), reaping idle sessions.
+	sel := selection.New(ctx, prev, log)
+
+	apiH := api.New(cat, prev, expl, conns, log)
+	uiH := ui.New(cat, prev, expl, conns, sel, cfg, log)
 	srv := httpserver.New(cfg.Server, apiH, uiH, log)
 
 	return &App{
 		Cfg: cfg, Log: log, Store: store, Bus: bus, Connections: conns, Crawler: cr,
-		Catalog: cat, Lineage: lin, Jobs: jobMgr, Scheduler: sched,
-		Agents: agentReg, Preview: prev, Explorer: expl, Server: srv,
+		Catalog: cat, Jobs: jobMgr, Scheduler: sched,
+		Preview: prev, Explorer: expl, Selection: sel, Server: srv,
 	}, nil
-}
-
-func buildProvider(cfg *config.Config) agents.Provider {
-	if !cfg.Agents.Enabled {
-		return agents.NewProvider(agents.Config{Provider: "noop"})
-	}
-	return agents.NewProvider(agents.Config{
-		Provider: cfg.Agents.Provider,
-		BaseURL:  cfg.Agents.LLM.BaseURL,
-		APIKey:   cfg.Agents.LLM.APIKey,
-		Model:    cfg.Agents.LLM.Model,
-	})
 }
 
 // Serve starts the scheduler and HTTP server and blocks until the context is
@@ -149,6 +142,9 @@ func (a *App) Shutdown() error {
 	}
 	a.Scheduler.Stop()
 	a.Jobs.Shutdown(shutCtx)
+	if a.Selection != nil {
+		a.Selection.Close()
+	}
 	a.Bus.Close()
 	if a.Preview != nil {
 		_ = a.Preview.Close()

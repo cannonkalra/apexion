@@ -1,0 +1,212 @@
+package ui
+
+import "fmt"
+
+var wizardStepNames = []string{"Source", "Analyze", "Review", "Register", "Done"}
+
+// WizardPage is the full-page Crawl → Analyze → Review → Register wizard.
+templ WizardPage(vm WizardVM) {
+	@Layout("wizard", "Crawl Dataset") {
+		<div class="max-w-5xl mx-auto">
+			<div id="wizard-body">
+				@WizardStep1(vm)
+			</div>
+		</div>
+	}
+}
+
+// ---- Step 1: Source ------------------------------------------------------
+templ WizardStep1(vm WizardVM) {
+	@WizardShell(0, "Select source", "Choose the storage directory to crawl into a dataset.") {
+		<div class="space-y-5">
+			@ErrorBanner(vm.Error)
+			<form hx-post="/ui/wizard/crawl" hx-target="#wizard-body" hx-swap="innerHTML" class="space-y-6">
+				<div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+					<div>
+						<label class="form-label">Bucket</label>
+						<input name="bucket" value={ vm.Bucket } placeholder="bucket" class="input"/>
+					</div>
+					<div>
+						<label class="form-label">Directory (prefix)</label>
+						<input name="prefix" value={ vm.Prefix } placeholder="path/to/dir/" class="input"/>
+					</div>
+					<div>
+						<label class="form-label">Glob pattern</label>
+						<input name="glob" placeholder="**/*  (auto)" class="input"/>
+					</div>
+					<div>
+						<label class="form-label">Ignore patterns</label>
+						<input name="ignore" placeholder="_tmp/, .checkpoint" class="input"/>
+					</div>
+				</div>
+				<div class="flex flex-wrap items-center gap-4">
+					<label class="check-row"><input type="checkbox" name="recursive" checked class="check"/> Recursive</label>
+					<label class="check-row"><input type="checkbox" name="include_hidden" class="check"/> Include hidden</label>
+				</div>
+				@ActionBar() {
+					<a class="btn-ghost" href="/explorer">Cancel</a>
+					<button class="btn-primary" type="submit">@iconPlay() Next</button>
+				}
+			</form>
+		</div>
+	}
+}
+
+// ---- Step 2: Analyze (streaming progress) --------------------------------
+templ WizardStep2Progress(vm WizardVM) {
+	<div
+		hx-get={ wizardProgressURL(vm) }
+		hx-trigger="load delay:1200ms"
+		hx-target="#wizard-body"
+		hx-swap="innerHTML"
+	>
+		@WizardShell(1, "Analyzing", "Crawling "+vm.Bucket+"/"+vm.Prefix+" — discovering files, schema and partitions.") {
+			if vm.Job != nil {
+				@ProgressBar(vm.Job.Progress)
+				<div class="mt-3 text-sm text-slate-400">{ wizardJobMessage(vm.Job) }</div>
+			} else {
+				@ProgressBar(0.02)
+				<div class="mt-3 text-sm text-slate-400">Starting…</div>
+			}
+			<div class="mt-4 text-xs text-slate-600">This runs in the background — progress updates automatically.</div>
+		}
+	</div>
+}
+
+// ---- Step 3: Review ------------------------------------------------------
+templ WizardStep3(vm WizardVM) {
+	@WizardShell(2, "Review dataset", "Discovered metadata for "+vm.Detail.Dataset.Name+".") {
+		<div class="grid grid-cols-2 md:grid-cols-4 gap-3 mb-6">
+			@miniStat("Format", string(vm.Detail.Dataset.Format))
+			@miniStat("Files", fmt.Sprintf("%d", vm.Detail.Dataset.FileCount))
+			@miniStat("Size", humanBytes(vm.Detail.Dataset.TotalSize))
+			@miniStat("Est. rows", humanCount(vm.Detail.Dataset.RowCount))
+			@miniStat("Columns", fmt.Sprintf("%d", columnCount(vm.Detail)))
+			@miniStat("Partitions", fmt.Sprintf("%d", len(vm.Detail.Partitions)))
+			@miniStat("Compression", string(vm.Detail.Dataset.Compression))
+			@miniStat("Location", vm.Detail.Dataset.BucketName+"/"+vm.Detail.Dataset.Path)
+		</div>
+		<details open>
+			<summary class="text-sm text-slate-300 cursor-pointer mb-3">Detected schema</summary>
+			if vm.Detail.Schema == nil || len(vm.Detail.Schema.Columns) == 0 {
+				<p class="text-sm text-slate-500">No schema inferred.</p>
+			} else {
+				@schemaTable(vm.Detail.Schema)
+			}
+		</details>
+		@ActionBar() {
+			<form hx-post="/ui/wizard/skip" hx-target="#wizard-body" hx-swap="innerHTML">
+				<input type="hidden" name="dataset_id" value={ vm.Detail.Dataset.ID }/>
+				<button class="btn-ghost" type="submit">Skip registration</button>
+			</form>
+			<form hx-post="/ui/wizard/register-form" hx-target="#wizard-body" hx-swap="innerHTML">
+				<input type="hidden" name="dataset_id" value={ vm.Detail.Dataset.ID }/>
+				<button class="btn-primary" type="submit">@iconTable() Register as table</button>
+			</form>
+		}
+	}
+}
+
+// ---- Step 4: Register ----------------------------------------------------
+templ WizardStep4(vm WizardVM) {
+	@WizardShell(3, "Register as SQL table", "Exposes "+vm.Detail.Dataset.Name+" as a DuckDB view — no data is copied.") {
+		<div class="space-y-5">
+			@ErrorBanner(vm.Error)
+			<form hx-post="/ui/wizard/register" hx-target="#wizard-body" hx-swap="innerHTML" class="space-y-8">
+				<input type="hidden" name="dataset_id" value={ vm.Detail.Dataset.ID }/>
+				@FormSection("Table information", "How this dataset is exposed as a SQL table.") {
+					<div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+						<div>
+							<label class="form-label">Table name</label>
+							<input name="name" value={ vm.Suggested } required pattern="[A-Za-z_][A-Za-z0-9_]*" class="input font-mono"/>
+							<p class="form-help">Letters, digits, underscore — must not start with a digit.</p>
+						</div>
+						<div>
+							<label class="form-label">Schema strategy</label>
+							<select name="schema_strategy" class="select">
+								<option value="union">Union — merge compatible files (default)</option>
+								<option value="strict">Strict — require identical schemas</option>
+								<option value="latest">Latest — use the newest file's schema</option>
+							</select>
+						</div>
+					</div>
+					<div>
+						<label class="form-label">Description (optional)</label>
+						<input name="description" placeholder="What this table contains" class="input"/>
+					</div>
+				}
+				@FormSection("Read options", "How the underlying files are parsed. Sensible defaults are pre-selected.") {
+					<div class="grid grid-cols-1 md:grid-cols-2 gap-3">
+						<label class="check-row"><input type="checkbox" name="opt_filename" checked class="check"/> Add filename column</label>
+						<label class="check-row"><input type="checkbox" name="opt_union" checked class="check"/> Union by column name</label>
+					</div>
+					<div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+						<div>
+							<label class="form-label">Header (CSV)</label>
+							<select name="opt_header" class="select">
+								<option value="auto">Auto-detect (default)</option>
+								<option value="present">Has header row</option>
+								<option value="none">No header row</option>
+							</select>
+						</div>
+						<div>
+							<label class="form-label">Sample size (CSV)</label>
+							<input name="opt_sample_size" placeholder="1000" pattern="-?[0-9]+" class="input font-mono"/>
+							<p class="form-help">Rows scanned for type inference. Empty = default; -1 = scan all.</p>
+						</div>
+					</div>
+					<label class="check-row"><input type="checkbox" name="opt_ignore_errors" class="check"/> Ignore malformed rows</label>
+				}
+				@ActionBar() {
+					<button
+						type="button"
+						class="btn-ghost"
+						hx-post="/ui/wizard/skip"
+						hx-vals={ wizardSkipVals(vm.Detail.Dataset.ID) }
+						hx-target="#wizard-body"
+						hx-swap="innerHTML"
+					>Skip</button>
+					<button class="btn-primary" type="submit">@iconTable() Register</button>
+				}
+			</form>
+		</div>
+	}
+}
+
+// ---- Step 5: Finish ------------------------------------------------------
+templ WizardStep5(vm WizardVM) {
+	@WizardShell(4, "Done", "") {
+		<div class="text-center py-2">
+			<div class="grid place-items-center w-12 h-12 rounded-full bg-accent-emerald/15 text-accent-emerald mx-auto mb-4">@iconEye()</div>
+			<div class="text-sm text-slate-400 space-y-1 mb-6">
+				<div>✓ Dataset created</div>
+				if vm.Entry != nil {
+					<div>✓ Catalog entry created — <span class="font-mono text-slate-200">{ vm.Entry.Name }</span></div>
+					<div>✓ DuckDB view created</div>
+				} else {
+					<div class="text-slate-500">Dataset was not registered as a table.</div>
+				}
+			</div>
+			<div class="flex items-center justify-center gap-2 flex-wrap">
+				if vm.Detail != nil {
+					<a class="btn-ghost" href={ templ.SafeURL("/datasets/" + vm.Detail.Dataset.ID) }>Open dataset</a>
+				}
+				if vm.Entry != nil {
+					<a class="btn-ghost" href="/catalog">Open catalog</a>
+					<a class="btn-primary" href={ templ.SafeURL("/query?table=" + vm.Entry.Name) }>@iconTerminal() Query table</a>
+				}
+				<a class="btn-ghost" href="/datasets">Done</a>
+			</div>
+		</div>
+	}
+}
+
+templ WizardError(msg string) {
+	<div class="card p-6 space-y-4">
+		<div class="banner-error">{ msg }</div>
+		<div class="flex flex-wrap items-center gap-2">
+			<a class="btn-ghost" href="/wizard">Start over</a>
+			<a class="btn-ghost" href="/datasets">Go to datasets</a>
+		</div>
+	</div>
+}

@@ -4,58 +4,33 @@ import (
 	"path"
 	"strings"
 
-	"github.com/apexion/apexion/internal/crawler/format"
+	"github.com/apexion/apexion/internal/catalog/discovery"
+	"github.com/apexion/apexion/internal/format"
 	"github.com/apexion/apexion/internal/model"
 )
 
-// grouping.go turns a flat stream of object keys into logical datasets, the way
-// AWS Glue's crawler does: it collapses folders of same-format files, recognizes
-// Hive-style k=v partition folders, and detects table-format roots.
+// grouping.go turns a flat stream of object keys into logical datasets. The
+// classification itself (dataset root + partition columns) lives in package
+// discovery; this file only adapts its result to the crawler's aggregation and
+// keeps the table-format / ignore heuristics.
 
-// partitionInfo captures the partition columns/values parsed from a key.
+// partitionInfo captures the partition columns/values for one key.
 type partitionInfo struct {
-	root   string            // dataset root prefix (no trailing slash)
-	keys   []string          // ordered partition column names
-	values map[string]string // column -> value for this object
+	root     string            // dataset root prefix (no trailing slash)
+	strategy string            // hive | positional | legacy
+	keys     []string          // ordered partition column names
+	values   map[string]string // column -> value for this object
 }
 
-// isKV reports whether a path segment is a Hive partition segment (k=v).
-func isKV(seg string) (key, val string, ok bool) {
-	i := strings.IndexByte(seg, '=')
-	if i <= 0 || i == len(seg)-1 {
-		return "", "", false
-	}
-	return seg[:i], seg[i+1:], true
-}
-
-// deriveDataset computes the dataset root and partition values for a data key.
-func deriveDataset(key string) partitionInfo {
-	dir := path.Dir(key)
-	if dir == "." {
-		dir = ""
-	}
-	segs := splitNonEmpty(dir, "/")
-
-	// Trailing contiguous k=v segments are partitions.
-	firstPart := len(segs)
-	for i := 0; i < len(segs); i++ {
-		if _, _, ok := isKV(segs[i]); ok {
-			firstPart = i
-			break
-		}
-	}
-	rootSegs := segs[:firstPart]
-	partSegs := segs[firstPart:]
-
-	info := partitionInfo{
-		root:   strings.Join(rootSegs, "/"),
-		values: map[string]string{},
-	}
-	for _, ps := range partSegs {
-		if k, v, ok := isKV(ps); ok {
-			info.keys = append(info.keys, k)
-			info.values[k] = v
-		}
+// deriveDataset classifies a data key into a dataset root and its partitions
+// using the configured discovery strategy. crawlRoot is the prefix the crawl
+// started at (the dataset root for positional layouts).
+func deriveDataset(key, crawlRoot string, disp discovery.Dispatcher) partitionInfo {
+	c := disp.Classify(key, crawlRoot)
+	info := partitionInfo{root: c.Root, strategy: c.Strategy, values: map[string]string{}}
+	for _, p := range c.Partitions {
+		info.keys = append(info.keys, p.Name)
+		info.values[p.Name] = p.Value
 	}
 	return info
 }
@@ -113,17 +88,6 @@ func shouldIgnore(key string, ignoreHidden bool) bool {
 		return true
 	}
 	return false
-}
-
-func splitNonEmpty(s, sep string) []string {
-	parts := strings.Split(s, sep)
-	out := parts[:0]
-	for _, p := range parts {
-		if p != "" {
-			out = append(out, p)
-		}
-	}
-	return out
 }
 
 // dominantFormat returns the format with the most votes (ties broken by a fixed

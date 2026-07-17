@@ -1,0 +1,188 @@
+package ui
+
+// Layout primitives — the reusable building blocks that give every page the
+// same spacing, hierarchy and structure. Pages compose from these instead of
+// hand-writing card/padding/margin utility strings. Paired with the semantic
+// CSS classes in assets/css/input.css (.card-header, .action-bar, .input, …).
+//
+// templ components expose a single { children... } slot, so "header + body +
+// footer" primitives render their fixed chrome (title, borders, padding) and
+// take the variable part as children; a footer/action bar is composed by the
+// caller as the last child (see ActionBar / WizardShell usage).
+
+// PageHeader is the standard page intro row: an optional subtitle and a
+// right-aligned actions slot (children). The page TITLE is owned by the topbar
+// (see Layout) — pass title="" to avoid duplicating it; a non-empty title is
+// only for standalone pages that don't render through the topbar. This keeps
+// every page's header consistent instead of showing the name twice.
+templ PageHeader(title, subtitle string) {
+	<div class="flex flex-wrap items-center justify-between gap-4 mb-6">
+		<div class="min-w-0">
+			if title != "" {
+				<h1 class="page-title truncate">{ title }</h1>
+			}
+			if subtitle != "" {
+				<p class={ "muted", templ.KV("mt-1", title != "") }>{ subtitle }</p>
+			}
+		</div>
+		<div class="flex items-center gap-2 shrink-0">
+			{ children... }
+		</div>
+	</div>
+}
+
+// Card is the structural card wrapper (no padding of its own — compose with
+// CardHeader/CardBody/CardFooter). Use `.card p-*` directly only for simple
+// single-block cards.
+templ Card() {
+	<div class="card overflow-hidden">
+		{ children... }
+	</div>
+}
+
+// CardHeader renders a card's title bar with a bottom rule and an optional
+// actions slot (children), so every card header looks identical.
+templ CardHeader(title, subtitle string) {
+	<div class="card-header flex flex-wrap items-start justify-between gap-4">
+		<div class="min-w-0">
+			<h2 class="section-title truncate">{ title }</h2>
+			if subtitle != "" {
+				<p class="muted mt-1">{ subtitle }</p>
+			}
+		</div>
+		<div class="flex items-center gap-2 shrink-0">
+			{ children... }
+		</div>
+	</div>
+}
+
+// CardBody is the padded content region of a structured card.
+templ CardBody() {
+	<div class="card-body">
+		{ children... }
+	</div>
+}
+
+// CardFooter is the bottom action region of a structured card.
+templ CardFooter() {
+	<div class="card-footer flex flex-wrap items-center justify-end gap-2">
+		{ children... }
+	</div>
+}
+
+// FormSection groups related form controls under a titled, separated block so a
+// long form reads as logical sections instead of one dense wall of inputs.
+templ FormSection(title, desc string) {
+	<section class="space-y-4">
+		if title != "" {
+			<div class="pb-1 border-b border-base-800">
+				<h3 class="text-sm font-semibold text-slate-200">{ title }</h3>
+				if desc != "" {
+					<p class="text-xs text-slate-500 mt-0.5">{ desc }</p>
+				}
+			</div>
+		}
+		<div class="space-y-4">
+			{ children... }
+		</div>
+	</section>
+}
+
+// ActionBar is the standard button footer: a top rule with consistent spacing,
+// right-aligned. Every "Cancel / Save / Next" area uses this so footers are
+// identical across the app.
+templ ActionBar() {
+	<div class="action-bar">
+		{ children... }
+	</div>
+}
+
+// Toolbar is a horizontal control strip (filters, search, view actions) with a
+// consistent height and spacing, sitting above content.
+templ Toolbar() {
+	<div class="flex flex-wrap items-center gap-2 mb-4">
+		{ children... }
+	</div>
+}
+
+// ErrorBanner shows an error that may be long/multiline (S3 paths, SQL, stack
+// text) without breaking layout — it wraps and never overflows.
+templ ErrorBanner(msg string) {
+	if msg != "" {
+		<div class="banner-error font-mono">{ msg }</div>
+	}
+}
+
+// InfoBanner shows a neutral informational note.
+templ InfoBanner(msg string) {
+	if msg != "" {
+		<div class="banner-info">{ msg }</div>
+	}
+}
+
+// iconSidebar is the panel/collapse glyph for the nav toggle.
+templ iconSidebar() {
+	@iconSvg(`<path stroke-linecap="round" stroke-linejoin="round" d="M3.75 6A2.25 2.25 0 016 3.75h12A2.25 2.25 0 0120.25 6v12A2.25 2.25 0 0118 20.25H6A2.25 2.25 0 013.75 18V6z"/><path stroke-linecap="round" stroke-linejoin="round" d="M9 3.75v16.5"/>`)
+}
+
+// iconCheck is a small check glyph for completed stepper nodes.
+templ iconCheck() {
+	@templ.Raw(`<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor" class="w-3.5 h-3.5"><path fill-rule="evenodd" d="M16.704 4.153a.75.75 0 0 1 .143 1.052l-8 10.5a.75.75 0 0 1-1.127.075l-4.5-4.5a.75.75 0 0 1 1.06-1.06l3.894 3.893 7.48-9.817a.75.75 0 0 1 1.05-.143Z" clip-rule="evenodd"/></svg>`)
+}
+
+// Stepper renders an evenly-spaced progress indicator: completed steps show a
+// check, the active step is highlighted, upcoming steps are muted. Connectors
+// flex to fill so spacing is uniform regardless of label length; labels hide on
+// narrow screens so it stays usable on mobile.
+templ Stepper(names []string, active int) {
+	<nav class="flex items-center mb-8" aria-label="Progress">
+		for i, name := range names {
+			<div class="flex items-center gap-2 shrink-0">
+				<span
+					class={ "grid place-items-center w-7 h-7 rounded-full text-xs font-semibold ring-1 transition-colors",
+						templ.KV("bg-brand-600 text-white ring-brand-600", i < active),
+						templ.KV("bg-brand-600 text-white ring-4 ring-brand-500/25", i == active),
+						templ.KV("bg-base-850 text-slate-500 ring-base-700", i > active) }
+				>
+					if i < active {
+						@iconCheck()
+					} else {
+						{ itoa(i + 1) }
+					}
+				</span>
+				<span
+					class={ "text-sm hidden sm:block",
+						templ.KV("text-white font-medium", i == active),
+						templ.KV("text-slate-300", i < active),
+						templ.KV("text-slate-500", i > active) }
+				>{ name }</span>
+			</div>
+			if i < len(names)-1 {
+				<div
+					class={ "flex-1 h-px mx-3 min-w-[1rem] transition-colors",
+						templ.KV("bg-brand-600", i < active),
+						templ.KV("bg-base-800", i >= active) }
+				></div>
+			}
+		}
+	</nav>
+}
+
+// WizardShell is the shared chrome for every wizard step: the stepper, plus a
+// card whose header carries the step title/subtitle. The step's form + its
+// ActionBar go in children (the card body). This removes the duplicated
+// stepper+card+header markup every step used to repeat.
+templ WizardShell(step int, title, subtitle string) {
+	@Stepper(wizardStepNames, step)
+	<div class="card overflow-hidden">
+		<div class="card-header">
+			<h2 class="section-title">{ title }</h2>
+			if subtitle != "" {
+				<p class="muted mt-1">{ subtitle }</p>
+			}
+		</div>
+		<div class="card-body">
+			{ children... }
+		</div>
+	</div>
+}

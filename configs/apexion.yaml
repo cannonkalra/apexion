@@ -1,6 +1,10 @@
 # Apexion configuration.
+#
 # Every value can be overridden with an APEXION_-prefixed environment variable,
-# e.g. APEXION_MINIO_ENDPOINT, APEXION_AGENTS_PROVIDER.
+# with dots replaced by underscores — e.g. APEXION_MINIO_ENDPOINT overrides
+# minio.endpoint, APEXION_SERVER_PORT overrides server.port.
+#
+# All values below are the built-in defaults; the file is entirely optional.
 
 server:
   host: 0.0.0.0
@@ -14,6 +18,9 @@ storage:
   path: data/apexion.duckdb
   max_open_conns: 1
 
+# Default object-store connection. S3-compatible: AWS S3, MinIO, Cloudflare R2,
+# SeaweedFS, and anything speaking the S3 API. Additional connections can be
+# added and switched at runtime from the Settings page.
 minio:
   endpoint: localhost:9000
   access_key: minioadmin
@@ -30,22 +37,15 @@ crawler:
   ignore_hidden: true
   timeout: 1h
 
-inference:
-  sample_rows: 1000
-  max_sample_values: 10
-  detect_pii: true
+catalog:
+  # Generated partition columns for bare-directory datasets, e.g. "pt" + "" -> pt0, pt1.
+  virtual_partition_prefix: pt
+  virtual_partition_separator: ""
+  discovery:
+    # positional (bare dirs -> pt0/pt1/...), hive (only key=value dirs
+    # partition), or auto.
+    strategy: positional
 
 log:
   level: info
   pretty: true
-
-agents:
-  enabled: true
-  # provider: noop | groq | openai | anthropic | ollama
-  # noop uses deterministic local text (works fully offline).
-  # groq is OpenAI-compatible; set api_key to your Groq key.
-  provider: noop
-  llm:
-    base_url: ""   # e.g. http://localhost:11434/v1 (Ollama); Groq defaults to api.groq.com
-    api_key: ""    # e.g. APEXION_AGENTS_LLM_API_KEY=gsk_... for Groq
-    model: ""      # e.g. llama-3.3-70b-versatile (Groq), gpt-4o-mini, claude-3-5-haiku-latest

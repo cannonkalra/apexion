@@ -54,42 +54,32 @@ func statSamples(c model.Column) string {
 	return truncate(strings.Join(vals, ", "), 40)
 }
 
-func statNulls(c model.Column) string {
-	if c.Statistics == nil {
+func discoveryLabel(strategy string) string {
+	if strategy == "" {
 		return "—"
 	}
-	return humanCount(c.Statistics.NullCount)
+	return strategy
 }
 
-func statUnique(c model.Column) string {
-	if c.Statistics == nil {
+func datasetRootLabel(d *catalog.DatasetDetail) string {
+	if d.Dataset.Path == "" {
+		return d.Dataset.BucketName + "/ (bucket root)"
+	}
+	return d.Dataset.BucketName + "/" + d.Dataset.Path
+}
+
+func partitionKeysLabel(d *catalog.DatasetDetail) string {
+	if len(d.Dataset.PartitionKeys) == 0 {
+		return "None"
+	}
+	return strings.Join(d.Dataset.PartitionKeys, ", ")
+}
+
+func schemaVersionLabel(d *catalog.DatasetDetail) string {
+	if d.Schema == nil {
 		return "—"
 	}
-	return pct(c.Statistics.Uniqueness)
-}
-
-func statMin(c model.Column) string {
-	if c.Statistics == nil || c.Statistics.MinValue == "" {
-		return "—"
-	}
-	return truncate(c.Statistics.MinValue, 18)
-}
-
-func statMax(c model.Column) string {
-	if c.Statistics == nil || c.Statistics.MaxValue == "" {
-		return "—"
-	}
-	return truncate(c.Statistics.MaxValue, 18)
-}
-
-func nullColumns(mv []model.MissingValueStat) int {
-	n := 0
-	for _, m := range mv {
-		if m.NullCount > 0 {
-			n++
-		}
-	}
-	return n
+	return fmt.Sprintf("v%d", d.Schema.Version)
 }
 
 func previewURLForObject(o model.Object) string {

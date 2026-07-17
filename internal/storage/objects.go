@@ -103,6 +103,20 @@ func (s *Store) ListObjects(ctx context.Context, bucketID, datasetID string, lim
 	return out, rows.Err()
 }
 
+// SampleObjectKey returns one representative object key for a dataset, or "" if
+// none. Callers use it to match a dataset's real file extension (including any
+// compression suffix, e.g. .csv.gz) when building readers and views.
+func (s *Store) SampleObjectKey(ctx context.Context, ds *model.Dataset) string {
+	if ds == nil {
+		return ""
+	}
+	objs, err := s.ListObjects(ctx, ds.BucketID, ds.ID, 1)
+	if err != nil || len(objs) == 0 {
+		return ""
+	}
+	return objs[0].Key
+}
+
 // CountObjects returns the total object count.
 func (s *Store) CountObjects(ctx context.Context) (int64, error) {
 	var n int64

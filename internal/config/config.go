@@ -12,13 +12,29 @@ import (
 
 // Config is the root configuration object.
 type Config struct {
-	Server    ServerConfig    `mapstructure:"server"`
-	Storage   StorageConfig   `mapstructure:"storage"`
-	MinIO     MinIOConfig     `mapstructure:"minio"`
-	Crawler   CrawlerConfig   `mapstructure:"crawler"`
-	Inference InferenceConfig `mapstructure:"inference"`
-	Log       LogConfig       `mapstructure:"log"`
-	Agents    AgentsConfig    `mapstructure:"agents"`
+	Server  ServerConfig  `mapstructure:"server"`
+	Storage StorageConfig `mapstructure:"storage"`
+	MinIO   MinIOConfig   `mapstructure:"minio"`
+	Crawler CrawlerConfig `mapstructure:"crawler"`
+	Catalog CatalogConfig `mapstructure:"catalog"`
+	Log     LogConfig     `mapstructure:"log"`
+}
+
+// CatalogConfig tunes the logical SQL catalog.
+type CatalogConfig struct {
+	// VirtualPartitionPrefix names generated partition columns for bare-directory
+	// datasets, e.g. "pt" → pt0, pt1. VirtualPartitionSeparator sits between the
+	// prefix and index, e.g. "_" → pt_0, pt_1.
+	VirtualPartitionPrefix    string          `mapstructure:"virtual_partition_prefix"`
+	VirtualPartitionSeparator string          `mapstructure:"virtual_partition_separator"`
+	Discovery                 DiscoveryConfig `mapstructure:"discovery"`
+}
+
+// DiscoveryConfig selects how the crawler groups objects into datasets.
+type DiscoveryConfig struct {
+	// Strategy is positional (default; bare dirs → pt0/pt1/…), hive (only
+	// key=value dirs partition; others are per-directory datasets), or auto.
+	Strategy string `mapstructure:"strategy"`
 }
 
 // ServerConfig configures the HTTP server.
@@ -58,31 +74,10 @@ type CrawlerConfig struct {
 	Timeout         time.Duration `mapstructure:"timeout"`
 }
 
-// InferenceConfig tunes the inference engine.
-type InferenceConfig struct {
-	SampleRows      int  `mapstructure:"sample_rows"`
-	MaxSampleValues int  `mapstructure:"max_sample_values"`
-	DetectPII       bool `mapstructure:"detect_pii"`
-}
-
 // LogConfig configures logging.
 type LogConfig struct {
 	Level  string `mapstructure:"level"`
 	Pretty bool   `mapstructure:"pretty"`
-}
-
-// AgentsConfig configures the AI agent SDK and its LLM provider.
-type AgentsConfig struct {
-	Enabled  bool      `mapstructure:"enabled"`
-	Provider string    `mapstructure:"provider"` // noop|openai|anthropic|ollama
-	LLM      LLMConfig `mapstructure:"llm"`
-}
-
-// LLMConfig configures a pluggable LLM backend (cloud or local).
-type LLMConfig struct {
-	BaseURL string `mapstructure:"base_url"`
-	APIKey  string `mapstructure:"api_key"`
-	Model   string `mapstructure:"model"`
 }
 
 // Addr returns host:port for the server.
@@ -138,16 +133,10 @@ func setDefaults(v *viper.Viper) {
 	v.SetDefault("crawler.ignore_hidden", true)
 	v.SetDefault("crawler.timeout", "1h")
 
-	v.SetDefault("inference.sample_rows", 1000)
-	v.SetDefault("inference.max_sample_values", 10)
-	v.SetDefault("inference.detect_pii", true)
+	v.SetDefault("catalog.virtual_partition_prefix", "pt")
+	v.SetDefault("catalog.virtual_partition_separator", "")
+	v.SetDefault("catalog.discovery.strategy", "positional")
 
 	v.SetDefault("log.level", "info")
 	v.SetDefault("log.pretty", true)
-
-	v.SetDefault("agents.enabled", true)
-	v.SetDefault("agents.provider", "noop")
-	v.SetDefault("agents.llm.base_url", "")
-	v.SetDefault("agents.llm.api_key", "")
-	v.SetDefault("agents.llm.model", "")
 }
