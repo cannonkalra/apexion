@@ -39,11 +39,31 @@ func (h *Handler) queryPage(w http.ResponseWriter, r *http.Request) {
 		h.render(w, r, QueryPage(vm))
 		return
 	}
-	if t := r.URL.Query().Get("table"); t != "" {
-		vm.InitialSQL = "SELECT * FROM " + t + " LIMIT 100"
-		vm.Selected = t
+	// Single-file editor: "Query in SQL" from a file preview passes the file's
+	// identity + reader options. The editor prefills a SELECT over the file and
+	// shows a reader-options bar (format override + toggles) to adjust it.
+	if r.URL.Query().Get("bucket") != "" && r.URL.Query().Get("key") != "" {
+		f := parseFileQuery(r)
+		vm.File = &f
+		vm.InitialSQL, _ = fileInitialSQL(f.Bucket, f.Key, f.Format, f.Opts)
+		h.render(w, r, QueryPage(vm))
+		return
 	}
+	vm.InitialSQL, vm.Selected = queryInitialSQL(r.URL.Query().Get("table"), r.URL.Query().Get("sql"))
 	h.render(w, r, QueryPage(vm))
+}
+
+// queryInitialSQL derives the editor's prefilled SQL and the selected sidebar
+// table from the query-page params. A ?table= (a registered catalog table)
+// wins: it both prefills a SELECT and highlights the sidebar entry. Otherwise a
+// ?sql= statement — the "Query in SQL" entry point from the file-preview page,
+// which carries a SELECT over the file's reader expression — is used verbatim
+// with no sidebar selection (an ad-hoc file is not a catalog table).
+func queryInitialSQL(table, sql string) (initialSQL, selected string) {
+	if table != "" {
+		return "SELECT * FROM " + table + " LIMIT 100", table
+	}
+	return sql, ""
 }
 
 // actionRegisterCatalog registers a dataset as a catalog table (HTMX form).

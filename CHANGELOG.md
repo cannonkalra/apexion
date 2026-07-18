@@ -7,6 +7,30 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.0.4] - 2026-07-18
+
+### Fixed
+- **"Query in SQL" from a file preview.** The button linked to a non-existent
+  `/sql` route (a 404 that did nothing) and the query console ignored the
+  incoming statement, so the SQL editor never opened on the previewed file. It
+  now opens the console pre-populated with a runnable `SELECT` over the object.
+
+### Added
+- **Reader-options bar with a "Read as" format override** on both the file
+  preview page and the SQL editor: a format selector (CSV / TSV / JSON / JSON
+  Lines / Parquet) plus Header, Union-by-name, and Ignore-errors toggles. An
+  undetected or misnamed file — e.g. a gzipped `.log` that is really JSON Lines
+  — can be pointed at the right DuckDB reader and previewed/queried with
+  `ignore_errors`, without hand-editing SQL. Changing any option regenerates
+  the preview and the prefilled SQL live.
+
+### Changed
+- **"Query in SQL" carries the chosen format and reader options into the
+  editor** (via an out-of-band link update), and renders disabled for formats
+  DuckDB cannot read directly (Avro / ORC / undetected) instead of generating a
+  broken query. Previews of undetected formats now show a short "Read as…"
+  guide instead of DuckDB's raw "preview not supported" error.
+
 ## [0.0.3] - 2026-07-18
 
 ### Added
@@ -67,7 +91,8 @@ First public release.
 - Cross-platform release binaries for linux/amd64, linux/arm64, darwin/arm64, and
   windows/amd64, published with SHA256 checksums.
 
-[Unreleased]: https://github.com/cannonkalra/apexion/compare/v0.0.3...HEAD
+[Unreleased]: https://github.com/cannonkalra/apexion/compare/v0.0.4...HEAD
+[0.0.4]: https://github.com/cannonkalra/apexion/compare/v0.0.3...v0.0.4
 [0.0.3]: https://github.com/cannonkalra/apexion/compare/v0.0.2...v0.0.3
 [0.0.2]: https://github.com/cannonkalra/apexion/compare/v0.0.1...v0.0.2
 [0.1.0]: https://github.com/cannonkalra/apexion/releases/tag/v0.1.0

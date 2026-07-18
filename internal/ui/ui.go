@@ -92,6 +92,7 @@ func (h *Handler) Routes() http.Handler {
 		r.Post("/catalog/{id}/refresh", h.actionRefreshCatalog)
 		r.Delete("/catalog/{id}", h.actionDeleteCatalog)
 		r.Post("/query", h.actionRunQuery)
+		r.Post("/query/file-options", h.actionQueryFileOptions)
 		// Multi-file smart selection (background schema discovery → virtual table).
 		r.Post("/selection", h.actionSelectionSet)
 		r.Get("/selection/progress", h.partialSelectionProgress)
@@ -239,8 +240,12 @@ func (h *Handler) filePreview(w http.ResponseWriter, r *http.Request) {
 	vp := virtualpath.New(h.cfg.Catalog.VirtualPartitionPrefix, h.cfg.Catalog.VirtualPartitionSeparator).Build(key, 1<<30)
 	vm.Partitions = vp.Partitions
 	vm.VirtualPath = vp.Virtual
-	res, err := h.preview.PreviewFileWith(r.Context(), bucket, key, f, opts, 100)
-	if err != nil {
+	// An undetected or non-DuckDB format (e.g. a gzipped .log, Avro, ORC) has no
+	// reader: skip the failing query and guide the user to the "Read as" bar
+	// instead of surfacing DuckDB's raw "preview not supported" error.
+	if _, ok := fileInitialSQL(bucket, key, f, opts); !ok {
+		vm.Error = unreadableFormatMsg
+	} else if res, err := h.preview.PreviewFileWith(r.Context(), bucket, key, f, opts, 100); err != nil {
 		vm.Error = err.Error()
 	} else {
 		vm.Result = res
