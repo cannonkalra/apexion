@@ -141,9 +141,28 @@ templ ReaderOptionsBar(vm PreviewOptsVM) {
 				@optionSel("none", "Off", vm.Opts.Header)
 			</select>
 		</label>
+		@delimiterSelect(vm.Opts.Delimiter)
 		@optCheckbox("union_by_name", "Union by name", vm.Opts.UnionByName)
 		@optCheckbox("ignore_errors", "Ignore errors", vm.Opts.IgnoreErrors)
 	</form>
+}
+
+// delimiterSelect is the CSV field-separator override, used by both the
+// single-file options bar and the multi-file SQL options drawer. "Auto" lets
+// DuckDB sniff the separator; an explicit choice (e.g. Pipe) rescues files where
+// sniffing fails, such as a one-line pipe-delimited CSV. It applies only to the
+// CSV reader; other readers ignore it.
+templ delimiterSelect(current string) {
+	<label class="flex items-center gap-2 text-slate-300">Delimiter
+		<select name="delimiter" class="select !w-auto !py-1">
+			@optionSel("", "Auto", current)
+			@optionSel(",", "Comma", current)
+			@optionSel(";", "Semicolon", current)
+			@optionSel("|", "Pipe", current)
+			@optionSel("tab", "Tab", current)
+			@optionSel("space", "Space", current)
+		</select>
+	</label>
 }
 
 // QueryInSqlLink is the "Query in SQL" button on the file-preview header. It

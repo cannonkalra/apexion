@@ -150,6 +150,17 @@ templ SqlOptionsDrawer(vm QueryVM) {
 		</div>
 		<div class="flex flex-wrap items-center gap-x-5 gap-y-3 text-sm">
 			<label class="flex items-center gap-2 text-slate-300">
+				Read as
+				<select name="format" class="select !w-auto !py-1">
+					@optionSel("", "Auto (detected)", "")
+					@optionSel("csv", "CSV", "")
+					@optionSel("tsv", "TSV", "")
+					@optionSel("json", "JSON", "")
+					@optionSel("jsonl", "JSON Lines (NDJSON)", "")
+					@optionSel("parquet", "Parquet", "")
+				</select>
+			</label>
+			<label class="flex items-center gap-2 text-slate-300">
 				Header
 				<select name="header" class="select !w-auto !py-1">
 					@optionSel("auto", "Auto detect", vm.SelOpts.Header)
@@ -157,6 +168,7 @@ templ SqlOptionsDrawer(vm QueryVM) {
 					@optionSel("none", "No header", vm.SelOpts.Header)
 				</select>
 			</label>
+			@delimiterSelect(vm.SelOpts.Delimiter)
 			@optCheckbox("union_by_name", "Union by name", vm.SelOpts.UnionByName)
 			@optCheckbox("ignore_errors", "Ignore errors", vm.SelOpts.IgnoreErrors)
 			@optCheckbox("filename", "Filename column", vm.SelOpts.Filename)

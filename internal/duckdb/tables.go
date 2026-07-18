@@ -196,10 +196,30 @@ func csvOpts(opts model.ReadOptions) string {
 	case "none":
 		opt += ", header=false"
 	}
+	if lit := csvDelimLiteral(opts.Delimiter); lit != "" {
+		opt += fmt.Sprintf(", delim='%s'", esc(lit))
+	}
 	if opts.IgnoreErrors {
 		opt += ", ignore_errors=true"
 	}
 	return opt
+}
+
+// csvDelimLiteral maps a delimiter option to the DuckDB delim string literal
+// (unquoted), or "" for auto-detect. Only a known set is honoured so an
+// arbitrary value can never reach the generated SQL. The TSV reader sets its own
+// delim, so a delimiter is only ever offered for CSV in the UI.
+func csvDelimLiteral(d string) string {
+	switch d {
+	case "tab":
+		return `\t`
+	case "space":
+		return " "
+	case ",", ";", "|", ":":
+		return d
+	default:
+		return ""
+	}
 }
 
 // readerFor builds a reader over a single object URI (used by FromClause).

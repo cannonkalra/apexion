@@ -105,6 +105,39 @@ func TestFileInitialSQL(t *testing.T) {
 	}
 }
 
+// TestFileInitialSQLDelimiter verifies an explicit CSV delimiter reaches the
+// generated reader — the pipe-delimited .csv.gz case where auto-detection fails.
+func TestFileInitialSQLDelimiter(t *testing.T) {
+	sql, ok := fileInitialSQL("b", "one_line.csv.gz", model.FormatCSV,
+		model.ReadOptions{Header: "none", Delimiter: "|"})
+	if !ok {
+		t.Fatal("csv should be readable")
+	}
+	if !strings.Contains(sql, "read_csv_auto(") || !strings.Contains(sql, "delim='|'") {
+		t.Errorf("expected read_csv_auto with delim='|', got %q", sql)
+	}
+	// Auto (empty) delimiter must not emit a delim= clause.
+	auto, _ := fileInitialSQL("b", "x.csv", model.FormatCSV, model.ReadOptions{})
+	if strings.Contains(auto, "delim=") {
+		t.Errorf("auto delimiter should omit delim=, got %q", auto)
+	}
+}
+
+// TestValidDelimiter verifies only the offered separators pass; anything else
+// (including an attempted injection) collapses to Auto.
+func TestValidDelimiter(t *testing.T) {
+	for _, ok := range []string{",", ";", "|", ":", "tab", "space"} {
+		if validDelimiter(ok) != ok {
+			t.Errorf("valid delimiter %q was rejected", ok)
+		}
+	}
+	for _, bad := range []string{"", "xyz", "','; DROP", "\t", ".."} {
+		if got := validDelimiter(bad); got != "" {
+			t.Errorf("invalid delimiter %q accepted as %q", bad, got)
+		}
+	}
+}
+
 // TestQueryInitialSQL verifies the query-page prefill precedence: a catalog
 // ?table= wins and selects the sidebar; otherwise ?sql= is used verbatim with
 // no sidebar selection; with neither, the editor stays empty.
