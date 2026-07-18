@@ -156,6 +156,15 @@ func (s *SelectionService) Regenerate(token string, opts model.ReadOptions) (*Co
 // waits for the regenerated schema + SQL; discovery is footer/sample only, so a
 // brief block is acceptable. Returns nil if the token is gone or it times out.
 func (s *SelectionService) RediscoverSync(token string, opts model.ReadOptions) (*CompatSummary, bool) {
+	return s.RediscoverSyncAs(token, opts, "")
+}
+
+// RediscoverSyncAs is RediscoverSync with an optional format override: when
+// formatOverride is a real format, every selected file is re-read (and grouped)
+// as that format, so a mixed or misdetected selection can be coerced into one
+// reader — e.g. all files as CSV with a chosen delimiter. An empty/unknown
+// override keeps each file's detected format.
+func (s *SelectionService) RediscoverSyncAs(token string, opts model.ReadOptions, formatOverride model.Format) (*CompatSummary, bool) {
 	sess, ok := s.store.get(token)
 	if !ok {
 		return nil, false
@@ -164,6 +173,9 @@ func (s *SelectionService) RediscoverSync(token string, opts model.ReadOptions) 
 	files := make([]FileRef, len(sess.files))
 	for i, f := range sess.files {
 		files[i] = f.Ref
+		if formatOverride != "" && formatOverride != model.FormatUnknown {
+			files[i].Format = formatOverride
+		}
 	}
 	sess.mu.Unlock()
 

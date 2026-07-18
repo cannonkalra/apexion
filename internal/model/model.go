@@ -198,6 +198,11 @@ type ReadOptions struct {
 	Header       string `json:"header"`        // "auto" (default) | "present" | "none"
 	SampleSize   int    `json:"sample_size"`   // 0 => engine default (1000); -1 => scan all rows
 	IgnoreErrors bool   `json:"ignore_errors"` // skip unparseable rows
+	// Delimiter overrides the CSV field separator when auto-detection fails
+	// (e.g. a single-line pipe-delimited file). Empty means auto-detect. Values
+	// are the literal separator (",", ";", "|", ":") or the tokens "tab"/"space";
+	// ignored for non-CSV readers.
+	Delimiter string `json:"delimiter"`
 }
 
 // DefaultReadOptions returns the safe on-by-default reader options: expose the

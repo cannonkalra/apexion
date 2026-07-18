@@ -32,6 +32,7 @@ func previewOptsFromRequest(r *http.Request) model.ReadOptions {
 	}
 	opts.UnionByName = r.FormValue("union_by_name") == "on"
 	opts.IgnoreErrors = r.FormValue("ignore_errors") == "on"
+	opts.Delimiter = validDelimiter(r.FormValue("delimiter"))
 	opts.Filename = false
 	return opts.Normalized()
 }
@@ -153,6 +154,9 @@ func insightsHref(bucket, key string, f model.Format, opts model.ReadOptions) st
 	}
 	if opts.IgnoreErrors {
 		v.Set("ignore_errors", "on")
+	}
+	if opts.Delimiter != "" {
+		v.Set("delimiter", opts.Delimiter)
 	}
 	return "/ui/insights?" + v.Encode()
 }

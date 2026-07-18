@@ -48,7 +48,22 @@ func fileQueryValues(bucket, key string, f model.Format, opts model.ReadOptions)
 	if opts.IgnoreErrors {
 		v.Set("ignore_errors", "on")
 	}
+	if opts.Delimiter != "" {
+		v.Set("delimiter", opts.Delimiter)
+	}
 	return v
+}
+
+// validDelimiter whitelists the CSV delimiter values the UI offers, mapping
+// anything else (including the empty "Auto" choice) to "" so an arbitrary
+// separator never reaches the generated SQL.
+func validDelimiter(d string) string {
+	switch d {
+	case ",", ";", "|", ":", "tab", "space":
+		return d
+	default:
+		return ""
+	}
 }
 
 // fileQueryURL builds the "Query in SQL" link for a previewed file: it opens the
@@ -72,6 +87,7 @@ func fileOptsFromRequest(r *http.Request) model.ReadOptions {
 	}
 	opts.UnionByName = r.FormValue("union_by_name") == "on"
 	opts.IgnoreErrors = r.FormValue("ignore_errors") == "on"
+	opts.Delimiter = validDelimiter(r.FormValue("delimiter"))
 	opts.Filename = false
 	return opts.Normalized()
 }
@@ -106,9 +122,16 @@ func fileEditorOptsVM(f QueryFileVM) PreviewOptsVM {
 // dropdown. Formats without an offered reader (undetected, Avro, ORC) map to the
 // empty placeholder so the user is prompted to choose one.
 func readAsCurrent(f model.Format) string {
+	return string(selectableFormat(f))
+}
+
+// selectableFormat returns f when it is one of the "Read as" choices offered in
+// the UI, else "" — so an unrecognized or empty submission means "no override /
+// keep detected format" rather than a garbage reader.
+func selectableFormat(f model.Format) model.Format {
 	switch f {
 	case model.FormatCSV, model.FormatTSV, model.FormatJSON, model.FormatJSONL, model.FormatParquet:
-		return string(f)
+		return f
 	default:
 		return ""
 	}

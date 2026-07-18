@@ -69,7 +69,11 @@ func (h *Handler) partialSelectionProgress(w http.ResponseWriter, r *http.Reques
 // SQL reflect the new options.
 func (h *Handler) actionSelectionRegenerate(w http.ResponseWriter, r *http.Request) {
 	token := r.FormValue("token")
-	sum, ok := h.selection.RediscoverSync(token, readOptsFromForm(r))
+	// An optional "Read as" override forces every selected file to a single
+	// format (empty = keep each file's detected format), so a mixed/misdetected
+	// selection can be coerced — e.g. all read as CSV with a chosen delimiter.
+	override := selectableFormat(model.Format(r.FormValue("format")))
+	sum, ok := h.selection.RediscoverSyncAs(token, readOptsFromForm(r), override)
 	if !ok || sum == nil {
 		h.render(w, r, SqlEditorAndSchema(QueryVM{Sel: token, SelExpired: true, Ready: h.preview.Ready()}))
 		return
@@ -164,6 +168,7 @@ func readOptsFromForm(r *http.Request) model.ReadOptions {
 	if n, err := strconv.Atoi(r.FormValue("sample_size")); err == nil && n >= 0 {
 		opts.SampleSize = n
 	}
+	opts.Delimiter = validDelimiter(r.FormValue("delimiter"))
 	return opts.Normalized()
 }
 

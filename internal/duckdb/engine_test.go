@@ -64,3 +64,38 @@ func TestFromClause(t *testing.T) {
 		t.Error("expected unsupported-format error for ORC")
 	}
 }
+
+func TestCSVDelimLiteral(t *testing.T) {
+	cases := map[string]string{
+		"":      "", // auto
+		",":     ",",
+		";":     ";",
+		"|":     "|",
+		":":     ":",
+		"tab":   `\t`, // DuckDB reads \t in delim as a tab
+		"space": " ",
+		"bogus": "", // unknown collapses to auto
+	}
+	for in, want := range cases {
+		if got := csvDelimLiteral(in); got != want {
+			t.Errorf("csvDelimLiteral(%q)=%q want %q", in, got, want)
+		}
+	}
+}
+
+func TestFromClauseCSVDelimiter(t *testing.T) {
+	// Pipe-delimited CSV: the reader must carry the explicit delimiter.
+	from, err := FromClause("b", "one_line.csv.gz", model.FormatCSV,
+		model.ReadOptions{Header: "none", Delimiter: "|"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !strings.Contains(from, "delim='|'") {
+		t.Errorf("expected delim='|', got %s", from)
+	}
+	// Tab token maps to the DuckDB tab literal.
+	tabFrom, _ := FromClause("b", "x.csv", model.FormatCSV, model.ReadOptions{Delimiter: "tab"})
+	if !strings.Contains(tabFrom, `delim='\t'`) {
+		t.Errorf(`expected delim='\t', got %s`, tabFrom)
+	}
+}

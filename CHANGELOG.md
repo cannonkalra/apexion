@@ -23,6 +23,15 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   — can be pointed at the right DuckDB reader and previewed/queried with
   `ignore_errors`, without hand-editing SQL. Changing any option regenerates
   the preview and the prefilled SQL live.
+- **CSV delimiter override** on every reader-options surface (preview page,
+  single-file SQL editor, and the multi-file selection drawer): Auto / Comma /
+  Semicolon / Pipe / Tab / Space. Rescues files where DuckDB's separator
+  auto-detection fails, such as a one-line pipe-delimited `.csv.gz`.
+- **Format + delimiter override in the multi-file selection drawer.** The SQL
+  options drawer gains a "Read as" selector (alongside the existing Header
+  toggle) that re-reads every selected file as one format, so a mixed or
+  misdetected selection can be coerced — e.g. all files as CSV with a chosen
+  delimiter.
 
 ### Changed
 - **"Query in SQL" carries the chosen format and reader options into the
