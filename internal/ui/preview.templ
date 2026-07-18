@@ -1,6 +1,9 @@
 package ui
 
-import "github.com/apexion/apexion/internal/duckdb"
+import (
+	"github.com/apexion/apexion/internal/duckdb"
+	"github.com/apexion/apexion/internal/model"
+)
 
 templ FilePreviewPage(vm PreviewVM) {
 	@Layout("explorer", "File preview") {
@@ -17,7 +20,7 @@ templ FilePreviewPage(vm PreviewVM) {
 			</div>
 			<div class="flex items-center gap-2 shrink-0">
 				<a class="btn-ghost" href={ templ.SafeURL(parentExplorerURL(vm.Bucket, vm.Key)) }>← Back to folder</a>
-				<a class="btn-ghost" href={ templ.SafeURL(sqlURLForFile(vm)) }>@iconTerminal() Query in SQL</a>
+				@QueryInSqlLink(vm.Bucket, vm.Key, vm.Format, vm.Opts, false)
 			</div>
 		</div>
 
@@ -40,21 +43,19 @@ templ FilePreviewPage(vm PreviewVM) {
 				<p class="muted mt-1 font-mono">queried directly from object storage — no download</p>
 			</div>
 			@CardBody() {
-				if vm.Error != "" {
-					@ErrorBanner(vm.Error)
-					if !vm.Ready {
-						<p class="text-xs text-slate-500 mt-2">The DuckDB <span class="font-mono">httpfs</span> extension could not be loaded (needs network on first use). Preview will work once it is installed.</p>
-					}
-				} else {
-					@PreviewOptions(filePreviewOptsVM(vm))
-					<div id="file-preview-result">
-						if vm.Result != nil {
-							@PreviewResultWith(vm.Result, insightsHref(vm.Bucket, vm.Key, vm.Format, vm.Opts))
-						} else {
-							@EmptyState("No preview available", "This file could not be previewed.")
+				@ReaderOptionsBar(filePreviewOptsVM(vm))
+				<div id="file-preview-result">
+					if vm.Error != "" {
+						@ErrorBanner(vm.Error)
+						if !vm.Ready {
+							<p class="text-xs text-slate-500 mt-2">The DuckDB <span class="font-mono">httpfs</span> extension could not be loaded (needs network on first use). Preview will work once it is installed.</p>
 						}
-					</div>
-				}
+					} else if vm.Result != nil {
+						@PreviewResultWith(vm.Result, insightsHref(vm.Bucket, vm.Key, vm.Format, vm.Opts))
+					} else {
+						@EmptyState("No preview available", "This file could not be previewed.")
+					}
+				</div>
 			}
 		}
 	}
@@ -95,6 +96,97 @@ templ PreviewOptions(vm PreviewOptsVM) {
 			}
 		</form>
 	}
+}
+
+// ReaderOptionsBar is the always-visible reader-options bar for single-file
+// surfaces (the preview page and the SQL editor). Unlike PreviewOptions it
+// leads with a "Read as" format selector, so an undetected or misnamed file
+// (e.g. a gzipped .log that is really JSON Lines) can be pointed at the right
+// reader; and it shows every toggle regardless of the current format, since
+// changing the format changes which toggles apply. The server emits only the
+// options each reader honours, so a toggle the format ignores is harmless.
+templ ReaderOptionsBar(vm PreviewOptsVM) {
+	<form
+		if vm.Method == "post" {
+			hx-post={ vm.Endpoint }
+		} else {
+			hx-get={ vm.Endpoint }
+		}
+		hx-target={ "#" + vm.Target }
+		hx-swap={ swapOr(vm.Swap) }
+		hx-trigger="change"
+		class="flex flex-wrap items-center gap-x-5 gap-y-2 mb-4 pb-4 border-b border-base-800 text-sm"
+	>
+		<input type="hidden" name="applied" value="1"/>
+		for _, kv := range vm.Hidden {
+			<input type="hidden" name={ kv[0] } value={ kv[1] }/>
+		}
+		<span class="eyebrow">Reader options</span>
+		if vm.ShowFormat {
+			<label class="flex items-center gap-2 text-slate-300">Read as
+				<select name="format" class="select !w-auto !py-1">
+					@optionSel("", "— pick format —", readAsCurrent(vm.Format))
+					@optionSel("csv", "CSV", readAsCurrent(vm.Format))
+					@optionSel("tsv", "TSV", readAsCurrent(vm.Format))
+					@optionSel("json", "JSON", readAsCurrent(vm.Format))
+					@optionSel("jsonl", "JSON Lines (NDJSON)", readAsCurrent(vm.Format))
+					@optionSel("parquet", "Parquet", readAsCurrent(vm.Format))
+				</select>
+			</label>
+		}
+		<label class="flex items-center gap-2 text-slate-300">Header
+			<select name="header" class="select !w-auto !py-1">
+				@optionSel("auto", "Auto", vm.Opts.Header)
+				@optionSel("present", "On", vm.Opts.Header)
+				@optionSel("none", "Off", vm.Opts.Header)
+			</select>
+		</label>
+		@optCheckbox("union_by_name", "Union by name", vm.Opts.UnionByName)
+		@optCheckbox("ignore_errors", "Ignore errors", vm.Opts.IgnoreErrors)
+	</form>
+}
+
+// QueryInSqlLink is the "Query in SQL" button on the file-preview header. It
+// carries the file's identity + current reader options to the SQL editor. When
+// the format has no DuckDB reader (undetected/Avro/ORC) it renders disabled so
+// the user isn't sent to an editor that cannot query the file. With oob=true it
+// is swapped out-of-band by the preview options bar, so choosing a format /
+// toggling "Ignore errors" on the preview flows straight into the editor link.
+templ QueryInSqlLink(bucket, key string, format model.Format, opts model.ReadOptions, oob bool) {
+	if href, ok := fileQueryURL(bucket, key, format, opts); ok {
+		<a
+			id="query-in-sql-link"
+			if oob {
+				hx-swap-oob="true"
+			}
+			class="btn-ghost"
+			href={ templ.SafeURL(href) }
+		>@iconTerminal() Query in SQL</a>
+	} else {
+		<span
+			id="query-in-sql-link"
+			if oob {
+				hx-swap-oob="true"
+			}
+			class="btn-ghost opacity-40 cursor-not-allowed"
+			title="Choose a readable format above to query this file in SQL"
+		>@iconTerminal() Query in SQL</span>
+	}
+}
+
+// filePreviewFragment is the HTMX response for a preview options change: the
+// refreshed result table plus an out-of-band update of the Query-in-SQL link so
+// it reflects the just-chosen format and reader options.
+templ filePreviewFragment(res *duckdb.Result, insightsURL, bucket, key string, format model.Format, opts model.ReadOptions) {
+	@PreviewResultWith(res, insightsURL)
+	@QueryInSqlLink(bucket, key, format, opts, true)
+}
+
+// filePreviewErrorFragment is filePreviewFragment for a failed preview: the
+// error message plus the same out-of-band link update.
+templ filePreviewErrorFragment(msg, bucket, key string, format model.Format, opts model.ReadOptions) {
+	@ErrorBanner(msg)
+	@QueryInSqlLink(bucket, key, format, opts, true)
 }
 
 // PreviewResult shows the exact generated SQL (Result.SQL) above the sample rows,

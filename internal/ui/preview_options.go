@@ -66,18 +66,30 @@ func optIgnore(f model.Format) bool {
 }
 
 // filePreviewOptsVM builds the options-bar VM for the single-file preview page.
+// Format is a visible "Read as" selector (not a hidden field) so an undetected
+// file can be pointed at the right reader; only bucket/key are hidden identity.
 func filePreviewOptsVM(vm PreviewVM) PreviewOptsVM {
 	return PreviewOptsVM{
-		Endpoint: "/ui/preview",
-		Target:   "file-preview-result",
-		Format:   vm.Format,
-		Opts:     vm.Opts,
+		Endpoint:   "/ui/preview",
+		Method:     "get",
+		Target:     "file-preview-result",
+		Swap:       "innerHTML",
+		Format:     vm.Format,
+		Opts:       vm.Opts,
+		ShowFormat: true,
 		Hidden: [][2]string{
 			{"bucket", vm.Bucket},
 			{"key", vm.Key},
-			{"format", string(vm.Format)},
 		},
 	}
+}
+
+// swapOr returns the hx-swap value, defaulting to innerHTML.
+func swapOr(s string) string {
+	if s == "" {
+		return "innerHTML"
+	}
+	return s
 }
 
 // datasetPreviewOptsVM builds the options-bar VM for the dataset Preview tab. The
@@ -93,24 +105,35 @@ func datasetPreviewOptsVM(id string, format model.Format) PreviewOptsVM {
 	}
 }
 
-// partialFilePreview re-runs a single-file preview with reader options from the
-// options bar and returns the generated SQL + result table.
+// partialFilePreview re-runs a single-file preview with the format + reader
+// options from the options bar and returns the generated SQL + result table,
+// plus an out-of-band refresh of the Query-in-SQL link so it stays in sync with
+// the chosen options. An empty/unreadable format yields a guiding message
+// rather than DuckDB's raw "preview not supported" error.
 func (h *Handler) partialFilePreview(w http.ResponseWriter, r *http.Request) {
-	q := r.URL.Query()
-	bucket, key := q.Get("bucket"), q.Get("key")
+	bucket, key := r.FormValue("bucket"), r.FormValue("key")
 	if bucket == "" || key == "" {
 		h.render(w, r, QueryError("bucket and key required"))
 		return
 	}
-	f := model.Format(q.Get("format"))
+	f := model.Format(r.FormValue("format"))
 	opts := previewOptsFromRequest(r)
-	res, err := h.preview.PreviewFileWith(r.Context(), bucket, key, f, opts, 100)
-	if err != nil {
-		h.render(w, r, QueryError(err.Error()))
+	if _, ok := fileInitialSQL(bucket, key, f, opts); !ok {
+		h.render(w, r, filePreviewErrorFragment(unreadableFormatMsg, bucket, key, f, opts))
 		return
 	}
-	h.render(w, r, PreviewResultWith(res, insightsHref(bucket, key, f, opts)))
+	res, err := h.preview.PreviewFileWith(r.Context(), bucket, key, f, opts, 100)
+	if err != nil {
+		h.render(w, r, filePreviewErrorFragment(err.Error(), bucket, key, f, opts))
+		return
+	}
+	h.render(w, r, filePreviewFragment(res, insightsHref(bucket, key, f, opts), bucket, key, f, opts))
 }
+
+// unreadableFormatMsg guides the user when a file's format was not detected (or
+// has no DuckDB reader): pick a format above and, for messy logs, ignore errors.
+const unreadableFormatMsg = "This file's format wasn't detected. Use “Read as” above to pick a reader " +
+	"(e.g. JSON Lines for a gzipped log), and enable “Ignore errors” if some rows are malformed."
 
 // insightsHref builds the lazy-load URL for a single file's column insights. It
 // carries bucket/key/format + the reader options (not raw SQL) so the profiler

@@ -39,6 +39,9 @@ templ QueryPage(vm QueryVM) {
 				if vm.Sel != "" {
 					@SqlOptionsDrawer(vm)
 				}
+				if vm.File != nil {
+					@ReaderOptionsBar(fileEditorOptsVM(*vm.File))
+				}
 				@SqlEditorAndSchema(vm)
 				<div id="query-results">
 					<div class="card p-8 text-center text-sm text-slate-500">Results will appear here.</div>

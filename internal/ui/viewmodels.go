@@ -60,14 +60,31 @@ type PreviewVM struct {
 }
 
 // PreviewOptsVM drives a live reader-options bar shown above a data preview. On
-// change it re-GETs Endpoint (with the toggles + any Hidden identity fields) and
-// swaps the regenerated SQL + result table into #Target.
+// change it re-submits Endpoint (with the toggles + any Hidden identity fields)
+// and swaps the regenerated SQL + result table into #Target.
 type PreviewOptsVM struct {
 	Endpoint string
+	Method   string // "get" (default) or "post"
 	Target   string
+	Swap     string // hx-swap value; default "innerHTML"
 	Format   model.Format
 	Opts     model.ReadOptions
-	Hidden   [][2]string
+	// ShowFormat renders a "Read as" format selector so a misdetected or
+	// unknown-extension file (e.g. a gzipped log with no .jsonl suffix) can be
+	// coerced into a supported reader. Off for dataset previews (fixed format).
+	ShowFormat bool
+	Hidden     [][2]string
+}
+
+// QueryFileVM identifies a single object opened in the SQL editor via
+// "Query in SQL". It backs the editor's reader-options bar, which regenerates
+// the FROM clause (and thus the prefilled SQL) when the format or a toggle
+// changes — the single-file analogue of the multi-file selection drawer.
+type QueryFileVM struct {
+	Bucket string
+	Key    string
+	Format model.Format
+	Opts   model.ReadOptions
 }
 
 // DatasetsVM is the datasets listing view model.
@@ -96,6 +113,11 @@ type QueryVM struct {
 	SelSummary *selection.CompatSummary
 	SelOpts    model.ReadOptions
 	SelExpired bool
+
+	// Single-file editor ("Query in SQL" from a file preview). When set, the
+	// editor shows a reader-options bar (format override + toggles) that
+	// regenerates InitialSQL on change.
+	File *QueryFileVM
 }
 
 // SettingsVM powers the settings page.
