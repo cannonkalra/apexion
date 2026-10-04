@@ -1,6 +1,6 @@
-// Command seed uploads a set of realistic sample datasets to MinIO so Apexion
-// has something to discover: CSV (with PII), Parquet, JSONL, a Hive-partitioned
-// Parquet table, and a Delta Lake table.
+// Command seed uploads a set of realistic sample datasets to an S3-compatible
+// store (MinIO, SeaweedFS, …) so Apexion has something to discover: CSV (with
+// PII), Parquet, JSONL, a Hive-partitioned Parquet table, and a Delta Lake table.
 package main
 
 import (
@@ -10,8 +10,9 @@ import (
 	"log"
 	"os"
 
-	"github.com/minio/minio-go/v7"
-	"github.com/minio/minio-go/v7/pkg/credentials"
+	"github.com/aws/aws-sdk-go-v2/aws"
+	"github.com/aws/aws-sdk-go-v2/credentials"
+	"github.com/aws/aws-sdk-go-v2/service/s3"
 	pq "github.com/parquet-go/parquet-go"
 )
 
@@ -28,21 +29,27 @@ func main() {
 	secret := env("APEXION_MINIO_SECRET_KEY", "minioadmin")
 	bucket := env("SEED_BUCKET", "warehouse")
 
-	mc, err := minio.New(endpoint, &minio.Options{
-		Creds:  credentials.NewStaticV4(access, secret, ""),
-		Secure: false,
+	client := s3.New(s3.Options{
+		Region:       "us-east-1",
+		BaseEndpoint: aws.String("http://" + endpoint),
+		UsePathStyle: true,
+		Credentials:  credentials.NewStaticCredentialsProvider(access, secret, ""),
+		// S3-compatible stores do not all support the SDK's default checksums.
+		RequestChecksumCalculation: aws.RequestChecksumCalculationWhenRequired,
+		ResponseChecksumValidation: aws.ResponseChecksumValidationWhenRequired,
 	})
-	must(err)
 
 	ctx := context.Background()
-	exists, _ := mc.BucketExists(ctx, bucket)
-	if !exists {
-		must(mc.MakeBucket(ctx, bucket, minio.MakeBucketOptions{}))
+	if _, err := client.HeadBucket(ctx, &s3.HeadBucketInput{Bucket: aws.String(bucket)}); err != nil {
+		_, err = client.CreateBucket(ctx, &s3.CreateBucketInput{Bucket: aws.String(bucket)})
+		must(err)
 	}
 
 	put := func(key string, data []byte, ct string) {
-		_, err := mc.PutObject(ctx, bucket, key, bytes.NewReader(data), int64(len(data)),
-			minio.PutObjectOptions{ContentType: ct})
+		_, err := client.PutObject(ctx, &s3.PutObjectInput{
+			Bucket: aws.String(bucket), Key: aws.String(key),
+			Body: bytes.NewReader(data), ContentType: aws.String(ct),
+		})
 		must(err)
 		fmt.Printf("  uploaded %s/%s (%d bytes)\n", bucket, key, len(data))
 	}

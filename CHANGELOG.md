@@ -7,6 +7,16 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Changed
+- **S3 access uses the AWS SDK for Go v2** instead of minio-go. Behaviour is
+  unchanged for MinIO, SeaweedFS, R2, and AWS: S3-compatible endpoints are
+  addressed path-style, AWS buckets have their region discovered per bucket,
+  and IAM roles resolve through the standard AWS credential chain (env, shared
+  config, SSO, IRSA, ECS, EC2 instance role). Object ETags are stored exactly
+  as before, so incremental crawls after upgrading do not re-process unchanged
+  objects. Ranged reads are served from 1 MiB blocks, so sampling a Parquet
+  file takes a handful of requests (4 for an 11 MB file).
+
 ## [0.0.5] - 2026-10-04
 
 ### Changed

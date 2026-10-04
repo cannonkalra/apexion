@@ -17,8 +17,9 @@ import (
 	"os"
 	"testing"
 
-	"github.com/minio/minio-go/v7"
-	"github.com/minio/minio-go/v7/pkg/credentials"
+	"github.com/aws/aws-sdk-go-v2/aws"
+	"github.com/aws/aws-sdk-go-v2/credentials"
+	"github.com/aws/aws-sdk-go-v2/service/s3"
 	"github.com/rs/zerolog"
 
 	"github.com/apexion/apexion/internal/config"
@@ -33,26 +34,43 @@ func itEndpoint() string {
 	return "localhost:19000"
 }
 
+func itAccessKey() string {
+	if v := os.Getenv("APEXION_S3_ACCESS_KEY"); v != "" {
+		return v
+	}
+	return "minioadmin"
+}
+
+func itSecretKey() string {
+	if v := os.Getenv("APEXION_S3_SECRET_KEY"); v != "" {
+		return v
+	}
+	return "minioadmin"
+}
+
 func seedGzCSV(t *testing.T, bucket, key string, body string) {
 	t.Helper()
-	raw, err := minio.New(itEndpoint(), &minio.Options{
-		Creds:        credentials.NewStaticV4("minioadmin", "minioadmin", ""),
-		Secure:       false,
-		BucketLookup: minio.BucketLookupPath,
+	raw := s3.New(s3.Options{
+		Region:                     "us-east-1",
+		BaseEndpoint:               aws.String("http://" + itEndpoint()),
+		UsePathStyle:               true,
+		Credentials:                credentials.NewStaticCredentialsProvider(itAccessKey(), itSecretKey(), ""),
+		RequestChecksumCalculation: aws.RequestChecksumCalculationWhenRequired,
 	})
-	if err != nil {
-		t.Fatalf("minio: %v", err)
-	}
 	ctx := context.Background()
-	_ = raw.MakeBucket(ctx, bucket, minio.MakeBucketOptions{})
+	_, _ = raw.CreateBucket(ctx, &s3.CreateBucketInput{Bucket: aws.String(bucket)})
 	var buf bytes.Buffer
 	gz := gzip.NewWriter(&buf)
 	if _, err := gz.Write([]byte(body)); err != nil {
 		t.Fatalf("gzip: %v", err)
 	}
-	gz.Close()
-	if _, err := raw.PutObject(ctx, bucket, key, bytes.NewReader(buf.Bytes()), int64(buf.Len()),
-		minio.PutObjectOptions{ContentType: "application/gzip"}); err != nil {
+	if err := gz.Close(); err != nil {
+		t.Fatalf("gzip close: %v", err)
+	}
+	if _, err := raw.PutObject(ctx, &s3.PutObjectInput{
+		Bucket: aws.String(bucket), Key: aws.String(key),
+		Body: bytes.NewReader(buf.Bytes()), ContentType: aws.String("application/gzip"),
+	}); err != nil {
 		t.Fatalf("put: %v", err)
 	}
 }
@@ -65,7 +83,7 @@ func TestIntegrationReadOptionsHeaderlessGzCSV(t *testing.T) {
 	seedGzCSV(t, bucket, "feed/2023-10-11/part-0.csv.gz", "a,1\nb,2\n")
 
 	eng, err := New(config.MinIOConfig{
-		Endpoint: itEndpoint(), AccessKey: "minioadmin", SecretKey: "minioadmin", UseSSL: false,
+		Endpoint: itEndpoint(), AccessKey: itAccessKey(), SecretKey: itSecretKey(), UseSSL: false,
 	}, zerolog.Nop())
 	if err != nil {
 		t.Fatalf("engine: %v", err)

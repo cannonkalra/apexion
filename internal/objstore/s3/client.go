@@ -1,21 +1,26 @@
-// Package s3 wraps a MinIO/S3-compatible object store and implements the
-// objstore.ObjectStore interface (plus a Connector) used by the rest of the
-// application. It is the only place, alongside other provider packages, that
-// imports a storage SDK. It never downloads whole objects for schema reads:
-// text formats stream a bounded prefix, footer formats use ranged random reads.
+// Package s3 wraps an S3-compatible object store with the AWS SDK for Go v2 and
+// implements the objstore.ObjectStore interface (plus a Connector) used by the
+// rest of the application. It is the only place, alongside other provider
+// packages, that imports a storage SDK. It never downloads whole objects for
+// schema reads: text formats stream a bounded prefix, footer formats use ranged
+// random reads.
 package s3
 
 import (
 	"context"
 	"fmt"
 	"io"
-	"net/http"
+	"regexp"
 	"sort"
 	"strings"
-	"time"
+	"sync"
 
-	"github.com/minio/minio-go/v7"
-	"github.com/minio/minio-go/v7/pkg/credentials"
+	"github.com/aws/aws-sdk-go-v2/aws"
+	"github.com/aws/aws-sdk-go-v2/config"
+	"github.com/aws/aws-sdk-go-v2/credentials"
+	"github.com/aws/aws-sdk-go-v2/feature/s3/manager"
+	"github.com/aws/aws-sdk-go-v2/service/s3"
+	"github.com/aws/aws-sdk-go-v2/service/s3/types"
 
 	"github.com/apexion/apexion/internal/format"
 	"github.com/apexion/apexion/internal/objstore"
@@ -26,43 +31,105 @@ import (
 // layer cannot import explorer (explorer depends on objstore, not vice versa).
 const defaultPageSize = 500
 
-// Client is a thin wrapper over the MinIO SDK. It implements
+// maxKeys is S3's cap on keys per ListObjectsV2 request.
+const maxKeys = 1000
+
+// defaultRegion signs requests when no region is configured, and is the
+// partition hint for discovering an AWS bucket's region.
+const defaultRegion = "us-east-1"
+
+// awsDefaultEndpoint matches AWS's standard S3 hostnames, which the SDK resolves
+// itself (per region). Any other amazonaws.com host — e.g. a VPC interface
+// endpoint — is used as given.
+var awsDefaultEndpoint = regexp.MustCompile(`^(https?://)?s3([.-][a-z0-9-]+)?\.amazonaws\.com(\.cn)?/?$`)
+
+// Client is a thin wrapper over the AWS SDK S3 client. It implements
 // objstore.ObjectStore.
 type Client struct {
-	mc       *minio.Client
+	s3       *s3.Client
 	endpoint string
 	region   string
+	// discover is set for AWS connections without a region: each bucket's real
+	// region is looked up once (HeadBucket) and requests for it are signed for
+	// that region, since a bucket outside the signing region rejects them.
+	discover bool
+	regions  sync.Map // bucket → region, when discover
 }
 
 var _ objstore.ObjectStore = (*Client)(nil)
 
-// New connects to the object store.
+// New builds a client for the object store. It does no network I/O.
 func New(cfg objstore.Config) (*Client, error) {
-	var creds *credentials.Credentials
+	ctx := context.Background()
+	region := cfg.Region
+	discover := region == "" && isAWS(cfg)
+	if region == "" {
+		region = defaultRegion
+	}
+
+	// Checksums are only computed/validated when an operation requires them:
+	// this client only reads, and many S3-compatible stores (and ranged GETs)
+	// do not return the newer flexible checksums.
+	var awsCfg aws.Config
 	if cfg.UseRole {
-		// Mirror the AWS SDK default chain: env → shared config → IAM role
-		// (EC2 IMDS / ECS / IRSA web identity).
-		creds = credentials.NewChainCredentials([]credentials.Provider{
-			&credentials.EnvAWS{},
-			&credentials.FileAWSCredentials{},
-			&credentials.IAM{Client: &http.Client{Timeout: 10 * time.Second}},
-		})
+		// The AWS SDK default chain: env → shared config/credentials → SSO →
+		// web identity (IRSA) → ECS → EC2 instance role (IMDS).
+		var err error
+		awsCfg, err = config.LoadDefaultConfig(ctx,
+			config.WithRegion(region),
+			config.WithRequestChecksumCalculation(aws.RequestChecksumCalculationWhenRequired),
+			config.WithResponseChecksumValidation(aws.ResponseChecksumValidationWhenRequired),
+		)
+		if err != nil {
+			return nil, fmt.Errorf("load AWS config: %w", err)
+		}
 	} else {
-		creds = credentials.NewStaticV4(cfg.AccessKey, cfg.SecretKey, cfg.SessionToken)
+		// Static keys: build the config directly so nothing is read from the
+		// environment or ~/.aws (the preview engine sets AWS_* env vars for
+		// DuckDB's table-format readers).
+		awsCfg = aws.Config{
+			Region:                     region,
+			Credentials:                aws.NewCredentialsCache(credentials.NewStaticCredentialsProvider(cfg.AccessKey, cfg.SecretKey, cfg.SessionToken)),
+			RequestChecksumCalculation: aws.RequestChecksumCalculationWhenRequired,
+			ResponseChecksumValidation: aws.ResponseChecksumValidationWhenRequired,
+		}
 	}
-	opts := &minio.Options{
-		Creds:  creds,
-		Secure: cfg.UseSSL,
-		Region: cfg.Region,
+
+	baseEndpoint := endpointURL(cfg)
+	client := s3.NewFromConfig(awsCfg, func(o *s3.Options) {
+		o.UsePathStyle = usePathStyle(cfg)
+		// Always set explicitly: an env AWS_ENDPOINT_URL(_S3) — which the preview
+		// engine may have set for a previous connection — must not redirect
+		// this client. nil means AWS's own regional endpoints.
+		o.BaseEndpoint = baseEndpoint
+	})
+	return &Client{s3: client, endpoint: cfg.Endpoint, region: cfg.Region, discover: discover}, nil
+}
+
+// usePathStyle reports whether requests address buckets in the path
+// (host/bucket/key) rather than the hostname (bucket.host/key). Only AWS uses
+// virtual-hosted addressing by default: S3-compatible stores (MinIO,
+// SeaweedFS, …) are addressed path-style, as most need it — SeaweedFS answers
+// a virtual-hosted LIST with an empty, successful result.
+func usePathStyle(cfg objstore.Config) bool {
+	return cfg.PathStyle || !isAWS(cfg)
+}
+
+// endpointURL is the base endpoint URL for the SDK, or nil to let it resolve
+// AWS's standard regional endpoints.
+func endpointURL(cfg objstore.Config) *string {
+	ep := strings.TrimSpace(cfg.Endpoint)
+	if ep == "" || (isAWS(cfg) && awsDefaultEndpoint.MatchString(ep)) {
+		return nil
 	}
-	if cfg.PathStyle {
-		opts.BucketLookup = minio.BucketLookupPath
+	if !strings.Contains(ep, "://") {
+		scheme := "http://"
+		if cfg.UseSSL {
+			scheme = "https://"
+		}
+		ep = scheme + ep
 	}
-	mc, err := minio.New(cfg.Endpoint, opts)
-	if err != nil {
-		return nil, fmt.Errorf("connect minio: %w", err)
-	}
-	return &Client{mc: mc, endpoint: cfg.Endpoint, region: cfg.Region}, nil
+	return aws.String(ep)
 }
 
 // Endpoint returns the configured endpoint.
@@ -71,92 +138,119 @@ func (c *Client) Endpoint() string { return c.endpoint }
 // Region returns the configured region.
 func (c *Client) Region() string { return c.region }
 
+// forBucket signs a request for the bucket's region when it is discovered per
+// bucket. A failed lookup leaves the default region, so the operation itself
+// reports the real error (e.g. NoSuchBucket, AccessDenied).
+func (c *Client) forBucket(ctx context.Context, bucket string) func(*s3.Options) {
+	return func(o *s3.Options) {
+		if !c.discover {
+			return
+		}
+		if r, err := c.bucketRegion(ctx, bucket); err == nil && r != "" {
+			o.Region = r
+		}
+	}
+}
+
+func (c *Client) bucketRegion(ctx context.Context, bucket string) (string, error) {
+	if r, ok := c.regions.Load(bucket); ok {
+		return r.(string), nil
+	}
+	r, err := manager.GetBucketRegion(ctx, c.s3, bucket)
+	if err != nil {
+		return "", err
+	}
+	c.regions.Store(bucket, r)
+	return r, nil
+}
+
 // ListBuckets returns the names of all buckets.
 func (c *Client) ListBuckets(ctx context.Context) ([]string, error) {
-	infos, err := c.mc.ListBuckets(ctx)
-	if err != nil {
-		return nil, err
-	}
-	names := make([]string, len(infos))
-	for i, b := range infos {
-		names[i] = b.Name
+	var names []string
+	p := s3.NewListBucketsPaginator(c.s3, &s3.ListBucketsInput{})
+	for p.HasMorePages() {
+		page, err := p.NextPage(ctx)
+		if err != nil {
+			return nil, err
+		}
+		for _, b := range page.Buckets {
+			names = append(names, aws.ToString(b.Name))
+		}
 	}
 	return names, nil
 }
 
-// BucketRegion resolves the region a bucket lives in. Calling it also primes the
-// SDK's internal region cache, so subsequent list/get operations sign with the
-// correct region even when the client was created without one (AWS auto-detect).
+// BucketRegion resolves the region a bucket lives in. For AWS connections
+// without a configured region it is looked up once per bucket (and cached, so
+// later requests are signed for it); otherwise it is the configured region.
 func (c *Client) BucketRegion(ctx context.Context, bucket string) (string, error) {
-	return c.mc.GetBucketLocation(ctx, bucket)
+	if c.discover {
+		return c.bucketRegion(ctx, bucket)
+	}
+	if c.region != "" {
+		return c.region, nil
+	}
+	return defaultRegion, nil
 }
 
 // WalkObjects streams every object under prefix to fn. Listing is recursive and
-// paginated by the SDK, so it scales to millions of objects with constant
-// memory. Returning an error from fn stops the walk.
+// paginated (1,000 keys per request), so it scales to millions of objects with
+// constant memory. Returning an error from fn stops the walk.
 func (c *Client) WalkObjects(ctx context.Context, bucket, prefix, startAfter string, fn func(objstore.ObjectMeta) error) error {
-	opts := minio.ListObjectsOptions{
-		Prefix:       prefix,
-		Recursive:    true,
-		StartAfter:   startAfter,
-		WithMetadata: false,
+	in := &s3.ListObjectsV2Input{Bucket: aws.String(bucket), Prefix: aws.String(prefix)}
+	if startAfter != "" {
+		in.StartAfter = aws.String(startAfter)
 	}
-	for obj := range c.mc.ListObjects(ctx, bucket, opts) {
-		if obj.Err != nil {
-			return obj.Err
-		}
-		if err := fn(objstore.ObjectMeta{
-			Key:          obj.Key,
-			ETag:         obj.ETag,
-			Size:         obj.Size,
-			LastModified: obj.LastModified,
-			StorageClass: obj.StorageClass,
-			VersionID:    obj.VersionID,
-		}); err != nil {
+	p := s3.NewListObjectsV2Paginator(c.s3, in)
+	for p.HasMorePages() {
+		page, err := p.NextPage(ctx, c.forBucket(ctx, bucket))
+		if err != nil {
 			return err
+		}
+		for _, o := range page.Contents {
+			if err := fn(objectMeta(o)); err != nil {
+				return err
+			}
 		}
 	}
 	return nil
 }
 
 // ListDirectory lists the immediate children of a prefix using a delimiter,
-// like a file browser: sub-folders (common prefixes) and files. It does not
-// recurse. When limit > 0 it stops after that many entries and reports
-// truncated=true, cancelling the underlying paginated LIST so a folder with
-// millions of children returns immediately instead of enumerating them all.
+// like a file browser: sub-folders (common prefixes) and files, in key order.
+// It does not recurse. When limit > 0 it stops after that many entries and
+// reports truncated=true, without fetching further pages, so a folder with
+// millions of children returns immediately.
 func (c *Client) ListDirectory(ctx context.Context, bucket, prefix string, limit int) (folders []string, files []objstore.ObjectMeta, truncated bool, err error) {
-	lctx, cancel := context.WithCancel(ctx)
-	defer cancel()
-
-	opts := minio.ListObjectsOptions{Prefix: prefix, Recursive: false}
-	for obj := range c.mc.ListObjects(lctx, bucket, opts) {
-		if obj.Err != nil {
-			if lctx.Err() != nil {
-				break // we cancelled after reaching the limit
-			}
-			return nil, nil, false, obj.Err
+	p := s3.NewListObjectsV2Paginator(c.s3, &s3.ListObjectsV2Input{
+		Bucket: aws.String(bucket), Prefix: aws.String(prefix), Delimiter: aws.String("/"),
+	})
+	for p.HasMorePages() {
+		page, err := p.NextPage(ctx, c.forBucket(ctx, bucket))
+		if err != nil {
+			return nil, nil, false, err
 		}
-		if strings.HasSuffix(obj.Key, "/") {
-			if obj.Key != prefix {
-				folders = append(folders, obj.Key)
+		// A page holds folders and files separately, each sorted; merge them so
+		// the limit keeps the lexicographically first entries.
+		cps, objs := page.CommonPrefixes, page.Contents
+		for len(cps) > 0 || len(objs) > 0 {
+			if len(cps) > 0 && (len(objs) == 0 || aws.ToString(cps[0].Prefix) < aws.ToString(objs[0].Key)) {
+				if f := aws.ToString(cps[0].Prefix); f != prefix {
+					folders = append(folders, f)
+				}
+				cps = cps[1:]
+			} else {
+				if k := aws.ToString(objs[0].Key); !strings.HasSuffix(k, "/") {
+					files = append(files, objectMeta(objs[0]))
+				}
+				objs = objs[1:]
 			}
-		} else {
-			files = append(files, objstore.ObjectMeta{
-				Key:          obj.Key,
-				ETag:         obj.ETag,
-				Size:         obj.Size,
-				LastModified: obj.LastModified,
-				StorageClass: obj.StorageClass,
-				VersionID:    obj.VersionID,
-			})
-		}
-		if limit > 0 && len(folders)+len(files) >= limit {
-			truncated = true
-			cancel() // stop the SDK's background pagination goroutine
-			break
+			if limit > 0 && len(folders)+len(files) >= limit {
+				return folders, files, true, nil
+			}
 		}
 	}
-	return folders, files, truncated, nil
+	return folders, files, false, nil
 }
 
 // ListPage lists one bounded, cursor-resumable page of a prefix's immediate
@@ -166,9 +260,7 @@ func (c *Client) ListDirectory(ctx context.Context, bucket, prefix string, limit
 // It maps directly onto S3's ListObjectsV2: the cursor IS the
 // ContinuationToken and limit IS MaxKeys, so a single request returns at most
 // one page and NextContinuationToken resumes exactly where it left off — even
-// across common prefixes (folders). This is why we use the low-level Core API
-// rather than the high-level streaming ListObjects: the streaming API hides the
-// continuation token and its StartAfter cannot correctly resume a *delimited*
+// across common prefixes (folders). StartAfter cannot do this for a delimited
 // listing (a folder cursor re-collapses into the same common prefix). A folder
 // with millions of children therefore returns immediately, never enumerated.
 // When the listing is not truncated, HasMore is false and NextCursor is "".
@@ -177,46 +269,60 @@ func (c *Client) ListPage(ctx context.Context, bucket, prefix, cursor string, li
 	if limit <= 0 {
 		limit = defaultPageSize
 	}
-	core := minio.Core{Client: c.mc}
-	// startAfter is empty — pagination is driven entirely by the continuation
-	// token (cursor). delimiter "/" gives the file-browser (non-recursive) view.
-	result, err := core.ListObjectsV2(bucket, prefix, "", cursor, "/", limit)
+	if limit > maxKeys {
+		limit = maxKeys
+	}
+	in := &s3.ListObjectsV2Input{
+		Bucket:    aws.String(bucket),
+		Prefix:    aws.String(prefix),
+		Delimiter: aws.String("/"), // file-browser (non-recursive) view
+		MaxKeys:   aws.Int32(int32(limit)),
+	}
+	if cursor != "" {
+		in.ContinuationToken = aws.String(cursor)
+	}
+	out, err := c.s3.ListObjectsV2(ctx, in, c.forBucket(ctx, bucket))
 	if err != nil {
 		return objstore.PageResult{}, err
 	}
 
 	var res objstore.PageResult
-	for _, cp := range result.CommonPrefixes {
-		if cp.Prefix == prefix {
-			continue // the prefix itself, if echoed back
+	for _, cp := range out.CommonPrefixes {
+		if p := aws.ToString(cp.Prefix); p != prefix { // skip the prefix itself, if echoed back
+			res.Folders = append(res.Folders, p)
 		}
-		res.Folders = append(res.Folders, cp.Prefix)
 	}
-	for _, obj := range result.Contents {
-		if strings.HasSuffix(obj.Key, "/") {
+	for _, o := range out.Contents {
+		if strings.HasSuffix(aws.ToString(o.Key), "/") {
 			continue // a folder-placeholder object (key == prefix), not a file
 		}
-		res.Files = append(res.Files, objstore.ObjectMeta{
-			Key:          obj.Key,
-			ETag:         obj.ETag,
-			Size:         obj.Size,
-			LastModified: obj.LastModified,
-			StorageClass: obj.StorageClass,
-			VersionID:    obj.VersionID,
-		})
+		res.Files = append(res.Files, objectMeta(o))
 	}
-	res.HasMore = result.IsTruncated
+	res.HasMore = aws.ToBool(out.IsTruncated)
 	if res.HasMore {
-		res.NextCursor = result.NextContinuationToken
+		res.NextCursor = aws.ToString(out.NextContinuationToken)
 	}
 	return res, nil
 }
 
+// objectMeta converts a listed object. The ETag is unquoted (S3 returns it in
+// quotes), matching what earlier versions stored, so crawl change detection —
+// which hashes the ETag — does not see every object as changed.
+func objectMeta(o types.Object) objstore.ObjectMeta {
+	return objstore.ObjectMeta{
+		Key:          aws.ToString(o.Key),
+		ETag:         strings.Trim(aws.ToString(o.ETag), `"`),
+		Size:         aws.ToInt64(o.Size),
+		LastModified: aws.ToTime(o.LastModified),
+		StorageClass: string(o.StorageClass),
+	}
+}
+
 // ListBucketsPage returns one bounded, cursor-resumable page of bucket names.
-// S3 has no native bucket pagination — ListBuckets always returns every bucket
-// — so paging here is synthetic: fetch all names, sort them, drop names <=
-// cursor, and take limit. NextCursor is the last name returned and HasMore is
-// true when names remain beyond it. limit<=0 uses defaultPageSize.
+// Paging here is synthetic — fetch all names, sort them, drop names <= cursor,
+// and take limit — so pages are stable and sorted regardless of the backend.
+// NextCursor is the last name returned and HasMore is true when names remain
+// beyond it. limit<=0 uses defaultPageSize.
 func (c *Client) ListBucketsPage(ctx context.Context, cursor string, limit int) (names []string, nextCursor string, hasMore bool, err error) {
 	if limit <= 0 {
 		limit = defaultPageSize
@@ -253,26 +359,24 @@ func pageBuckets(all []string, cursor string, limit int) (names []string, nextCu
 	return names, nextCursor, hasMore
 }
 
-// listPrefix lists objects directly under a prefix (used by table resolvers).
+// listPrefix lists objects under a prefix, recursively (used by table resolvers).
 func (c *Client) listPrefix(ctx context.Context, bucket, prefix string) ([]format.Entry, error) {
 	var out []format.Entry
-	for obj := range c.mc.ListObjects(ctx, bucket, minio.ListObjectsOptions{Prefix: prefix, Recursive: true}) {
-		if obj.Err != nil {
-			return nil, obj.Err
-		}
-		out = append(out, format.Entry{Key: obj.Key, Size: obj.Size})
-	}
-	return out, nil
+	err := c.WalkObjects(ctx, bucket, prefix, "", func(om objstore.ObjectMeta) error {
+		out = append(out, format.Entry{Key: om.Key, Size: om.Size})
+		return nil
+	})
+	return out, err
 }
 
 // getBytes fetches the full bytes of a (small) object.
 func (c *Client) getBytes(ctx context.Context, bucket, key string) ([]byte, error) {
-	obj, err := c.mc.GetObject(ctx, bucket, key, minio.GetObjectOptions{})
+	out, err := c.s3.GetObject(ctx, &s3.GetObjectInput{Bucket: aws.String(bucket), Key: aws.String(key)}, c.forBucket(ctx, bucket))
 	if err != nil {
 		return nil, err
 	}
-	defer obj.Close()
-	return io.ReadAll(obj)
+	defer out.Body.Close()
+	return io.ReadAll(out.Body)
 }
 
 // Catalog adapts the client to format.Catalog for a specific bucket.
