@@ -154,6 +154,12 @@ curl -fsSL -o apexion https://github.com/cannonkalra/apexion/releases/latest/dow
 chmod +x apexion && ./apexion version
 ```
 
+**macOS (Intel)**
+```bash
+curl -fsSL -o apexion https://github.com/cannonkalra/apexion/releases/latest/download/apexion-darwin-amd64
+chmod +x apexion && ./apexion version
+```
+
 **Windows (x86_64)** — download `apexion-windows-amd64.exe` from the Releases page.
 
 ### Build from source
