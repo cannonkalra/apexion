@@ -6,7 +6,7 @@ import (
 )
 
 // connector builds S3-compatible ObjectStores. It is the only bridge between a
-// connection Config and the MinIO SDK; the rest of the app calls it through the
+// connection Config and the AWS SDK; the rest of the app calls it through the
 // feature registry and receives an objstore.ObjectStore.
 type connector struct{}
 
