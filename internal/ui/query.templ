@@ -22,7 +22,7 @@ templ QueryPage(vm QueryVM) {
 					}
 					@CardBody() {
 						if len(vm.Tables) == 0 {
-							<p class="text-sm text-slate-500">No tables registered yet. Register a dataset from the Datasets page.</p>
+							<p class="text-sm text-slate-500">No tables yet. Select files in the Explorer and save them as a table.</p>
 						} else {
 							<div class="space-y-1">
 								for _, t := range vm.Tables {

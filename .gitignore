@@ -8,6 +8,9 @@
 /data/*.duckdb
 *.duckdb
 *.duckdb.wal
+*.ducklake
+*.ducklake.wal
+*.ducklake.files/
 
 # Local environment overrides
 /.env

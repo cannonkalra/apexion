@@ -164,3 +164,16 @@ func TestQueryInitialSQL(t *testing.T) {
 		})
 	}
 }
+
+func TestSelectionSourceLabel(t *testing.T) {
+	cases := map[string]string{
+		"SELECT * FROM read_parquet(['s3://b/a.parquet', 's3://b/c.parquet'])": "2 selected files",
+		"SELECT * FROM read_csv_auto(['s3://b/a.csv'])":                        "1 selected file",
+		"SELECT 1": "Selected files",
+	}
+	for sql, want := range cases {
+		if got := selectionSourceLabel(sql); got != want {
+			t.Errorf("selectionSourceLabel(%q) = %q, want %q", sql, got, want)
+		}
+	}
+}

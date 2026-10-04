@@ -128,7 +128,7 @@ func QueryPage(vm QueryVM) templ.Component {
 					}
 					ctx = templ.InitializeContext(ctx)
 					if len(vm.Tables) == 0 {
-						templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 4, "<p class=\"text-sm text-slate-500\">No tables registered yet. Register a dataset from the Datasets page.</p>")
+						templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 4, "<p class=\"text-sm text-slate-500\">No tables yet. Select files in the Explorer and save them as a table.</p>")
 						if templ_7745c5c3_Err != nil {
 							return templ_7745c5c3_Err
 						}

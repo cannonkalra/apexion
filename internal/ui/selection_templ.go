@@ -646,11 +646,11 @@ func SelectionPreviewBody(token, suggestedName string, res *duckdb.Result) templ
 		if templ_7745c5c3_Err != nil {
 			return templ_7745c5c3_Err
 		}
-		templ_7745c5c3_Err = iconInbox().Render(ctx, templ_7745c5c3_Buffer)
+		templ_7745c5c3_Err = iconTable().Render(ctx, templ_7745c5c3_Buffer)
 		if templ_7745c5c3_Err != nil {
 			return templ_7745c5c3_Err
 		}
-		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 47, "Save to Datasets</button><p class=\"text-[11px] text-slate-500 basis-full\">Creates a queryable DuckDB view over the selected files — no data is copied.</p></form>")
+		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 47, "Save as table</button><p class=\"text-[11px] text-slate-500 basis-full\">Creates a queryable DuckDB view over the selected files — no data is copied.</p></form>")
 		if templ_7745c5c3_Err != nil {
 			return templ_7745c5c3_Err
 		}

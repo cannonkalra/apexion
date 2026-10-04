@@ -179,7 +179,7 @@ templ SelectionPreviewBody(token, suggestedName string, res *duckdb.Result) {
 				class="w-64 px-2.5 py-1.5 rounded-lg bg-base-950 border border-base-800 text-sm font-mono text-slate-200 focus:outline-none focus:ring-2 focus:ring-brand-500/40"
 			/>
 		</label>
-		<button type="submit" class="btn-primary text-sm">@iconInbox() Save to Datasets</button>
+		<button type="submit" class="btn-primary text-sm">@iconTable() Save as table</button>
 		<p class="text-[11px] text-slate-500 basis-full">Creates a queryable DuckDB view over the selected files — no data is copied.</p>
 	</form>
 	@ResultTable(res)

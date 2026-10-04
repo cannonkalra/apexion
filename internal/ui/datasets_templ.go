@@ -66,13 +66,13 @@ func DatasetsPage(vm DatasetsVM) templ.Component {
 				if templ_7745c5c3_Err != nil {
 					return templ_7745c5c3_Err
 				}
-				templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 2, "Crawl Dataset</a>")
+				templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 2, "Crawl folder</a>")
 				if templ_7745c5c3_Err != nil {
 					return templ_7745c5c3_Err
 				}
 				return nil
 			})
-			templ_7745c5c3_Err = PageHeader("", fmt.Sprintf("%d datasets", len(vm.Datasets))).Render(templ.WithChildren(ctx, templ_7745c5c3_Var3), templ_7745c5c3_Buffer)
+			templ_7745c5c3_Err = PageHeader("", fmt.Sprintf("%d folders discovered by crawling", len(vm.Datasets))).Render(templ.WithChildren(ctx, templ_7745c5c3_Var3), templ_7745c5c3_Buffer)
 			if templ_7745c5c3_Err != nil {
 				return templ_7745c5c3_Err
 			}
@@ -232,12 +232,12 @@ func DatasetsPage(vm DatasetsVM) templ.Component {
 				return templ_7745c5c3_Err
 			}
 			if len(vm.Datasets) == 0 {
-				templ_7745c5c3_Err = EmptyState("No datasets yet", "Use “Crawl Dataset” to discover a directory as a dataset.").Render(ctx, templ_7745c5c3_Buffer)
+				templ_7745c5c3_Err = EmptyState("No folders discovered yet", "Use “Crawl folder” to group a directory's files into one table you can save.").Render(ctx, templ_7745c5c3_Buffer)
 				if templ_7745c5c3_Err != nil {
 					return templ_7745c5c3_Err
 				}
 			} else {
-				templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 19, "<div class=\"overflow-x-auto\"><table class=\"w-full\"><thead><tr class=\"border-b border-base-800\"><th class=\"th\">Dataset</th><th class=\"th\">Format</th><th class=\"th\">Rows</th><th class=\"th\">Files</th><th class=\"th\">Size</th><th class=\"th\">Partitions</th><th class=\"th\">Catalog</th><th class=\"th\">Last Scan</th><th class=\"th text-right\">Actions</th></tr></thead> <tbody class=\"divide-y divide-base-800\">")
+				templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 19, "<div class=\"overflow-x-auto\"><table class=\"w-full\"><thead><tr class=\"border-b border-base-800\"><th class=\"th\">Folder</th><th class=\"th\">Format</th><th class=\"th\">Rows</th><th class=\"th\">Files</th><th class=\"th\">Size</th><th class=\"th\">Partitions</th><th class=\"th\">Catalog</th><th class=\"th\">Last Scan</th><th class=\"th text-right\">Actions</th></tr></thead> <tbody class=\"divide-y divide-base-800\">")
 				if templ_7745c5c3_Err != nil {
 					return templ_7745c5c3_Err
 				}
@@ -258,7 +258,7 @@ func DatasetsPage(vm DatasetsVM) templ.Component {
 			}
 			return nil
 		})
-		templ_7745c5c3_Err = Layout("datasets", "Datasets").Render(templ.WithChildren(ctx, templ_7745c5c3_Var2), templ_7745c5c3_Buffer)
+		templ_7745c5c3_Err = Layout("datasets", "Discovered").Render(templ.WithChildren(ctx, templ_7745c5c3_Var2), templ_7745c5c3_Buffer)
 		if templ_7745c5c3_Err != nil {
 			return templ_7745c5c3_Err
 		}
@@ -404,7 +404,7 @@ func datasetRow(d model.Dataset, catalogCount int) templ.Component {
 			return templ_7745c5c3_Err
 		}
 		if catalogCount > 0 {
-			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 32, "<a href=\"/catalog\" class=\"badge bg-accent-emerald/15 text-accent-emerald\">Registered ")
+			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 32, "<a href=\"/catalog\" class=\"badge bg-accent-emerald/15 text-accent-emerald\">In catalog ")
 			if templ_7745c5c3_Err != nil {
 				return templ_7745c5c3_Err
 			}
@@ -476,14 +476,14 @@ func datasetRow(d model.Dataset, catalogCount int) templ.Component {
 			return templ_7745c5c3_Err
 		}
 		if catalogCount == 0 {
-			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 41, "<button class=\"btn-ghost !px-2 !py-1\" title=\"Register as table\" hx-post=\"")
+			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 41, "<button class=\"btn-ghost !px-2 !py-1\" title=\"Save as table\" hx-post=\"")
 			if templ_7745c5c3_Err != nil {
 				return templ_7745c5c3_Err
 			}
 			var templ_7745c5c3_Var25 string
 			templ_7745c5c3_Var25, templ_7745c5c3_Err = templ.ResolveAttributeValue("/ui/datasets/" + d.ID + "/register")
 			if templ_7745c5c3_Err != nil {
-				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/ui/datasets.templ`, Line: 109, Col: 115}
+				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/ui/datasets.templ`, Line: 109, Col: 111}
 			}
 			_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ_7745c5c3_Var25)
 			if templ_7745c5c3_Err != nil {
@@ -536,7 +536,7 @@ func datasetRow(d model.Dataset, catalogCount int) templ.Component {
 		if templ_7745c5c3_Err != nil {
 			return templ_7745c5c3_Err
 		}
-		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 47, "\" hx-confirm=\"Delete this dataset?\" hx-target=\"")
+		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 47, "\" hx-confirm=\"Remove this folder from Discovered? Files in storage are not deleted.\" hx-target=\"")
 		if templ_7745c5c3_Err != nil {
 			return templ_7745c5c3_Err
 		}

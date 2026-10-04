@@ -23,12 +23,11 @@ SQL. No metastore, no cluster, no notebooks — just one executable.
 Point Apexion at an S3-compatible bucket and it lets you:
 
 - 🔎 **Explore S3 buckets** — a fast, VS Code-style browser for your object storage
-- 🕸️ **Crawl data lakes** — recursively walk buckets and group objects into datasets
-- 🔦 **Search datasets** — filter and find tables across your lake
 - 👁️ **Preview files** — inspect CSV, JSON, and Parquet without downloading anything
+- 🧺 **Query a selection in SQL** — pick several files and open them as one table, with reader options (header, delimiter, union-by-name, format override)
 - 🧬 **Inspect schemas** — automatic schema inference and column-level insights
-- 📦 **Import multiple datasets** — bulk-register everything a crawl discovers
-- 🗂️ **Register datasets into a DuckDB catalog** — turn raw prefixes into logical SQL tables
+- 🗂️ **Save as table** — keep a selection (or a crawled folder) as a named SQL table in a [DuckLake](https://ducklake.select) catalog; any DuckDB client can `ATTACH` it
+- 🕸️ **Discover folders** — crawl buckets to group files into table candidates, with Hive and positional partitions
 - ⚡ **Query everything locally through DuckDB** — read-only SQL, straight over object storage
 
 Everything runs from one process. Drop the binary on an EC2 box next to your data

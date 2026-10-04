@@ -6,9 +6,9 @@ import (
 )
 
 templ DatasetsPage(vm DatasetsVM) {
-	@Layout("datasets", "Datasets") {
-		@PageHeader("", fmt.Sprintf("%d datasets", len(vm.Datasets))) {
-			<a class="btn-primary" href="/wizard">@iconInbox() Crawl Dataset</a>
+	@Layout("datasets", "Discovered") {
+		@PageHeader("", fmt.Sprintf("%d folders discovered by crawling", len(vm.Datasets))) {
+			<a class="btn-primary" href="/wizard">@iconInbox() Crawl folder</a>
 		}
 
 		<div class="space-y-6">
@@ -48,13 +48,13 @@ templ DatasetsPage(vm DatasetsVM) {
 
 			<div class="card overflow-hidden">
 				if len(vm.Datasets) == 0 {
-					@EmptyState("No datasets yet", "Use “Crawl Dataset” to discover a directory as a dataset.")
+					@EmptyState("No folders discovered yet", "Use “Crawl folder” to group a directory's files into one table you can save.")
 				} else {
 					<div class="overflow-x-auto">
 						<table class="w-full">
 						<thead>
 							<tr class="border-b border-base-800">
-								<th class="th">Dataset</th>
+								<th class="th">Folder</th>
 								<th class="th">Format</th>
 								<th class="th">Rows</th>
 								<th class="th">Files</th>
@@ -92,7 +92,7 @@ templ datasetRow(d model.Dataset, catalogCount int) {
 		<td class="table-cell text-slate-400 font-mono text-xs">{ partitionKeyList(d.PartitionKeys) }</td>
 		<td class="table-cell">
 			if catalogCount > 0 {
-				<a href="/catalog" class="badge bg-accent-emerald/15 text-accent-emerald">Registered
+				<a href="/catalog" class="badge bg-accent-emerald/15 text-accent-emerald">In catalog
 					if catalogCount > 1 {
 						({ fmt.Sprintf("%d", catalogCount) })
 					}
@@ -106,14 +106,14 @@ templ datasetRow(d model.Dataset, catalogCount int) {
 			<div class="flex items-center justify-end gap-1">
 				<a href={ templ.SafeURL("/datasets/" + d.ID) } class="btn-ghost !px-2 !py-1" title="Open">@iconEye()</a>
 				if catalogCount == 0 {
-					<button class="btn-ghost !px-2 !py-1" title="Register as table" hx-post={ "/ui/datasets/" + d.ID + "/register" } hx-target="#toast-slot" hx-swap="innerHTML">@iconTable()</button>
+					<button class="btn-ghost !px-2 !py-1" title="Save as table" hx-post={ "/ui/datasets/" + d.ID + "/register" } hx-target="#toast-slot" hx-swap="innerHTML">@iconTable()</button>
 				}
 				<button class="btn-ghost !px-2 !py-1" title="Refresh (re-crawl)" hx-post={ "/ui/datasets/" + d.ID + "/refresh" } hx-target="#toast-slot" hx-swap="innerHTML">@iconRefresh()</button>
 				<button
 					class="btn-danger !px-2 !py-1"
 					title="Delete"
 					hx-delete={ "/ui/datasets/" + d.ID }
-					hx-confirm="Delete this dataset?"
+					hx-confirm="Remove this folder from Discovered? Files in storage are not deleted."
 					hx-target={ "#dataset-" + d.ID }
 					hx-swap="outerHTML swap:200ms"
 				>@iconTrash()</button>
