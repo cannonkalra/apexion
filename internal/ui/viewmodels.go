@@ -98,11 +98,15 @@ type DatasetsVM struct {
 // CatalogVM powers the catalog (logical SQL tables) page.
 type CatalogVM struct {
 	Entries []model.CatalogEntry
+	Lake    duckdb.LakeStatus
 }
 
 // QueryVM powers the SQL query console over catalog tables.
 type QueryVM struct {
-	Tables     []model.CatalogEntry
+	Tables []model.CatalogEntry
+	// LakeOther lists DuckLake tables/views that are not Apexion catalog
+	// entries — created by other clients sharing the lake.
+	LakeOther  []duckdb.LakeObject
 	Selected   string
 	InitialSQL string
 	Ready      bool

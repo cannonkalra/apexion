@@ -60,7 +60,7 @@ func (s *Service) RegisterDatasetWith(ctx context.Context, datasetID string, opt
 	if !duckdb.ValidIdentifier(name) {
 		return nil, fmt.Errorf("invalid table name %q (use letters, digits, underscore; may not start with a digit)", name)
 	}
-	if existing, _ := s.store.GetCatalogEntryByName(ctx, name); existing != nil {
+	if s.nameTaken(ctx, name) {
 		return nil, ErrTableNameTaken
 	}
 	strategy := opt.SchemaStrategy
@@ -142,7 +142,7 @@ func (s *Service) RegisterSelectionView(ctx context.Context, name, selectSQL str
 	if selectSQL == "" {
 		return nil, fmt.Errorf("no SQL to save")
 	}
-	if existing, _ := s.store.GetCatalogEntryByName(ctx, name); existing != nil {
+	if s.nameTaken(ctx, name) {
 		return nil, ErrTableNameTaken
 	}
 	now := time.Now().UTC()
@@ -270,12 +270,21 @@ func (s *Service) SuggestTableName(ctx context.Context, base string) string {
 	// Bounded: after a sane number of collisions, return the last candidate and
 	// let registration surface ErrTableNameTaken rather than loop forever.
 	for i := 2; i < 1000; i++ {
-		if existing, _ := s.store.GetCatalogEntryByName(ctx, candidate); existing == nil {
+		if !s.nameTaken(ctx, candidate) {
 			return candidate
 		}
 		candidate = fmt.Sprintf("%s_%d", name, i)
 	}
 	return candidate
+}
+
+// nameTaken reports whether a table name is used by a catalog entry or by an
+// object another client created in the shared DuckLake.
+func (s *Service) nameTaken(ctx context.Context, name string) bool {
+	if existing, _ := s.store.GetCatalogEntryByName(ctx, name); existing != nil {
+		return true
+	}
+	return s.duckdb.LakeHasObject(ctx, name)
 }
 
 // GetCatalog returns a catalog entry by id (nil if absent).
@@ -321,17 +330,25 @@ func (s *Service) RefreshCatalog(ctx context.Context, id string) error {
 	return nil
 }
 
-// RecreateViews re-registers every enabled catalog view. Called at startup
-// because the DuckDB engine is in-memory and starts empty each run.
+// RecreateViews ensures every enabled catalog entry has its view. Called at
+// startup. With DuckLake attached the views persist, so only missing ones are
+// created — this also moves tables registered before DuckLake into the lake on
+// first run, without re-snapshotting the rest. Without a lake the engine's
+// in-memory database starts empty, so every view is rebuilt.
 func (s *Service) RecreateViews(ctx context.Context) {
 	entries, err := s.store.ListCatalogEntries(ctx)
 	if err != nil {
 		s.log.Warn().Err(err).Msg("list catalog entries for view recreation")
 		return
 	}
+	existing, err := s.duckdb.LakeViews(ctx)
+	if err != nil {
+		s.log.Warn().Err(err).Msg("list DuckLake views; recreating all")
+		existing = nil
+	}
 	n := 0
 	for _, e := range entries {
-		if !e.Enabled {
+		if !e.Enabled || existing[e.Name] {
 			continue
 		}
 		if err := s.rebuildView(ctx, &e); err != nil {

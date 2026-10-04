@@ -4,6 +4,7 @@ package config
 
 import (
 	"fmt"
+	"path/filepath"
 	"strings"
 	"time"
 
@@ -12,12 +13,49 @@ import (
 
 // Config is the root configuration object.
 type Config struct {
-	Server  ServerConfig  `mapstructure:"server"`
-	Storage StorageConfig `mapstructure:"storage"`
-	MinIO   MinIOConfig   `mapstructure:"minio"`
-	Crawler CrawlerConfig `mapstructure:"crawler"`
-	Catalog CatalogConfig `mapstructure:"catalog"`
-	Log     LogConfig     `mapstructure:"log"`
+	Server   ServerConfig   `mapstructure:"server"`
+	Storage  StorageConfig  `mapstructure:"storage"`
+	MinIO    MinIOConfig    `mapstructure:"minio"`
+	Crawler  CrawlerConfig  `mapstructure:"crawler"`
+	Catalog  CatalogConfig  `mapstructure:"catalog"`
+	DuckLake DuckLakeConfig `mapstructure:"ducklake"`
+	Log      LogConfig      `mapstructure:"log"`
+}
+
+// DuckLakeConfig configures the DuckLake catalog that registered tables are
+// stored in. With it enabled, catalog views persist in DuckLake (and any DuckDB
+// client that ATTACHes the same lake sees them); disabled, they live only in
+// the in-memory query engine and are rebuilt at startup.
+type DuckLakeConfig struct {
+	Enabled bool `mapstructure:"enabled"`
+	// Metadata is the DuckLake metadata location: a file path (a DuckDB file,
+	// the default) or any ATTACH 'ducklake:<metadata>' target such as
+	// "postgres:dbname=lake host=…" for a lake shared between machines. Empty
+	// derives "<storage.path without .duckdb>.ducklake".
+	Metadata string `mapstructure:"metadata"`
+	// DataPath is where DuckLake writes table data (e.g. s3://bucket/lake/).
+	// Only used when the lake is first created — DuckLake records it in the
+	// metadata and rejects a different value on later attaches. Empty uses
+	// DuckLake's default (<metadata>.files/ next to a file catalog).
+	DataPath string `mapstructure:"data_path"`
+}
+
+// MetadataPath resolves the DuckLake metadata location, deriving it from the
+// storage path when unset. The derived path is made absolute so the ATTACH
+// snippet shown in the UI works from any directory. An in-memory store yields
+// "" (no persistent lake).
+func (c Config) MetadataPath() string {
+	if c.DuckLake.Metadata != "" {
+		return c.DuckLake.Metadata
+	}
+	if c.Storage.Path == "" || c.Storage.Path == ":memory:" {
+		return ""
+	}
+	p := strings.TrimSuffix(c.Storage.Path, ".duckdb") + ".ducklake"
+	if abs, err := filepath.Abs(p); err == nil {
+		return abs
+	}
+	return p
 }
 
 // CatalogConfig tunes the logical SQL catalog.
@@ -140,6 +178,10 @@ func setDefaults(v *viper.Viper) {
 	v.SetDefault("catalog.virtual_partition_prefix", "pt")
 	v.SetDefault("catalog.virtual_partition_separator", "")
 	v.SetDefault("catalog.discovery.strategy", "positional")
+
+	v.SetDefault("ducklake.enabled", true)
+	v.SetDefault("ducklake.metadata", "")
+	v.SetDefault("ducklake.data_path", "")
 
 	v.SetDefault("log.level", "info")
 	v.SetDefault("log.pretty", true)

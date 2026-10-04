@@ -1,10 +1,13 @@
 package ui
 
 import (
+	"context"
 	"net/http"
+	"strings"
 
 	"github.com/go-chi/chi/v5"
 
+	"github.com/apexion/apexion/internal/duckdb"
 	"github.com/apexion/apexion/internal/model"
 )
 
@@ -15,7 +18,7 @@ func (h *Handler) catalogPage(w http.ResponseWriter, r *http.Request) {
 		h.fail(w, err)
 		return
 	}
-	h.render(w, r, CatalogPage(CatalogVM{Entries: entries}))
+	h.render(w, r, CatalogPage(CatalogVM{Entries: entries, Lake: h.preview.LakeInfo(r.Context())}))
 }
 
 // queryPage renders the SQL query console over the catalog tables. With ?sel=
@@ -23,7 +26,7 @@ func (h *Handler) catalogPage(w http.ResponseWriter, r *http.Request) {
 // preview); with ?table= it prefills a single catalog table.
 func (h *Handler) queryPage(w http.ResponseWriter, r *http.Request) {
 	entries, _ := h.catalog.ListCatalog(r.Context())
-	vm := QueryVM{Tables: entries, Ready: h.preview.Ready()}
+	vm := QueryVM{Tables: entries, LakeOther: h.lakeOther(r.Context(), entries), Ready: h.preview.Ready()}
 	if token := r.URL.Query().Get("sel"); token != "" {
 		snap, ok := h.selection.Progress(token)
 		switch {
@@ -51,6 +54,39 @@ func (h *Handler) queryPage(w http.ResponseWriter, r *http.Request) {
 	}
 	vm.InitialSQL, vm.Selected = queryInitialSQL(r.URL.Query().Get("table"), r.URL.Query().Get("sql"))
 	h.render(w, r, QueryPage(vm))
+}
+
+// lakeOther returns the DuckLake objects that are not catalog entries, i.e.
+// tables and views other clients created in the shared lake.
+func (h *Handler) lakeOther(ctx context.Context, entries []model.CatalogEntry) []duckdb.LakeObject {
+	objs, err := h.preview.LakeObjects(ctx)
+	if err != nil {
+		h.log.Debug().Err(err).Msg("list DuckLake objects")
+		return nil
+	}
+	known := make(map[string]bool, len(entries))
+	for _, e := range entries {
+		known[e.Name] = true
+	}
+	var out []duckdb.LakeObject
+	for _, o := range objs {
+		if o.Schema == "main" && known[o.Name] {
+			continue
+		}
+		out = append(out, o)
+	}
+	return out
+}
+
+// lakeObjectRef is the SQL reference for a lake object from the default
+// catalog: a bare name for a plain identifier in main, otherwise quoted and
+// schema-qualified.
+func lakeObjectRef(o duckdb.LakeObject) string {
+	if o.Schema == "main" && duckdb.ValidIdentifier(o.Name) {
+		return o.Name
+	}
+	q := func(s string) string { return `"` + strings.ReplaceAll(s, `"`, `""`) + `"` }
+	return q(o.Schema) + "." + q(o.Name)
 }
 
 // queryInitialSQL derives the editor's prefilled SQL and the selected sidebar

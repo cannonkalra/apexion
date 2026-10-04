@@ -88,6 +88,32 @@ Controls how the crawler groups objects into datasets and names partitions.
   directories become separate datasets.
 - `auto` — infer per dataset.
 
+### `ducklake`
+
+Registered tables are stored as views in a [DuckLake](https://ducklake.select)
+catalog, so they persist across restarts and any DuckDB client can query them:
+
+```sql
+ATTACH 'ducklake:/path/to/data/apexion.ducklake' AS lake (READ_ONLY);
+SELECT * FROM lake.my_table;
+```
+
+The Catalog page shows the exact `ATTACH` statement. Views read the original
+files in place; Apexion never hands your data files to DuckLake (files adopted
+with `ducklake_add_data_files` are deleted by DuckLake's snapshot cleanup).
+
+| Key | Env | Default | Description |
+| --- | --- | --- | --- |
+| `ducklake.enabled` | `APEXION_DUCKLAKE_ENABLED` | `true` | Store catalog tables in DuckLake. `false` keeps them in memory, rebuilt at startup. |
+| `ducklake.metadata` | `APEXION_DUCKLAKE_METADATA` | derived | Metadata location. Empty uses `storage.path` with `.ducklake` in place of `.duckdb`. Any `ducklake:` target works, e.g. `postgres:dbname=lake host=db` to share one lake between machines. |
+| `ducklake.data_path` | `APEXION_DUCKLAKE_DATA_PATH` | `` (empty) | Where DuckLake writes table data, e.g. `s3://bucket/lake/`. Fixed when the lake is created; DuckLake rejects a different value later. Empty uses `<metadata>.files/`. |
+
+A local metadata file can be opened by one process at a time. While Apexion is
+running, other clients should use a Postgres-backed lake to share it. If the
+lake cannot be attached (for example, offline on first run, before the
+`ducklake` extension is cached), Apexion logs a warning, shows it on the Catalog
+page, and falls back to in-memory views.
+
 ### `log`
 
 | Key | Env | Default | Description |

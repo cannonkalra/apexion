@@ -1,6 +1,11 @@
 package ui
 
-import "github.com/apexion/apexion/internal/model"
+import (
+	"strconv"
+
+	"github.com/apexion/apexion/internal/duckdb"
+	"github.com/apexion/apexion/internal/model"
+)
 
 // CatalogPage lists the registered logical SQL tables. Each maps to a DuckDB
 // view that reads directly from object storage.
@@ -9,6 +14,7 @@ templ CatalogPage(vm CatalogVM) {
 		@PageHeader("", "Logical SQL tables — each reads its dataset's files directly from storage. No data is copied.") {
 			<a class="btn-ghost" href="/datasets">@iconTable() Register a dataset</a>
 		}
+		@lakeStatus(vm.Lake)
 		if len(vm.Entries) == 0 {
 			@EmptyState("No tables yet", "Register a dataset from the Datasets page to expose it as a SQL table.")
 		} else {
@@ -73,4 +79,25 @@ templ catalogRow(e model.CatalogEntry) {
 			</div>
 		</td>
 	</tr>
+}
+
+// lakeStatus says where catalog tables are stored: the attached DuckLake (with
+// its latest snapshot and how to attach it from any DuckDB client), or — when
+// the lake failed to attach — that tables are in-memory only.
+templ lakeStatus(l duckdb.LakeStatus) {
+	if l.Attached {
+		<div class="banner-info mb-6">
+			Stored in DuckLake <span class="font-mono">{ l.Metadata }</span>
+			if l.SnapshotID > 0 {
+				· snapshot #{ strconv.FormatInt(l.SnapshotID, 10) }, { timeAgo(l.SnapshotTime) }
+			}
+			<div class="mt-1 text-xs text-slate-400">
+				Query it from any DuckDB client: <span class="font-mono select-all">{ "ATTACH 'ducklake:" + l.Metadata + "' AS lake (READ_ONLY);" }</span>
+			</div>
+		</div>
+	} else if l.Err != "" {
+		<div class="mb-6">
+			@ErrorBanner("DuckLake unavailable (" + l.Err + "). Tables are kept in memory and rebuilt on restart.")
+		</div>
+	}
 }

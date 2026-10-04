@@ -50,6 +50,20 @@ catalog:
     # partition), or auto.
     strategy: positional
 
+# DuckLake catalog. Registered tables are stored as views in a DuckLake, so they
+# persist across restarts and any DuckDB client can query them with
+#   ATTACH 'ducklake:data/apexion.ducklake' AS lake;
+# Views read the original files in place — DuckLake never takes ownership of
+# your data files.
+ducklake:
+  enabled: true
+  # Metadata location. Empty derives it from storage.path (data/apexion.ducklake).
+  # Use "postgres:dbname=lake host=…" to share one lake between machines.
+  metadata: ""
+  # Where DuckLake writes table data, e.g. s3://bucket/lake/. Fixed when the lake
+  # is first created; empty uses <metadata>.files/.
+  data_path: ""
+
 log:
   level: info
   pretty: true
