@@ -508,7 +508,36 @@ templ FolderStats(s explorer.FolderSummary) {
 			}
 		</div>
 		<div><span class="text-slate-500">Modified </span><span class="text-white font-medium">{ timeAgo(s.LastModified) }</span></div>
+		<div title={ folderCostTitle(s) }><span class="text-slate-500">Cost </span><span class="text-white font-medium">{ costLabel(s.Cost, s.Truncated) }/mo</span></div>
 	</div>
+}
+
+// FolderRowStats fills a folder row's size, modified, and cost columns from a
+// lazily computed (bounded) recursive summary. It replaces the row's
+// .folder-stats placeholder, so it keeps the same column widths.
+templ FolderRowStats(s explorer.FolderSummary) {
+	<span class="folder-stats contents">
+		<span class="text-xs text-slate-500 w-20 text-right">{ humanBytes(s.Size) }{ truncatedMark(s.Truncated) }</span>
+		<span class="text-xs text-slate-600 w-24 text-right hidden sm:block">{ timeAgo(s.LastModified) }</span>
+		<span class="text-xs text-slate-400 w-20 text-right tabular-nums" title={ folderCostTitle(s) }>{ costLabel(s.Cost, s.Truncated) }</span>
+	</span>
+}
+
+// folderRowStatsPending is the placeholder a folder row shows until its stats load.
+templ folderRowStatsPending() {
+	<span class="folder-stats contents">
+		<span class="text-xs text-slate-700 w-20 text-right">…</span>
+		<span class="text-xs text-slate-700 w-24 text-right hidden sm:block">…</span>
+		<span class="text-xs text-slate-700 w-20 text-right">…</span>
+	</span>
+}
+
+templ FolderRowStatsError() {
+	<span class="folder-stats contents">
+		<span class="w-20"></span>
+		<span class="w-24 hidden sm:block"></span>
+		<span class="text-xs text-slate-600 w-20 text-right" title="Could not list this folder">—</span>
+	</span>
 }
 
 templ FolderStatsError() {
@@ -520,6 +549,17 @@ templ FolderStatsError() {
 // this same container so the divide styling flows across pages.
 templ DirListing(l *explorer.DirListing, infinite bool) {
 	<div class="card overflow-hidden">
+		if len(l.Folders) > 0 || len(l.Files) > 0 {
+			<div class="flex items-center gap-3 px-4 py-2 border-b border-base-800 bg-base-850/50 text-[11px] font-medium uppercase tracking-wide text-slate-500">
+				<span class="w-4 shrink-0"></span>
+				<span class="flex-1">Name</span>
+				<span class="w-20 text-right">Format</span>
+				<span class="w-4"></span>
+				<span class="w-20 text-right">Size</span>
+				<span class="w-24 text-right hidden sm:block">Modified</span>
+				<span class="w-20 text-right cursor-help" title={ costBasis(l.PriceRegion) + "\nFolders: up to the first 5,000 files." }>Cost</span>
+			</div>
+		}
 		<div id="explorer-rows" class="divide-y divide-base-800">
 			if len(l.Folders) == 0 && len(l.Files) == 0 {
 				<div class="p-8 text-center text-sm text-slate-500">Empty folder.</div>
@@ -533,10 +573,23 @@ templ DirListing(l *explorer.DirListing, infinite bool) {
 // initial page and the load-more fragment so appended rows are identical.
 templ dirRows(l *explorer.DirListing) {
 	for _, f := range l.Folders {
-		<a href={ templ.SafeURL("/explorer?bucket=" + l.Bucket + "&prefix=" + f.Path) } class="flex items-center gap-3 px-4 py-2.5 hover:bg-base-850/60">
+		// Size, modified, and cost need a recursive scan, so each folder row
+		// loads them lazily once it scrolls into view (bounded, like the
+		// folder summary). The link itself still navigates on click.
+		<a
+			href={ templ.SafeURL("/explorer?bucket=" + l.Bucket + "&prefix=" + f.Path) }
+			class="flex items-center gap-3 px-4 py-2.5 hover:bg-base-850/60"
+			hx-get={ "/ui/partials/folder-row-stats?" + summaryQuery(l.Bucket, f.Path) }
+			hx-trigger="revealed"
+			hx-target="find .folder-stats"
+			hx-swap="outerHTML"
+		>
+			<span class="w-4 shrink-0"></span>
 			<span class="text-accent-amber">@iconFolder()</span>
 			<span class="text-sm text-slate-200 flex-1 truncate">{ f.Name }</span>
-			<span class="text-xs text-slate-600">folder</span>
+			<span class="text-xs text-slate-600 w-20 text-right">folder</span>
+			<span class="w-4"></span>
+			@folderRowStatsPending()
 		</a>
 	}
 	for _, file := range l.Files {
@@ -560,10 +613,11 @@ templ dirRows(l *explorer.DirListing) {
 				<span class="text-slate-500">@iconFile()</span>
 				<span class="text-sm text-slate-200 flex-1 truncate">{ file.Name }</span>
 			</a>
-			@FormatPill(file.Format)
+			<span class="w-20 flex justify-end">@FormatPill(file.Format)</span>
 			<span id={ rowBadgeID(l.Bucket, file.Key, string(file.Format)) } class="w-4 grid place-items-center"></span>
 			<span class="text-xs text-slate-500 w-20 text-right">{ humanBytes(file.Size) }</span>
 			<span class="text-xs text-slate-600 w-24 text-right hidden sm:block">{ timeAgo(file.Modified) }</span>
+			<span class="text-xs text-slate-400 w-20 text-right tabular-nums" title={ fileCostTitle(l.PriceRegion, file) }>{ costLabel(file.Cost, false) }</span>
 		</div>
 	}
 }

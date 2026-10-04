@@ -76,6 +76,7 @@ func (h *Handler) Routes() http.Handler {
 	r.Route("/ui", func(r chi.Router) {
 		r.Get("/partials/explorer-summary", h.partialExplorerSummary)
 		r.Get("/partials/explorer-page", h.partialExplorerPage)
+		r.Get("/partials/folder-row-stats", h.partialFolderRowStats)
 		r.Get("/preview", h.partialFilePreview)
 		r.Get("/insights", h.partialColumnInsights)
 		r.Get("/datasets/{id}/preview", h.partialDatasetPreview)
@@ -195,6 +196,17 @@ func (h *Handler) partialExplorerSummary(w http.ResponseWriter, r *http.Request)
 		return
 	}
 	h.render(w, r, FolderStats(*summary))
+}
+
+// partialFolderRowStats lazily fills one folder row's size, modified, and
+// cost columns from the same bounded recursive summary as the folder header.
+func (h *Handler) partialFolderRowStats(w http.ResponseWriter, r *http.Request) {
+	summary, err := h.explorer.FolderSummary(r.Context(), r.URL.Query().Get("bucket"), r.URL.Query().Get("prefix"))
+	if err != nil {
+		h.render(w, r, FolderRowStatsError())
+		return
+	}
+	h.render(w, r, FolderRowStats(*summary))
 }
 
 // partialExplorerPage returns ONE cursor-resumed page of a folder: just the rows

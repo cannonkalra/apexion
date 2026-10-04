@@ -2,11 +2,14 @@ package ui
 
 import (
 	"encoding/json"
+	"fmt"
 	"net/url"
 	"path"
 	"strconv"
+	"strings"
 
 	"github.com/apexion/apexion/internal/explorer"
+	"github.com/apexion/apexion/internal/pricing"
 )
 
 // parentExplorerURL links back to the folder containing a key.
@@ -148,4 +151,81 @@ func sortOptions(current string) []sortOption {
 		opts[i].Selected = opts[i].Value == current
 	}
 	return opts
+}
+
+// costLabel formats an estimated monthly storage cost in USD: cents for
+// anything from $0.01, "<$0.01" for a non-zero smaller amount. truncated marks
+// a folder whose bounded scan stopped early, so the cost is a lower bound.
+func costLabel(usd float64, truncated bool) string {
+	var s string
+	switch {
+	case usd == 0:
+		s = "$0.00"
+	case usd < 0.01:
+		s = "<$0.01"
+	default:
+		s = "$" + thousands(fmt.Sprintf("%.2f", usd))
+	}
+	if truncated {
+		return "≥ " + s
+	}
+	return s
+}
+
+// thousands inserts commas into the integer part of a decimal string.
+func thousands(s string) string {
+	intPart, frac, _ := strings.Cut(s, ".")
+	var b strings.Builder
+	for i, r := range intPart {
+		if i > 0 && (len(intPart)-i)%3 == 0 {
+			b.WriteByte(',')
+		}
+		b.WriteRune(r)
+	}
+	if frac != "" {
+		b.WriteString("." + frac)
+	}
+	return b.String()
+}
+
+// costBasis explains a cost figure: storage only, at AWS list prices for the
+// pricing region (non-AWS stores are shown as their S3 equivalent).
+func costBasis(region string) string {
+	return "Estimated monthly S3 storage cost at AWS list prices for " + region +
+		" (storage only; first volume tier; prices as of " + pricingDate() + ")"
+}
+
+// fileCostTitle is the tooltip for one file's cost: its class and exact amount.
+func fileCostTitle(region string, f explorer.FileEntry) string {
+	class := f.StorageClass
+	if class == "" {
+		class = pricing.Standard
+	}
+	return fmt.Sprintf("%s/month · %s · $%g per GB-month\n%s",
+		exactUSD(f.Cost), class, pricing.Rate(region, class), costBasis(region))
+}
+
+// folderCostTitle is the tooltip for a folder's cost.
+func folderCostTitle(s explorer.FolderSummary) string {
+	t := fmt.Sprintf("%s/month for %s files\n%s", exactUSD(s.Cost), humanCount(s.Files), costBasis(s.PriceRegion))
+	if s.Truncated {
+		t += "\nOnly the first " + humanCount(s.Files) + " files were scanned, so the folder costs at least this."
+	}
+	return t
+}
+
+// exactUSD shows a cost precisely enough to be meaningful for tiny objects:
+// cents from $0.01, otherwise three significant digits ($0.0000000214).
+func exactUSD(usd float64) string {
+	if usd == 0 || usd >= 0.01 {
+		return "$" + thousands(fmt.Sprintf("%.2f", usd))
+	}
+	v, _ := strconv.ParseFloat(fmt.Sprintf("%.3g", usd), 64)
+	return "$" + strconv.FormatFloat(v, 'f', -1, 64)
+}
+
+// pricingDate is the date of the AWS price list the rates were generated from.
+func pricingDate() string {
+	d, _, _ := strings.Cut(pricing.RatesPublished, "T")
+	return d
 }

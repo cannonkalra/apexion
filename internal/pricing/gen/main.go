@@ -1,0 +1,180 @@
+//go:build ignore
+
+// Command gen regenerates rates_gen.go from the AWS Price List API: the
+// first-tier on-demand storage rate (USD per GB-month) of every S3 storage
+// class in every region. Run it with `go generate ./internal/pricing`.
+//
+// It reads the public, unauthenticated bulk offer files: AmazonS3 for most
+// classes and AmazonS3GlacierDeepArchive, which AWS publishes separately.
+package main
+
+import (
+	"bytes"
+	"encoding/json"
+	"fmt"
+	"go/format"
+	"log"
+	"net/http"
+	"os"
+	"regexp"
+	"sort"
+	"strconv"
+	"time"
+)
+
+const base = "https://pricing.us-east-1.amazonaws.com"
+
+// usageRe matches a storage usage type with an optional region prefix such as
+// "APS3-" or "EU-" and captures the region-neutral part.
+var usageRe = regexp.MustCompile(`^(?:[A-Z]{2,4}[0-9]?-)?(TimedStorage-[A-Za-z0-9-]+)$`)
+
+// classBySKU maps a storage SKU, identified by its region-neutral usage type
+// and its volume type, to the storage class string S3 returns in object
+// listings. The volume type is needed because other charges reuse a class's
+// usage type (e.g. Intelligent-Tiering archive "object overhead" is billed
+// under the Standard usage type).
+var classBySKU = map[[2]string]string{
+	{"TimedStorage-ByteHrs", "Standard"}:                                   "STANDARD",
+	{"TimedStorage-SIA-ByteHrs", "Standard - Infrequent Access"}:           "STANDARD_IA",
+	{"TimedStorage-ZIA-ByteHrs", "One Zone - Infrequent Access"}:           "ONEZONE_IA",
+	{"TimedStorage-GIR-ByteHrs", "Glacier Instant Retrieval"}:              "GLACIER_IR",
+	{"TimedStorage-GlacierByteHrs", "Amazon Glacier"}:                      "GLACIER",
+	{"TimedStorage-GDA-ByteHrs", "Glacier Deep Archive"}:                   "DEEP_ARCHIVE",
+	{"TimedStorage-INT-FA-ByteHrs", "Intelligent-Tiering Frequent Access"}: "INTELLIGENT_TIERING",
+	{"TimedStorage-RRS-ByteHrs", "Reduced Redundancy"}:                     "REDUCED_REDUNDANCY",
+	{"TimedStorage-XZ-ByteHrs", "Express One Zone"}:                        "EXPRESS_ONEZONE",
+}
+
+type offer struct {
+	PublicationDate string `json:"publicationDate"`
+	Products        map[string]struct {
+		Attributes map[string]string `json:"attributes"`
+	} `json:"products"`
+	Terms struct {
+		OnDemand map[string]map[string]struct {
+			PriceDimensions map[string]struct {
+				BeginRange   string            `json:"beginRange"`
+				Unit         string            `json:"unit"`
+				PricePerUnit map[string]string `json:"pricePerUnit"`
+			} `json:"priceDimensions"`
+		} `json:"OnDemand"`
+	} `json:"terms"`
+}
+
+func main() {
+	rates := map[string]map[string]float64{} // region → class → USD/GB-month
+	var published string
+	for _, code := range []string{"AmazonS3", "AmazonS3GlacierDeepArchive"} {
+		var idx struct {
+			Regions map[string]struct {
+				CurrentVersionURL string `json:"currentVersionUrl"`
+			} `json:"regions"`
+		}
+		get(base+"/offers/v1.0/aws/"+code+"/current/region_index.json", &idx)
+		for region, r := range idx.Regions {
+			var o offer
+			get(base+r.CurrentVersionURL, &o)
+			if o.PublicationDate > published {
+				published = o.PublicationDate
+			}
+			collect(region, &o, rates)
+		}
+	}
+	write(rates, published)
+}
+
+func collect(region string, o *offer, rates map[string]map[string]float64) {
+	for sku, p := range o.Products {
+		a := p.Attributes
+		if a["regionCode"] != region || a["locationType"] != "AWS Region" {
+			continue
+		}
+		// Usage types carry an optional region prefix ("APS3-TimedStorage-…").
+		// Other S3 products share the suffix under their own prefix
+		// ("Tables-", "Vectors-", "USE1-Files-"), so only a region prefix is
+		// stripped.
+		m := usageRe.FindStringSubmatch(a["usagetype"])
+		if m == nil {
+			continue
+		}
+		class, ok := classBySKU[[2]string{m[1], a["volumeType"]}]
+		if !ok {
+			continue
+		}
+		for _, term := range o.Terms.OnDemand[sku] {
+			for _, pd := range term.PriceDimensions {
+				if pd.BeginRange != "0" || pd.Unit != "GB-Mo" {
+					continue // first tier only
+				}
+				v, err := strconv.ParseFloat(pd.PricePerUnit["USD"], 64)
+				if err != nil {
+					continue
+				}
+				if rates[region] == nil {
+					rates[region] = map[string]float64{}
+				}
+				if prev, dup := rates[region][class]; dup && prev != v {
+					log.Fatalf("%s %s: conflicting rates %v and %v (usage type %s)", region, class, prev, v, a["usagetype"])
+				}
+				rates[region][class] = v
+			}
+		}
+	}
+}
+
+func get(url string, v any) {
+	c := http.Client{Timeout: 2 * time.Minute}
+	resp, err := c.Get(url)
+	if err != nil {
+		log.Fatal(err)
+	}
+	defer resp.Body.Close()
+	if resp.StatusCode != http.StatusOK {
+		log.Fatalf("GET %s: %s", url, resp.Status)
+	}
+	if err := json.NewDecoder(resp.Body).Decode(v); err != nil {
+		log.Fatalf("decode %s: %v", url, err)
+	}
+}
+
+func write(rates map[string]map[string]float64, published string) {
+	regions := make([]string, 0, len(rates))
+	for r := range rates {
+		regions = append(regions, r)
+	}
+	sort.Strings(regions)
+
+	var b bytes.Buffer
+	fmt.Fprintf(&b, "// Code generated by gen/main.go from the AWS Price List API; DO NOT EDIT.\n\n")
+	fmt.Fprintf(&b, "package pricing\n\n")
+	fmt.Fprintf(&b, "// RatesPublished is the publication date of the newest AWS offer file used.\n")
+	fmt.Fprintf(&b, "const RatesPublished = %q\n\n", published)
+	fmt.Fprintf(&b, "// storageRates is the first-tier on-demand storage rate, in USD per GB-month,\n")
+	fmt.Fprintf(&b, "// of each storage class in each region.\n")
+	fmt.Fprintf(&b, "var storageRates = map[string]map[string]float64{\n")
+	for _, r := range regions {
+		classes := make([]string, 0, len(rates[r]))
+		for c := range rates[r] {
+			classes = append(classes, c)
+		}
+		sort.Strings(classes)
+		fmt.Fprintf(&b, "\t%q: {", r)
+		for i, c := range classes {
+			if i > 0 {
+				b.WriteString(", ")
+			}
+			fmt.Fprintf(&b, "%q: %s", c, strconv.FormatFloat(rates[r][c], 'f', -1, 64))
+		}
+		b.WriteString("},\n")
+	}
+	b.WriteString("}\n")
+
+	src, err := format.Source(b.Bytes())
+	if err != nil {
+		log.Fatal(err)
+	}
+	if err := os.WriteFile("rates_gen.go", src, 0o644); err != nil {
+		log.Fatal(err)
+	}
+	log.Printf("wrote rates for %d regions (published %s)", len(regions), published)
+}
