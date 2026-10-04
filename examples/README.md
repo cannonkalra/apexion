@@ -17,6 +17,20 @@ open http://localhost:8080   # or just visit it in a browser
 The seeded data lands in a bucket named `warehouse`. Crawl it, preview the files,
 register a dataset, and query it from the **Query** page.
 
+## 1b. Native app + local SeaweedFS
+
+To run the app natively (faster rebuilds) against a local S3 store:
+
+```bash
+make seaweed            # SeaweedFS S3 on :8333 (admin / password) + sample data
+make build && ./bin/apexion serve -c configs/apexion.yaml
+make seaweed-connect    # in another shell: add + activate the connection
+```
+
+Or add it by hand under **Settings → New connection**: provider *SeaweedFS*,
+endpoint `localhost:8333`, *Access keys* `admin` / `password`, path-style on,
+SSL off. `make seaweed-down` stops it and deletes its data.
+
 ## 2. Crawl from the CLI
 
 ```bash

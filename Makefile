@@ -179,6 +179,30 @@ down: ## Stop and remove the Docker stack
 docker-build: ## Build the Docker image
 	docker build -t apexion:latest .
 
+# ---- local SeaweedFS ---------------------------------------------------------
+# An S3 store for running the app natively (make run / ./bin/apexion serve).
+
+SEAWEED_COMPOSE := docker compose -f docker-compose.seaweed.yml
+SEAWEED_CONN    := {"name":"seaweedfs-local","provider":"seaweed","endpoint":"localhost:8333","region":"us-east-1","access_key":"admin","secret_key":"password","path_style":true}
+
+.PHONY: seaweed
+seaweed: ## Start local SeaweedFS (S3 on :8333) and seed the warehouse bucket
+	$(SEAWEED_COMPOSE) up -d
+	@until curl -s -o /dev/null localhost:8333/; do sleep 1; done
+	APEXION_MINIO_ENDPOINT=localhost:8333 APEXION_MINIO_ACCESS_KEY=admin \
+	  APEXION_MINIO_SECRET_KEY=password go run $(SEED_PKG)
+
+.PHONY: seaweed-connect
+seaweed-connect: ## Add + activate the SeaweedFS connection in a running app on :8080
+	@id=$$(curl -sf -XPOST localhost:8080/api/connections -H 'content-type: application/json' \
+	  -d '$(SEAWEED_CONN)' | sed -E 's/.*"id":"([^"]+)".*/\1/') && \
+	  curl -sf -XPOST localhost:8080/api/connections/$$id/activate >/dev/null && \
+	  echo "→ seaweedfs-local is the active connection"
+
+.PHONY: seaweed-down
+seaweed-down: ## Stop local SeaweedFS and delete its data
+	$(SEAWEED_COMPOSE) down -v
+
 # ---- housekeeping ----------------------------------------------------------
 
 .PHONY: clean
