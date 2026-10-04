@@ -18,6 +18,7 @@ import (
 	"github.com/apexion/apexion/internal/format"
 	"github.com/apexion/apexion/internal/model"
 	"github.com/apexion/apexion/internal/objstore"
+	"github.com/apexion/apexion/internal/pricing"
 )
 
 // Service browses object storage using the active connection.
@@ -38,12 +39,14 @@ type FolderEntry struct {
 
 // FileEntry is a file in a listing.
 type FileEntry struct {
-	Name        string
-	Key         string
-	Size        int64
-	Modified    time.Time
-	Format      model.Format
-	Compression model.Compression
+	Name         string
+	Key          string
+	Size         int64
+	Modified     time.Time
+	Format       model.Format
+	Compression  model.Compression
+	StorageClass string
+	Cost         float64 // estimated S3 storage cost, USD per month
 }
 
 // FolderSummary aggregates a prefix (bounded scan).
@@ -53,6 +56,8 @@ type FolderSummary struct {
 	Formats      []model.Format
 	LastModified time.Time
 	Truncated    bool
+	Cost         float64 // estimated S3 storage cost of the scanned files, USD per month
+	PriceRegion  string  // region whose S3 list prices Cost uses
 }
 
 // DirListing is the immediate contents of a prefix (paginated). The folder
@@ -69,6 +74,8 @@ type DirListing struct {
 	Cursor     string // cursor that produced THIS page ("" = first page)
 	NextCursor string // pass to the next ListDir call; "" when !HasMore
 	HasMore    bool   // more children exist beyond this page
+	// PriceRegion is the region whose S3 list prices the file costs use.
+	PriceRegion string
 }
 
 // DefaultPageSize bounds how many immediate children a listing returns per page.
@@ -105,21 +112,24 @@ func (s *Service) ListDir(ctx context.Context, bucket, prefix, search, sortBy, c
 	if err != nil {
 		return nil, err
 	}
+	region := s.priceRegion(ctx, bucket)
 	out := &DirListing{
 		Bucket: bucket, Prefix: prefix, Search: search, Sort: sortBy, Limit: limit,
-		Cursor: cursor, NextCursor: pr.NextCursor, HasMore: pr.HasMore,
+		Cursor: cursor, NextCursor: pr.NextCursor, HasMore: pr.HasMore, PriceRegion: region,
 	}
 	for _, f := range pr.Folders {
 		out.Folders = append(out.Folders, FolderEntry{Name: folderName(f), Path: f})
 	}
 	for _, om := range pr.Files {
 		out.Files = append(out.Files, FileEntry{
-			Name:        path.Base(om.Key),
-			Key:         om.Key,
-			Size:        om.Size,
-			Modified:    om.LastModified,
-			Format:      format.DetectFormat(om.Key, nil),
-			Compression: format.DetectCompression(om.Key),
+			Name:         path.Base(om.Key),
+			Key:          om.Key,
+			Size:         om.Size,
+			Modified:     om.LastModified,
+			Format:       format.DetectFormat(om.Key, nil),
+			Compression:  format.DetectCompression(om.Key),
+			StorageClass: om.StorageClass,
+			Cost:         pricing.ObjectCost(region, om.StorageClass, om.Size),
 		})
 	}
 	sortListing(out, sortBy)
@@ -169,7 +179,7 @@ func sortListing(l *DirListing, sortBy string) {
 // bounded (and loaded lazily by the UI) so it never blocks browsing.
 func (s *Service) FolderSummary(ctx context.Context, bucket, prefix string) (*FolderSummary, error) {
 	const cap = 5000
-	sum := &FolderSummary{}
+	sum := &FolderSummary{PriceRegion: s.priceRegion(ctx, bucket)}
 	formats := map[model.Format]bool{}
 	err := s.storeFor(bucket).WalkObjects(ctx, bucket, prefix, "", func(om objstore.ObjectMeta) error {
 		if strings.HasSuffix(om.Key, "/") {
@@ -177,6 +187,7 @@ func (s *Service) FolderSummary(ctx context.Context, bucket, prefix string) (*Fo
 		}
 		sum.Files++
 		sum.Size += om.Size
+		sum.Cost += pricing.ObjectCost(sum.PriceRegion, om.StorageClass, om.Size)
 		if om.LastModified.After(sum.LastModified) {
 			sum.LastModified = om.LastModified
 		}
@@ -197,6 +208,20 @@ func (s *Service) FolderSummary(ctx context.Context, bucket, prefix string) (*Fo
 	}
 	sort.Slice(sum.Formats, func(i, j int) bool { return sum.Formats[i] < sum.Formats[j] })
 	return sum, nil
+}
+
+// priceRegion is the region whose S3 list prices apply to a bucket: the
+// bucket's own region when AWS publishes S3 rates for it, else
+// pricing.DefaultRegion (non-AWS stores are priced as their S3 equivalent).
+func (s *Service) priceRegion(ctx context.Context, bucket string) string {
+	store := s.storeFor(bucket)
+	ctx, cancel := context.WithTimeout(ctx, 3*time.Second)
+	defer cancel()
+	region, err := store.BucketRegion(ctx, bucket)
+	if err != nil || region == "" {
+		region = store.Region()
+	}
+	return pricing.Region(region)
 }
 
 // Crumb is one cumulative path segment of a prefix, used for breadcrumb navigation.
