@@ -7,6 +7,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.0.5] - 2026-10-04
+
 ### Changed
 - **Catalog tables are stored in DuckLake.** Registered tables are now views in
   a DuckLake catalog (`data/apexion.ducklake` by default) instead of the query
@@ -24,6 +26,16 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   Catalog shows each table's source: its selected files or its folder.
 
 ### Added
+- **Monthly storage cost in the Explorer.** A new **Cost** column shows each
+  file's estimated monthly S3 storage cost from its size and storage class, and
+  each folder's (loaded lazily, up to its first 5,000 files); the folder
+  summary shows the total. Rates are AWS's published on-demand list prices for
+  the bucket's region, generated from the AWS Price List API
+  (`go generate ./internal/pricing`), including minimum billable sizes for
+  IA/Glacier Instant Retrieval and Glacier per-object overhead. Storage only:
+  requests, retrieval, transfer, and Intelligent-Tiering monitoring are not
+  included. Non-AWS stores show their S3-equivalent cost at us-east-1 rates.
+- **macOS Intel (`darwin/amd64`) release binary**, built natively on CI.
 - The Catalog page shows where the lake is stored, its latest snapshot, and the
   `ATTACH` statement to use it from DuckDB.
 - The query page lists tables and views that other clients created in the lake.
@@ -121,7 +133,8 @@ First public release.
 - Cross-platform release binaries for linux/amd64, linux/arm64, darwin/arm64, and
   windows/amd64, published with SHA256 checksums.
 
-[Unreleased]: https://github.com/cannonkalra/apexion/compare/v0.0.4...HEAD
+[Unreleased]: https://github.com/cannonkalra/apexion/compare/v0.0.5...HEAD
+[0.0.5]: https://github.com/cannonkalra/apexion/compare/v0.0.4...v0.0.5
 [0.0.4]: https://github.com/cannonkalra/apexion/compare/v0.0.3...v0.0.4
 [0.0.3]: https://github.com/cannonkalra/apexion/compare/v0.0.2...v0.0.3
 [0.0.2]: https://github.com/cannonkalra/apexion/compare/v0.0.1...v0.0.2
