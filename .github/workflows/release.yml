@@ -6,9 +6,15 @@ name: Release
 # Because the embedded DuckDB driver uses CGO, each target is built natively on
 # its own runner (cross-compiling CGO is unreliable). A final job aggregates the
 # binaries, writes SHA256SUMS, and creates the GitHub Release.
+#
+# Pull requests that change this workflow, and manual runs (Actions → Release →
+# Run workflow), build every binary without publishing — a dry run of the matrix.
 on:
   push:
     tags: ["v*"]
+  pull_request:
+    paths: [".github/workflows/release.yml"]
+  workflow_dispatch:
 
 permissions:
   contents: write
@@ -27,11 +33,11 @@ jobs:
           - { runner: macos-15-intel,   goos: darwin,  goarch: amd64, ext: "" }
           - { runner: windows-latest,   goos: windows, goarch: amd64, ext: ".exe" }
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
         with:
           fetch-depth: 0 # tags + full history for version metadata
 
-      - uses: actions/setup-go@v5
+      - uses: actions/setup-go@v7
         with:
           go-version-file: go.mod
           cache: true
@@ -42,6 +48,7 @@ jobs:
           CGO_ENABLED: "1"
         run: |
           VERSION="${GITHUB_REF_NAME}"
+          [[ "${GITHUB_REF}" == refs/tags/* ]] || VERSION="dev-$(git rev-parse --short HEAD)"
           COMMIT="$(git rev-parse --short HEAD)"
           DATE="$(git show -s --format=%cI HEAD)"
           OUT="apexion-${{ matrix.goos }}-${{ matrix.goarch }}${{ matrix.ext }}"
@@ -51,7 +58,7 @@ jobs:
             -o "dist/${OUT}" ./cmd/apexion
           echo "built dist/${OUT}"
 
-      - uses: actions/upload-artifact@v4
+      - uses: actions/upload-artifact@v7
         with:
           name: apexion-${{ matrix.goos }}-${{ matrix.goarch }}
           path: dist/apexion-*
@@ -64,7 +71,7 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - name: Download all binaries
-        uses: actions/download-artifact@v4
+        uses: actions/download-artifact@v8
         with:
           path: staging
           merge-multiple: true
@@ -78,8 +85,10 @@ jobs:
           echo "----- SHA256SUMS -----"
           cat SHA256SUMS
 
+      # Only a tag push publishes; dry runs stop after the checksums.
       - name: Create GitHub Release
-        uses: softprops/action-gh-release@v2
+        if: startsWith(github.ref, 'refs/tags/')
+        uses: softprops/action-gh-release@v3
         with:
           draft: true
           generate_release_notes: true
