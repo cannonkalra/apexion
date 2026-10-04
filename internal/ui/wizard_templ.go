@@ -10,9 +10,9 @@ import templruntime "github.com/a-h/templ/runtime"
 
 import "fmt"
 
-var wizardStepNames = []string{"Source", "Analyze", "Review", "Register", "Done"}
+var wizardStepNames = []string{"Source", "Analyze", "Review", "Save", "Done"}
 
-// WizardPage is the full-page Crawl → Analyze → Review → Register wizard.
+// WizardPage is the full-page Crawl → Analyze → Review → Save wizard.
 func WizardPage(vm WizardVM) templ.Component {
 	return templruntime.GeneratedTemplate(func(templ_7745c5c3_Input templruntime.GeneratedComponentInput) (templ_7745c5c3_Err error) {
 		templ_7745c5c3_W, ctx := templ_7745c5c3_Input.Writer, templ_7745c5c3_Input.Context
@@ -60,7 +60,7 @@ func WizardPage(vm WizardVM) templ.Component {
 			}
 			return nil
 		})
-		templ_7745c5c3_Err = Layout("wizard", "Crawl Dataset").Render(templ.WithChildren(ctx, templ_7745c5c3_Var2), templ_7745c5c3_Buffer)
+		templ_7745c5c3_Err = Layout("wizard", "Crawl folder").Render(templ.WithChildren(ctx, templ_7745c5c3_Var2), templ_7745c5c3_Buffer)
 		if templ_7745c5c3_Err != nil {
 			return templ_7745c5c3_Err
 		}
@@ -176,7 +176,7 @@ func WizardStep1(vm WizardVM) templ.Component {
 			}
 			return nil
 		})
-		templ_7745c5c3_Err = WizardShell(0, "Select source", "Choose the storage directory to crawl into a dataset.").Render(templ.WithChildren(ctx, templ_7745c5c3_Var4), templ_7745c5c3_Buffer)
+		templ_7745c5c3_Err = WizardShell(0, "Select source", "Choose the storage directory to crawl.").Render(templ.WithChildren(ctx, templ_7745c5c3_Var4), templ_7745c5c3_Buffer)
 		if templ_7745c5c3_Err != nil {
 			return templ_7745c5c3_Err
 		}
@@ -420,7 +420,7 @@ func WizardStep3(vm WizardVM) templ.Component {
 				if templ_7745c5c3_Err != nil {
 					return templ_7745c5c3_Err
 				}
-				templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 24, "Register as table</button></form>")
+				templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 24, "Save as table</button></form>")
 				if templ_7745c5c3_Err != nil {
 					return templ_7745c5c3_Err
 				}
@@ -530,7 +530,7 @@ func WizardStep4(vm WizardVM) templ.Component {
 				}
 				return nil
 			})
-			templ_7745c5c3_Err = FormSection("Table information", "How this dataset is exposed as a SQL table.").Render(templ.WithChildren(ctx, templ_7745c5c3_Var20), templ_7745c5c3_Buffer)
+			templ_7745c5c3_Err = FormSection("Table information", "How this folder is exposed as a SQL table.").Render(templ.WithChildren(ctx, templ_7745c5c3_Var20), templ_7745c5c3_Buffer)
 			if templ_7745c5c3_Err != nil {
 				return templ_7745c5c3_Err
 			}
@@ -655,7 +655,7 @@ func WizardStep5(vm WizardVM) templ.Component {
 			if templ_7745c5c3_Err != nil {
 				return templ_7745c5c3_Err
 			}
-			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 36, "</div><div class=\"text-sm text-slate-400 space-y-1 mb-6\"><div>✓ Dataset created</div>")
+			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 36, "</div><div class=\"text-sm text-slate-400 space-y-1 mb-6\"><div>✓ Folder discovered</div>")
 			if templ_7745c5c3_Err != nil {
 				return templ_7745c5c3_Err
 			}
@@ -678,7 +678,7 @@ func WizardStep5(vm WizardVM) templ.Component {
 					return templ_7745c5c3_Err
 				}
 			} else {
-				templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 39, "<div class=\"text-slate-500\">Dataset was not registered as a table.</div>")
+				templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 39, "<div class=\"text-slate-500\">Folder was not saved as a table.</div>")
 				if templ_7745c5c3_Err != nil {
 					return templ_7745c5c3_Err
 				}
@@ -781,7 +781,7 @@ func WizardError(msg string) templ.Component {
 		if templ_7745c5c3_Err != nil {
 			return templ_7745c5c3_Err
 		}
-		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 48, "</div><div class=\"flex flex-wrap items-center gap-2\"><a class=\"btn-ghost\" href=\"/wizard\">Start over</a> <a class=\"btn-ghost\" href=\"/datasets\">Go to datasets</a></div></div>")
+		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 48, "</div><div class=\"flex flex-wrap items-center gap-2\"><a class=\"btn-ghost\" href=\"/wizard\">Start over</a> <a class=\"btn-ghost\" href=\"/datasets\">Go to Discovered</a></div></div>")
 		if templ_7745c5c3_Err != nil {
 			return templ_7745c5c3_Err
 		}

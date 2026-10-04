@@ -418,7 +418,7 @@ templ explorerToolbar(l *explorer.DirListing) {
 				hx-target="#toast-slot"
 				hx-swap="innerHTML"
 			>@iconPlay() Quick crawl</button>
-			<a class="btn-primary" href={ templ.SafeURL("/wizard?bucket=" + l.Bucket + "&prefix=" + l.Prefix) }>@iconInbox() Crawl Dataset</a>
+			<a class="btn-primary" href={ templ.SafeURL("/wizard?bucket=" + l.Bucket + "&prefix=" + l.Prefix) }>@iconInbox() Crawl folder</a>
 		</div>
 	</div>
 }

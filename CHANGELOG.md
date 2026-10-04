@@ -17,6 +17,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   Configure with the new `ducklake` section; `ducklake.enabled: false` keeps
   the old in-memory behaviour.
 
+- **Clearer names: selections, tables, and discovered folders.** A saved
+  multi-file selection is now a *table* ("Save as table", previously "Save to
+  Datasets", which actually saved into the Catalog). Crawled directories are
+  *discovered folders*, under **Discovered** (previously **Datasets**). The
+  Catalog shows each table's source: its selected files or its folder.
+
 ### Added
 - The Catalog page shows where the lake is stored, its latest snapshot, and the
   `ATTACH` statement to use it from DuckDB.

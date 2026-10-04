@@ -14,8 +14,9 @@ make up
 open http://localhost:8080   # or just visit it in a browser
 ```
 
-The seeded data lands in a bucket named `warehouse`. Crawl it, preview the files,
-register a dataset, and query it from the **Query** page.
+The seeded data lands in a bucket named `warehouse`. Browse it in the Explorer,
+select files and preview them in SQL, save the selection as a table, and query
+it from the **Query** page.
 
 ## 1b. Native app + local SeaweedFS
 

@@ -11,12 +11,12 @@ import (
 // view that reads directly from object storage.
 templ CatalogPage(vm CatalogVM) {
 	@Layout("catalog", "Catalog") {
-		@PageHeader("", "Logical SQL tables — each reads its dataset's files directly from storage. No data is copied.") {
-			<a class="btn-ghost" href="/datasets">@iconTable() Register a dataset</a>
+		@PageHeader("", "SQL tables saved from selected files or discovered folders. Each reads its files directly from storage — no data is copied.") {
+			<a class="btn-ghost" href="/explorer">@iconFolder() Select files</a>
 		}
 		@lakeStatus(vm.Lake)
 		if len(vm.Entries) == 0 {
-			@EmptyState("No tables yet", "Register a dataset from the Datasets page to expose it as a SQL table.")
+			@EmptyState("No tables yet", "Select files in the Explorer and save them as a table, or save a discovered folder.")
 		} else {
 			<div class="card overflow-hidden">
 				<div class="overflow-x-auto">
@@ -48,7 +48,11 @@ templ catalogRow(e model.CatalogEntry) {
 	<tr id={ "catalog-" + e.ID } class="hover:bg-base-850/50">
 		<td class="table-cell">
 			<div class="font-medium text-white font-mono break-all">{ e.Name }</div>
-			<div class="text-xs text-slate-500 font-mono break-all max-w-md">{ e.URI }</div>
+			if e.SelectSQL != "" {
+				<div class="text-xs text-slate-500">{ selectionSourceLabel(e.SelectSQL) }</div>
+			} else {
+				<a href={ templ.SafeURL("/datasets/" + e.DatasetID) } class="block text-xs text-slate-500 hover:text-slate-300 font-mono break-all max-w-md" title="Discovered folder">{ e.URI }</a>
+			}
 		</td>
 		<td class="table-cell">@FormatPill(e.Format)</td>
 		<td class="table-cell text-xs text-slate-400 font-mono">

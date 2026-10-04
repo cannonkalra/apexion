@@ -2,6 +2,7 @@ package ui
 
 import (
 	"context"
+	"fmt"
 	"net/http"
 	"strings"
 
@@ -172,4 +173,18 @@ func (h *Handler) actionDeleteCatalog(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	w.WriteHeader(http.StatusOK)
+}
+
+// selectionSourceLabel describes a table saved from a file selection. Its SQL
+// reads an explicit list of quoted object URIs (duckdb.ListReader), so the
+// file count is the number of quoted s3:// literals.
+func selectionSourceLabel(selectSQL string) string {
+	switch n := strings.Count(selectSQL, "'s3://"); n {
+	case 0:
+		return "Selected files"
+	case 1:
+		return "1 selected file"
+	default:
+		return fmt.Sprintf("%d selected files", n)
+	}
 }

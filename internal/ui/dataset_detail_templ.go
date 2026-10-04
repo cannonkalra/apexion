@@ -144,7 +144,7 @@ func DatasetDetailPage(d *catalog.DatasetDetail, tab string, status catalog.Cata
 			if templ_7745c5c3_Err != nil {
 				return templ_7745c5c3_Err
 			}
-			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 10, "Register into Catalog</button></form></div><div class=\"grid grid-cols-2 md:grid-cols-4 xl:grid-cols-6 gap-3 mb-6\">")
+			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 10, "Save as table</button></form></div><div class=\"grid grid-cols-2 md:grid-cols-4 xl:grid-cols-6 gap-3 mb-6\">")
 			if templ_7745c5c3_Err != nil {
 				return templ_7745c5c3_Err
 			}
@@ -240,7 +240,7 @@ func DatasetDetailPage(d *catalog.DatasetDetail, tab string, status catalog.Cata
 			}
 			return nil
 		})
-		templ_7745c5c3_Err = Layout("datasets", "Dataset").Render(templ.WithChildren(ctx, templ_7745c5c3_Var2), templ_7745c5c3_Buffer)
+		templ_7745c5c3_Err = Layout("datasets", "Discovered folder").Render(templ.WithChildren(ctx, templ_7745c5c3_Var2), templ_7745c5c3_Buffer)
 		if templ_7745c5c3_Err != nil {
 			return templ_7745c5c3_Err
 		}
@@ -389,7 +389,7 @@ func filesPanel(d *catalog.DatasetDetail) templ.Component {
 				}
 				ctx = templ.InitializeContext(ctx)
 				if len(d.Objects) == 0 {
-					templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 21, "<p class=\"text-sm text-slate-500\">No files linked to this dataset.</p>")
+					templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 21, "<p class=\"text-sm text-slate-500\">No files linked to this folder.</p>")
 					if templ_7745c5c3_Err != nil {
 						return templ_7745c5c3_Err
 					}
@@ -577,7 +577,7 @@ func catalogPanel(d *catalog.DatasetDetail, status catalog.CatalogStatus, sugges
 				}
 				ctx = templ.InitializeContext(ctx)
 				if status.Registered {
-					templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 35, "<span class=\"badge bg-accent-emerald/15 text-accent-emerald\">Registered</span>")
+					templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 35, "<span class=\"badge bg-accent-emerald/15 text-accent-emerald\">In catalog</span>")
 					if templ_7745c5c3_Err != nil {
 						return templ_7745c5c3_Err
 					}
@@ -610,7 +610,7 @@ func catalogPanel(d *catalog.DatasetDetail, status catalog.CatalogStatus, sugges
 				}
 				ctx = templ.InitializeContext(ctx)
 				if len(status.Entries) == 0 {
-					templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 38, "<p class=\"text-sm text-slate-500\">This dataset is not exposed as a SQL table yet.</p>")
+					templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 38, "<p class=\"text-sm text-slate-500\">This folder is not saved as a table yet.</p>")
 					if templ_7745c5c3_Err != nil {
 						return templ_7745c5c3_Err
 					}
@@ -736,7 +736,7 @@ func catalogPanel(d *catalog.DatasetDetail, status catalog.CatalogStatus, sugges
 				ctx = templ.InitializeContext(ctx)
 				return nil
 			})
-			templ_7745c5c3_Err = CardHeader("Register as SQL table", "").Render(templ.WithChildren(ctx, templ_7745c5c3_Var32), templ_7745c5c3_Buffer)
+			templ_7745c5c3_Err = CardHeader("Save as table", "").Render(templ.WithChildren(ctx, templ_7745c5c3_Var32), templ_7745c5c3_Buffer)
 			if templ_7745c5c3_Err != nil {
 				return templ_7745c5c3_Err
 			}
@@ -790,7 +790,7 @@ func catalogPanel(d *catalog.DatasetDetail, status catalog.CatalogStatus, sugges
 				if templ_7745c5c3_Err != nil {
 					return templ_7745c5c3_Err
 				}
-				templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 52, "Register</button></form><p class=\"text-[11px] text-slate-600 mt-2\">Registering creates a DuckDB view over the files — no data is copied. A dataset can back multiple tables (different names/globs).</p>")
+				templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 52, "Save</button></form><p class=\"text-[11px] text-slate-600 mt-2\">Saving creates a view over the files — no data is copied. A folder can back several tables (different names or options).</p>")
 				if templ_7745c5c3_Err != nil {
 					return templ_7745c5c3_Err
 				}
@@ -836,7 +836,7 @@ func partitionsPanel(d *catalog.DatasetDetail) templ.Component {
 		}
 		ctx = templ.ClearChildren(ctx)
 		if len(d.Partitions) == 0 {
-			templ_7745c5c3_Err = EmptyState("No partitions", "This dataset is not partitioned.").Render(ctx, templ_7745c5c3_Buffer)
+			templ_7745c5c3_Err = EmptyState("No partitions", "This folder is not partitioned.").Render(ctx, templ_7745c5c3_Buffer)
 			if templ_7745c5c3_Err != nil {
 				return templ_7745c5c3_Err
 			}
@@ -1052,7 +1052,7 @@ func datasetSummaryCard(d *catalog.DatasetDetail) templ.Component {
 				if templ_7745c5c3_Err != nil {
 					return templ_7745c5c3_Err
 				}
-				templ_7745c5c3_Err = summaryItem("Dataset root", datasetRootLabel(d)).Render(ctx, templ_7745c5c3_Buffer)
+				templ_7745c5c3_Err = summaryItem("Folder root", datasetRootLabel(d)).Render(ctx, templ_7745c5c3_Buffer)
 				if templ_7745c5c3_Err != nil {
 					return templ_7745c5c3_Err
 				}

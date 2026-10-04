@@ -2,11 +2,11 @@ package ui
 
 import "fmt"
 
-var wizardStepNames = []string{"Source", "Analyze", "Review", "Register", "Done"}
+var wizardStepNames = []string{"Source", "Analyze", "Review", "Save", "Done"}
 
-// WizardPage is the full-page Crawl → Analyze → Review → Register wizard.
+// WizardPage is the full-page Crawl → Analyze → Review → Save wizard.
 templ WizardPage(vm WizardVM) {
-	@Layout("wizard", "Crawl Dataset") {
+	@Layout("wizard", "Crawl folder") {
 		<div class="max-w-5xl mx-auto">
 			<div id="wizard-body">
 				@WizardStep1(vm)
@@ -17,7 +17,7 @@ templ WizardPage(vm WizardVM) {
 
 // ---- Step 1: Source ------------------------------------------------------
 templ WizardStep1(vm WizardVM) {
-	@WizardShell(0, "Select source", "Choose the storage directory to crawl into a dataset.") {
+	@WizardShell(0, "Select source", "Choose the storage directory to crawl.") {
 		<div class="space-y-5">
 			@ErrorBanner(vm.Error)
 			<form hx-post="/ui/wizard/crawl" hx-target="#wizard-body" hx-swap="innerHTML" class="space-y-6">
@@ -101,7 +101,7 @@ templ WizardStep3(vm WizardVM) {
 			</form>
 			<form hx-post="/ui/wizard/register-form" hx-target="#wizard-body" hx-swap="innerHTML">
 				<input type="hidden" name="dataset_id" value={ vm.Detail.Dataset.ID }/>
-				<button class="btn-primary" type="submit">@iconTable() Register as table</button>
+				<button class="btn-primary" type="submit">@iconTable() Save as table</button>
 			</form>
 		}
 	}
@@ -114,7 +114,7 @@ templ WizardStep4(vm WizardVM) {
 			@ErrorBanner(vm.Error)
 			<form hx-post="/ui/wizard/register" hx-target="#wizard-body" hx-swap="innerHTML" class="space-y-8">
 				<input type="hidden" name="dataset_id" value={ vm.Detail.Dataset.ID }/>
-				@FormSection("Table information", "How this dataset is exposed as a SQL table.") {
+				@FormSection("Table information", "How this folder is exposed as a SQL table.") {
 					<div class="grid grid-cols-1 md:grid-cols-2 gap-4">
 						<div>
 							<label class="form-label">Table name</label>
@@ -179,12 +179,12 @@ templ WizardStep5(vm WizardVM) {
 		<div class="text-center py-2">
 			<div class="grid place-items-center w-12 h-12 rounded-full bg-accent-emerald/15 text-accent-emerald mx-auto mb-4">@iconEye()</div>
 			<div class="text-sm text-slate-400 space-y-1 mb-6">
-				<div>✓ Dataset created</div>
+				<div>✓ Folder discovered</div>
 				if vm.Entry != nil {
 					<div>✓ Catalog entry created — <span class="font-mono text-slate-200">{ vm.Entry.Name }</span></div>
 					<div>✓ DuckDB view created</div>
 				} else {
-					<div class="text-slate-500">Dataset was not registered as a table.</div>
+					<div class="text-slate-500">Folder was not saved as a table.</div>
 				}
 			</div>
 			<div class="flex items-center justify-center gap-2 flex-wrap">
@@ -206,7 +206,7 @@ templ WizardError(msg string) {
 		<div class="banner-error">{ msg }</div>
 		<div class="flex flex-wrap items-center gap-2">
 			<a class="btn-ghost" href="/wizard">Start over</a>
-			<a class="btn-ghost" href="/datasets">Go to datasets</a>
+			<a class="btn-ghost" href="/datasets">Go to Discovered</a>
 		</div>
 	</div>
 }
