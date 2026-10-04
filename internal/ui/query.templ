@@ -1,6 +1,10 @@
 package ui
 
-import "github.com/apexion/apexion/internal/selection"
+import (
+	"net/url"
+
+	"github.com/apexion/apexion/internal/selection"
+)
 
 // QueryPage is a simple SQL console over the catalog tables. It runs read-only
 // queries through DuckDB, which reads directly from object storage.
@@ -28,6 +32,21 @@ templ QueryPage(vm QueryVM) {
 									>
 										@iconTable()
 										<span class="font-mono truncate">{ t.Name }</span>
+									</a>
+								}
+							</div>
+						}
+						if len(vm.LakeOther) > 0 {
+							<p class="mt-4 mb-1 px-2 text-xs uppercase tracking-wide text-slate-500">In DuckLake</p>
+							<div class="space-y-1">
+								for _, o := range vm.LakeOther {
+									<a
+										href={ templ.SafeURL("/query?table=" + url.QueryEscape(lakeObjectRef(o))) }
+										title={ o.Kind + " created outside Apexion" }
+										class={ "flex items-center gap-2 px-2 py-1.5 rounded-md text-sm hover:bg-base-800", templ.KV("bg-base-800 text-white", lakeObjectRef(o) == vm.Selected), templ.KV("text-slate-300", lakeObjectRef(o) != vm.Selected) }
+									>
+										@iconTable()
+										<span class="font-mono truncate">{ lakeObjectRef(o) }</span>
 									</a>
 								}
 							</div>

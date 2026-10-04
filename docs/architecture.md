@@ -32,10 +32,14 @@ cmd/apexion            CLI entrypoint (serve · crawl · migrate · version)
 are all embedded. There is no separate database server, metastore, or worker
 process to deploy.
 
-**The catalog is a DuckDB file.** Buckets, datasets, connections, jobs, and
-registered tables are persisted to a single `.duckdb` database (`storage.path`).
-Registered datasets become DuckDB *views* over the underlying object-store files,
-so querying a table reads live data — nothing is copied.
+**The catalog is a DuckDB file plus a DuckLake.** Buckets, datasets,
+connections, and jobs are persisted to a single `.duckdb` database
+(`storage.path`). Registered datasets become *views* over the underlying
+object-store files, stored in a DuckLake catalog (`apexion.ducklake` by
+default), so querying a table reads live data — nothing is copied — and any
+DuckDB client that ATTACHes the lake sees the same tables. The `catalog_entries`
+table keeps only what DuckLake doesn't: the link back to the dataset, read
+options, and partition columns.
 
 **Discovery is decoupled from formats.** The crawler walks objects and groups
 them into datasets, but it never imports a concrete file-format reader directly.

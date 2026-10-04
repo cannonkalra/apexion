@@ -30,7 +30,7 @@ func (e *Engine) CreateView(ctx context.Context, name, bucket, prefix string, fo
 	if err != nil {
 		return err
 	}
-	stmt := fmt.Sprintf(`CREATE OR REPLACE VIEW "%s" AS SELECT * FROM %s`, name, from)
+	stmt := fmt.Sprintf(`CREATE OR REPLACE VIEW %s AS SELECT * FROM %s`, viewRef(e.lake, name), from)
 	if _, err := e.db.ExecContext(ctx, stmt); err != nil {
 		return cleanErr(err)
 	}
@@ -54,7 +54,7 @@ func (e *Engine) CreateViewPartitioned(ctx context.Context, name, bucket, prefix
 	if !e.ready {
 		return fmt.Errorf("query engine unavailable: %s", e.readErr)
 	}
-	stmt, err := partitionViewSQL(name, bucket, prefix, format, sampleKey, partNames, opts)
+	stmt, err := partitionViewSQL(viewRef(e.lake, name), bucket, prefix, format, sampleKey, partNames, opts)
 	if err != nil {
 		return err
 	}
@@ -95,13 +95,14 @@ func partitionSelectSQL(bucket, prefix string, format model.Format, sampleKey st
 	return fmt.Sprintf(`SELECT %s, %s FROM %s`, projection, strings.Join(cols, ", "), reader), nil
 }
 
-// partitionViewSQL wraps partitionSelectSQL in a CREATE VIEW statement.
-func partitionViewSQL(name, bucket, prefix string, format model.Format, sampleKey string, partNames []string, opts model.ReadOptions) (string, error) {
+// partitionViewSQL wraps partitionSelectSQL in a CREATE VIEW statement. ref is
+// the view reference built by viewRef.
+func partitionViewSQL(ref, bucket, prefix string, format model.Format, sampleKey string, partNames []string, opts model.ReadOptions) (string, error) {
 	sel, err := partitionSelectSQL(bucket, prefix, format, sampleKey, partNames, opts)
 	if err != nil {
 		return "", err
 	}
-	return fmt.Sprintf(`CREATE OR REPLACE VIEW "%s" AS %s`, name, sel), nil
+	return fmt.Sprintf(`CREATE OR REPLACE VIEW %s AS %s`, ref, sel), nil
 }
 
 // CreateViewFromSelect registers a view built directly from a SELECT statement —
@@ -119,7 +120,7 @@ func (e *Engine) CreateViewFromSelect(ctx context.Context, name, sel string) err
 	if err := readOnly(sel); err != nil {
 		return err
 	}
-	stmt := fmt.Sprintf(`CREATE OR REPLACE VIEW "%s" AS %s`, name, sel)
+	stmt := fmt.Sprintf(`CREATE OR REPLACE VIEW %s AS %s`, viewRef(e.lake, name), sel)
 	if _, err := e.db.ExecContext(ctx, stmt); err != nil {
 		return cleanErr(err)
 	}
@@ -132,7 +133,7 @@ func (e *Engine) DropView(ctx context.Context, name string) error {
 	if !ValidIdentifier(name) {
 		return fmt.Errorf("invalid table name %q", name)
 	}
-	_, err := e.db.ExecContext(ctx, fmt.Sprintf(`DROP VIEW IF EXISTS "%s"`, name))
+	_, err := e.db.ExecContext(ctx, fmt.Sprintf(`DROP VIEW IF EXISTS %s`, viewRef(e.lake, name)))
 	return err
 }
 

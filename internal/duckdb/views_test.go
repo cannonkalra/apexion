@@ -58,7 +58,7 @@ func TestReadOnlyGuard(t *testing.T) {
 func TestPartitionViewSQL(t *testing.T) {
 	opts := model.DefaultReadOptions()
 	opts.Filename = false // default positional view drops the filename column
-	sql, err := partitionViewSQL("idfa", "eyeota-data-feed", "IDFA", model.FormatParquet, "", []string{"pt0", "pt1", "pt2"}, opts)
+	sql, err := partitionViewSQL(viewRef(false, "idfa"), "eyeota-data-feed", "IDFA", model.FormatParquet, "", []string{"pt0", "pt1", "pt2"}, opts)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -80,7 +80,7 @@ func TestPartitionViewSQL(t *testing.T) {
 	}
 	// No partition names → plain path (CreateView) is used; partitionViewSQL is
 	// only reached with names, so an empty-name slice yields no derived columns.
-	empty, _ := partitionViewSQL("t", "b", "p", model.FormatCSV, "", nil, opts)
+	empty, _ := partitionViewSQL(viewRef(false, "t"), "b", "p", model.FormatCSV, "", nil, opts)
 	if strings.Contains(empty, "split_part") {
 		t.Errorf("no partition names should mean no split_part: %s", empty)
 	}
@@ -91,7 +91,7 @@ func TestPartitionViewSQL(t *testing.T) {
 // while the reader always exposes filename so split_part can derive columns.
 func TestPartitionViewFilename(t *testing.T) {
 	on := model.DefaultReadOptions() // Filename=true
-	sql, err := partitionViewSQL("idfa", "b", "root", model.FormatCSV, "", []string{"pt0"}, on)
+	sql, err := partitionViewSQL(viewRef(false, "idfa"), "b", "root", model.FormatCSV, "", []string{"pt0"}, on)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -103,7 +103,7 @@ func TestPartitionViewFilename(t *testing.T) {
 	}
 	off := model.DefaultReadOptions()
 	off.Filename = false
-	sql, err = partitionViewSQL("idfa", "b", "root", model.FormatCSV, "", []string{"pt0"}, off)
+	sql, err = partitionViewSQL(viewRef(false, "idfa"), "b", "root", model.FormatCSV, "", []string{"pt0"}, off)
 	if err != nil {
 		t.Fatal(err)
 	}

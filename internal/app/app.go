@@ -77,6 +77,16 @@ func New(ctx context.Context, cfg *config.Config) (*App, error) {
 		return nil, err
 	}
 
+	// Registered tables live in the DuckLake catalog. Attach after the
+	// connection manager has applied the active connection's S3 credentials, in
+	// case the lake's metadata or data path is on object storage. A failed
+	// attach is logged and the catalog falls back to in-memory views.
+	if cfg.DuckLake.Enabled {
+		if meta := cfg.MetadataPath(); meta != "" {
+			_ = prev.AttachLake(ctx, meta, cfg.DuckLake.DataPath)
+		}
+	}
+
 	registry := crawler.DefaultRegistry()
 	resolvers := crawler.DefaultResolvers()
 	disp := discovery.New(cfg.Catalog.Discovery.Strategy, cfg.Catalog.VirtualPartitionPrefix, cfg.Catalog.VirtualPartitionSeparator)
@@ -87,7 +97,7 @@ func New(ctx context.Context, cfg *config.Config) (*App, error) {
 	vpath := virtualpath.New(cfg.Catalog.VirtualPartitionPrefix, cfg.Catalog.VirtualPartitionSeparator)
 	cat := catalog.New(store, conns, cr, jobMgr, bus, prev, vpath, log)
 	cat.PersistEvents(bus)
-	// Recreate registered catalog views in the (in-memory) query engine.
+	// Create any registered catalog views missing from the query engine.
 	cat.RecreateViews(ctx)
 
 	sched := jobs.NewScheduler(store, cat, log)

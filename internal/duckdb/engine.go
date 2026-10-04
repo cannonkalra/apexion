@@ -34,6 +34,10 @@ type Engine struct {
 	log     zerolog.Logger
 	ready   bool
 	readErr string
+	// lake is set once the DuckLake catalog is attached (see lake.go); catalog
+	// views then live in lake.main instead of the in-memory database.
+	lake       bool
+	lakeStatus LakeStatus
 }
 
 // Result is a tabular query result.

@@ -7,6 +7,21 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Changed
+- **Catalog tables are stored in DuckLake.** Registered tables are now views in
+  a DuckLake catalog (`data/apexion.ducklake` by default) instead of the query
+  engine's in-memory database. They persist across restarts, and any DuckDB
+  client can query them with `ATTACH 'ducklake:…' AS lake`. Existing tables are
+  moved into the lake automatically on first start. Views still read files in
+  place; nothing is copied, and DuckLake never takes ownership of your data.
+  Configure with the new `ducklake` section; `ducklake.enabled: false` keeps
+  the old in-memory behaviour.
+
+### Added
+- The Catalog page shows where the lake is stored, its latest snapshot, and the
+  `ATTACH` statement to use it from DuckDB.
+- The query page lists tables and views that other clients created in the lake.
+
 ## [0.0.4] - 2026-07-18
 
 ### Fixed
